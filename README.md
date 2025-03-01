@@ -17,7 +17,7 @@ Project Setup
 
 ## Project Setup
 
-1. Clone the repository:
+## 1. Clone the repository:
 
 git clone https://github.com/yourusername/researcher-collaboration-portal.git
 Install dependencies:
@@ -36,7 +36,10 @@ Steps:
 Implement UI components for the researcher's profile and announcements.
 Set up React Router for different pages: Home, Dashboard, Profile, Messages, and Search.
 Use Axios to call backend endpoints for retrieving and sending data.
-Integrate the chat functionality for real-time messaging. 3. Backend Development (Node.js / Express.js)
+Integrate the chat functionality for real-time messaging.
+
+## 3. Backend Development (Node.js / Express.js)
+
 The backend handles the logic for user authentication, storing research announcements, and messaging.
 
 API Endpoints: Built with Express.js to handle requests from the frontend.
@@ -50,17 +53,28 @@ Steps:
 Set up Express.js and create endpoints for user registration, login, profile management, posting announcements, and managing collaborator requests.
 Implement JWT-based authentication and middleware to secure routes.
 Set up the MySQL database and write queries for storing and retrieving data.
-Implement real-time chat functionality using Socket.io. 4. Database Setup (MySQL)
+Implement real-time chat functionality using Socket.io
+
+## Database Design
+
+The database is designed to store user information, research announcements, and collaboration requests.
+
+## Tables: Some key tables include:
+
+## Users: Stores user information such as name, email, password, and role.
+
+## Announcements: Stores research opportunities and requests for collaborators.
+
+## CollaboratorRequests: Stores requests from users to participate in research projects.
+
+## Relationships: Use foreign keys to establish relationships between users and their announcements or collaborator requests.
+
+Design the database schema for the Users, Announcements, and CollaboratorRequests tables.
+Create SQL queries for interacting with the database (e.g., adding new users, posting new announcements).
+Use an ORM (like Sequelize or TypeORM) if necessary for easier database interaction.
 The database is structured to store the data related to users, announcements, collaboration requests, and messages.
 
-Tables: Some key tables include:
-Users: Stores user information such as name, email, password, and role.
-Announcements: Stores research opportunities and requests for collaborators.
-Messages: Stores messages exchanged between users.
-CollaboratorRequests: Stores requests from users to participate in research projects.
-Relationships: Use foreign keys to establish relationships between users and their announcements or collaborator requests.
-Steps:
-
+T
 Design the database schema for the Users, Announcements, Messages, and CollaboratorRequests tables.
 Create SQL queries for interacting with the database (e.g., adding new users, posting new announcements).
 Use an ORM (like Sequelize or TypeORM) if necessary for easier database interaction. 5. Real-Time Functionality (Socket.io)
@@ -70,6 +84,7 @@ Chat Feature: Enables users to send and receive messages instantly.
 Notifications: Notifies users when they receive a new collaborator request or message.
 Steps:
 
-Set up Socket.io on both the frontend and backend.
+## Set up Socket.io on both the frontend and backend.
+
 Implement event listeners on the frontend for new messages and notifications.
 Set up a backend listener to handle real-time events like new messages or collaborator request approvals.
