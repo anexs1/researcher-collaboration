@@ -6,6 +6,7 @@ function Navbar() {
   const [showLoginForm, setShowLoginForm] = useState(false); // Control login form visibility
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [searchQuery, setSearchQuery] = useState(""); // State for search query
   const navigate = useNavigate();
 
   // Handle login form submission
@@ -27,6 +28,19 @@ function Navbar() {
       e.preventDefault();
       alert("Please login to access the Admin page.");
       setShowLoginForm(true); // Show login form if not logged in
+    }
+  };
+
+  // Handle search query change
+  const handleSearchChange = (e) => {
+    setSearchQuery(e.target.value);
+  };
+
+  // Handle form submission (or search action)
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    if (searchQuery) {
+      navigate(`/researchers?search=${searchQuery}`); // Redirect to researcher search page with query
     }
   };
 
@@ -58,6 +72,20 @@ function Navbar() {
           <Link to="/profile">Profile</Link>
         </li>
       </ul>
+
+      {/* Search Bar */}
+      <div className="search-bar">
+        <form onSubmit={handleSearchSubmit}>
+          <input
+            type="text"
+            placeholder="Search Researchers"
+            value={searchQuery}
+            onChange={handleSearchChange}
+            required
+          />
+          <button type="submit">Search</button>
+        </form>
+      </div>
 
       <div className="auth-buttons">
         <button className="login-btn" onClick={() => setShowLoginForm(true)}>

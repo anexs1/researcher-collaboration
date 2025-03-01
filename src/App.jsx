@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import axios from "axios";
 import Admin from "./Page/Admin";
-import AboutUs from "./Page/AboutUs";
 import Home from "./Page/Home";
 import Profile from "./Page/Profile";
 import Publication from "./Page/Publication";
@@ -72,7 +71,6 @@ function App() {
       <Navbar />
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/aboutus" element={<AboutUs />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/researcher" element={<Researcher />} />
         <Route path="/register" element={<Register />} />

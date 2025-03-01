@@ -77,3 +77,14 @@ app.use(express.urlencoded({ extended: true }));
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
 });
+// Example route to fetch a researcher by ID
+app.get("/api/researchers/:id", (req, res) => {
+  const researcherId = req.params.id;
+  // Fetch the researcher from the database using the ID
+  // For example:
+  Researcher.findById(researcherId)
+    .then((researcher) => res.json(researcher))
+    .catch((err) =>
+      res.status(500).json({ error: "Failed to fetch researcher" })
+    );
+});
