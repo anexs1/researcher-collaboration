@@ -1,0 +1,344 @@
+/* General container styling with animation */
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+  background-color: #f9f9f9;
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+}
+
+.container:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+}
+
+/* Heading styles with animation */
+h2,
+h3 {
+  text-align: center;
+  color: #333;
+  font-weight: bold;
+  animation: fadeIn 1s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Form styling with hover effects */
+form {
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.3s ease-in-out;
+}
+
+form:hover {
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.form-control {
+  border-radius: 5px;
+  padding: 10px;
+  border: 1px solid #ddd;
+  transition: border-color 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+}
+
+.form-control:focus {
+  border-color: #007bff;
+  outline: none;
+  box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+}
+
+/* Button styling with hover and active effects */
+.btn-primary {
+  background-color: #007bff;
+  border: none;
+  padding: 10px 15px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s ease-in-out, transform 0.2s ease-in-out;
+}
+
+.btn-primary:hover {
+  background-color: #0056b3;
+  transform: scale(1.05);
+}
+
+.btn-primary:active {
+  transform: scale(0.95);
+}
+
+/* Researcher profile list with hover effects */
+.list-group-item {
+  background: #fff;
+  padding: 15px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.list-group-item:hover {
+  transform: scale(1.02);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* Textarea styling with focus effect */
+textarea.form-control {
+  min-height: 100px;
+  resize: vertical;
+  border-radius: 5px;
+  padding: 10px;
+  border: 1px solid #ddd;
+  font-size: 14px;
+  font-family: Arial, sans-serif;
+  transition: border-color 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+}
+
+textarea.form-control:focus {
+  border-color: #007bff;
+  outline: none;
+  box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+}
+
+/* Navbar styling with hover effects */
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+  background-color: #007bff;
+  color: white;
+  transition: background-color 0.3s ease-in-out;
+}
+
+.navbar:hover {
+  background-color: #0056b3;
+}
+
+.nav-links li a {
+  color: white;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.3s ease-in-out;
+}
+
+.nav-links li a:hover {
+  color: lightgray;
+}
+
+.auth-buttons .login-btn,
+.auth-buttons .register-btn {
+  background-color: white;
+  color: #007bff;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease-in-out, color 0.3s ease-in-out;
+}
+
+.auth-buttons .login-btn:hover,
+.auth-buttons .register-btn:hover {
+  background-color: lightgray;
+  color: #0056b3;
+}
+
+/* Nav-link styling with animation */
+.nav-link {
+  color: rgb(23, 20, 219);
+  text-decoration: none;
+  padding: 10px;
+  border-radius: 4px;
+  background-color: #f9f9f9;
+  transition: background-color 0.3s ease-in-out, color 0.3s ease-in-out,
+    transform 0.2s ease-in-out;
+}
+
+.nav-link:hover {
+  background-color: rgb(23, 20, 219);
+  color: #f9f9f9;
+  transform: translateY(-2px);
+}
+
+.nav-link:active {
+  background-color: rgb(15, 13, 153);
+  color: #f9f9f9;
+  transform: translateY(0);
+}
+
+/* Image styling with hover effect */
+.container img {
+  max-width: 100%;
+  height: auto;
+  transition: transform 0.3s ease-in-out;
+}
+
+.container img:hover {
+  transform: scale(1.05);
+}
+
+/* Row styling with hover effect */
+.row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  transition: transform 0.3s ease-in-out;
+}
+
+.row:hover {
+  transform: translateY(-5px);
+}
+/* Navbar styling */
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+  background-color: #007bff;
+  color: white;
+  width: 80%; /* Reduce the width of the header */
+  margin: 0 auto; /* Center the header horizontally */
+  border-radius: 8px; /* Add rounded corners */
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); /* Add a subtle shadow */
+  transition: width 0.3s ease-in-out, background-color 0.3s ease-in-out;
+}
+
+/* Navbar hover effect */
+.navbar:hover {
+  background-color: #0056b3;
+  width: 85%; /* Slightly expand the width on hover */
+}
+
+/* Logo styling */
+.navbar .logo a {
+  font-size: 20px;
+  font-weight: bold;
+  color: white;
+  text-decoration: none;
+  transition: color 0.3s ease-in-out;
+}
+
+.navbar .logo a:hover {
+  color: lightgray;
+}
+
+/* Nav links styling */
+.nav-links {
+  list-style: none;
+  display: flex;
+  gap: 15px;
+  margin: auto;
+  padding: 0;
+  width: 100%;
+}
+
+.nav-links li a {
+  color: hsl(#0056b3);
+  text-decoration: none;
+  font-weight: 800;
+  justify-content: centers;
+  flex-direction: column;
+  width: 100%;
+
+  border-radius: 4px;
+  transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+}
+
+.nav-links li a:hover {
+  background-color: hwb(155 2% 5% / 0.1);
+  color: rgb(255, 12, 12);
+}
+
+/* Auth buttons styling */
+.auth-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.login-btn,
+.register-btn {
+  background-color: white;
+  color: #007bff;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease-in-out, color 0.3s ease-in-out;
+}
+
+.login-btn:hover,
+.register-btn:hover {
+  background-color: lightgray;
+  color: #0056b3;
+}
+/* Login Form Overlay */
+.login-form-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+/* Login Form */
+.login-form {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  width: 300px;
+  text-align: center;
+}
+
+.login-form h2 {
+  margin-bottom: 20px;
+  color: #333;
+}
+
+.login-form input {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.login-form button {
+  padding: 10px 20px;
+  margin: 5px;
+  border: none;
+  border-radius: 4px;
+  background-color: #007bff;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.3s ease-in-out;
+}
+
+.login-form button:hover {
+  background-color: #0056b3;
+}
+.nav-links {
+  padding: 0.45rem 0;
+}
