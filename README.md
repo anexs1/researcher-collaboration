@@ -28,6 +28,7 @@ The frontend is developed using React.js, where users can interact with the port
 
 UI Design and Components: The user interface is designed with reusable components for different sections (e.g., search bar, collaborator requests, chat interface).
 State Management: We use React Context API for global state management (or Redux if required).
+
 Routing: We use React Router for navigating between pages like Dashboard, Profile, Announcements, and Messages.
 Fetching Data: Frontend communicates with the backend API through RESTful API calls using Axios or Fetch.
 Authentication: Authentication is handled via JWT (JSON Web Tokens) for secure user login and session management.
