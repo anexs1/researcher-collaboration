@@ -23,7 +23,10 @@ git clone https://github.com/yourusername/researcher-collaboration-portal.git
 Install dependencies:
 
 cd researcher-collaboration-portal
-npm install 2. Frontend Development (React.js)
+npm install
+
+## 2. Frontend Development (React.js)
+
 The frontend is developed using React.js, where users can interact with the portal.
 
 UI Design and Components: The user interface is designed with reusable components for different sections (e.g., search bar, collaborator requests, chat interface).
