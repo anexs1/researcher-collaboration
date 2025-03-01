@@ -1,21 +1,28 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom"; // For navigation after registration
 
 function Register() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [researchArea, setResearchArea] = useState("");
   const [password, setPassword] = useState("");
+
+  const navigate = useNavigate(); // Replaces useHistory()
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Here you'd typically send the data to a backend
-    alert("Registration successful");
+
+    // Your form logic here, such as sending the data to the backend.
+
+    // For now, just redirect to profile
+    navigate("/profile"); // Redirects to the profile page
   };
 
   return (
-    <div className="register-container">
+    <div className="register-form">
       <h2>Register</h2>
       <form onSubmit={handleSubmit}>
-        <div className="form-group">
+        <div>
           <label>Name:</label>
           <input
             type="text"
@@ -24,7 +31,7 @@ function Register() {
             required
           />
         </div>
-        <div className="form-group">
+        <div>
           <label>Email:</label>
           <input
             type="email"
@@ -33,7 +40,16 @@ function Register() {
             required
           />
         </div>
-        <div className="form-group">
+        <div>
+          <label>Research Area:</label>
+          <input
+            type="text"
+            value={researchArea}
+            onChange={(e) => setResearchArea(e.target.value)}
+            required
+          />
+        </div>
+        <div>
           <label>Password:</label>
           <input
             type="password"

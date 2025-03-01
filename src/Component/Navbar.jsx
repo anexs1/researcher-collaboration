@@ -6,7 +6,6 @@ function Navbar() {
   const [showLoginForm, setShowLoginForm] = useState(false); // Control login form visibility
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [searchQuery, setSearchQuery] = useState(""); // State for search query
   const navigate = useNavigate();
 
   // Handle login form submission
@@ -54,9 +53,7 @@ function Navbar() {
         <li>
           <Link to="/">Home</Link>
         </li>
-        <li>
-          <Link to="/aboutus">About Us</Link>
-        </li>
+
         <li>
           <Link to="/researcher">Researchers</Link>
         </li>
@@ -72,20 +69,6 @@ function Navbar() {
           <Link to="/profile">Profile</Link>
         </li>
       </ul>
-
-      {/* Search Bar */}
-      <div className="search-bar">
-        <form onSubmit={handleSearchSubmit}>
-          <input
-            type="text"
-            placeholder="Search Researchers"
-            value={searchQuery}
-            onChange={handleSearchChange}
-            required
-          />
-          <button type="submit">Search</button>
-        </form>
-      </div>
 
       <div className="auth-buttons">
         <button className="login-btn" onClick={() => setShowLoginForm(true)}>

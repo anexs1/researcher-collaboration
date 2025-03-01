@@ -9,22 +9,23 @@ import Researcher from "./Page/Researcher";
 import Navbar from "./Component/Navbar";
 import Register from "./Page/Register";
 import Login from "./Page/Login";
-import CollaborationRequests from "./Page/CollaborationRequests"; // Page to display collaboration requests
-import CollaborationRequestForm from "./Page/CollaborationRequestForm"; // Form to create collaboration request
+import CollaborationRequests from "./Page/CollaborationRequests";
+import CollaborationRequestForm from "./Page/CollaborationRequestForm";
+import PublicationForm from "./Page/PublicationForm";
 
 function App() {
   const [researchers, setResearchers] = useState([]);
   const [collaborationRequest, setCollaborationRequest] = useState("");
-  const [status, setStatus] = useState(""); // For displaying request status
+  const [status, setStatus] = useState("");
   const [collaborationRequests, setCollaborationRequests] = useState([]);
 
-  // Fetching researchers
+  // Fetch researchers
   useEffect(() => {
     const fetchResearchers = async () => {
       try {
         const response = await axios.get(
           "http://localhost:5000/api/researchers"
-        ); // Update the API endpoint as needed
+        );
         setResearchers(response.data);
       } catch (error) {
         console.error("Error fetching researchers:", error);
@@ -33,13 +34,13 @@ function App() {
     fetchResearchers();
   }, []);
 
-  // Fetching collaboration requests
+  // Fetch collaboration requests
   useEffect(() => {
     const fetchCollaborationRequests = async () => {
       try {
         const response = await axios.get(
           "http://localhost:5000/api/collaboration"
-        ); // API to fetch collaboration requests
+        );
         setCollaborationRequests(response.data);
       } catch (error) {
         console.error("Error fetching collaboration requests:", error);
@@ -59,7 +60,7 @@ function App() {
         }
       );
       setStatus("Request sent successfully!");
-      setCollaborationRequest(""); // Clear the input field
+      setCollaborationRequest("");
     } catch (error) {
       console.error("Error submitting request:", error);
       setStatus("Error sending request");
@@ -75,6 +76,8 @@ function App() {
         <Route path="/researcher" element={<Researcher />} />
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/publication-form" element={<PublicationForm />} />
+        <Route path="/publication" element={<Publication />} />
 
         {/* Collaboration Requests Page */}
         <Route
@@ -95,10 +98,8 @@ function App() {
           }
         />
 
-        {/* Admin Section with Nested Routes */}
-        <Route path="/admin" element={<Admin />}>
-          <Route path="publication" element={<Publication />} />
-        </Route>
+        {/* Admin Section */}
+        <Route path="/admin" element={<Admin />} />
       </Routes>
     </Router>
   );
