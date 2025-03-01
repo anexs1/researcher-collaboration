@@ -87,12 +87,21 @@ const Home = () => {
         <h2 className="section-title">What Our Users Say</h2>
         <div className="testimonials-grid">
           <div className="testimonial-item">
-            <p>"This platform helped me find the perfect research partner!"</p>
-            <h4>- Dr. Amanuel T.</h4>
+            <img src="C:\Users\Anuwar\Desktop\what\src\assets\IMG_3959.PNG" />
+            <div className="testimonial-content">
+              <p>
+                "This platform helped me find the perfect research partner!"
+              </p>
+              <h4>- Dr. Amanuel T.</h4>
+            </div>
           </div>
+
           <div className="testimonial-item">
-            <p>"Collaborating has never been easier. Great experience!"</p>
-            <h4>- Prof. Mulu A.</h4>
+            <img src="C:\Users\Anuwar\Desktop\what\src\assets\IMG_3959.PNG" />
+            <div className="testimonial-content">
+              <p>"Collaborating has never been easier. Great experience!"</p>
+              <h4>- Prof. Mulu A.</h4>
+            </div>
           </div>
         </div>
       </section>
@@ -100,16 +109,61 @@ const Home = () => {
       {/* FAQ Section */}
       <section className="faq-section">
         <h2 className="section-title">Frequently Asked Questions</h2>
+
         <div className="faq-item hover-effect">
           <h3>How can I find a research partner?</h3>
           <p>
             You can browse collaboration opportunities or search for researchers
-            by expertise.
+            by expertise, field, or location. The platform also allows you to
+            filter researchers by their qualifications and previous projects to
+            ensure the best fit.
           </p>
         </div>
+
         <div className="faq-item hover-effect">
           <h3>Is my data secure?</h3>
-          <p>Yes! We ensure end-to-end encryption for all communications.</p>
+          <p>
+            Yes! We ensure end-to-end encryption for all communications. We
+            follow industry best practices to secure your personal and project
+            data, using secure protocols and regular security audits to protect
+            your information.
+          </p>
+        </div>
+
+        <div className="faq-item hover-effect">
+          <h3>Can I send direct messages to researchers?</h3>
+          <p>
+            Absolutely! Our platform provides real-time messaging functionality,
+            allowing you to connect with researchers directly. You can send
+            inquiries or project proposals through private chats.
+          </p>
+        </div>
+
+        <div className="faq-item hover-effect">
+          <h3>What happens after I send a collaboration request?</h3>
+          <p>
+            Once you send a request, the researcher will be notified and can
+            either approve or deny your request. If approved, you will be able
+            to start collaborating and sharing relevant materials securely.
+          </p>
+        </div>
+
+        <div className="faq-item hover-effect">
+          <h3>How can I update my profile?</h3>
+          <p>
+            You can easily update your profile by accessing the "My Profile"
+            section from your dashboard. There, you can update your
+            qualifications, research interests, and contact details at any time.
+          </p>
+        </div>
+
+        <div className="faq-item hover-effect">
+          <h3>Do I need to pay to use the platform?</h3>
+          <p>
+            No, the platform is completely free for all registered users. We
+            provide access to all research tools and collaboration features at
+            no cost to help foster academic collaboration.
+          </p>
         </div>
       </section>
 
