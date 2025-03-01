@@ -17,6 +17,10 @@ Project Setup
 
 ## Project Setup
 
+<!-- git add for adding files
+git commit for committing changes
+git push for pushing changes to the remote repository -->
+
 ## 1. Clone the repository:
 
 git clone https://github.com/yourusername/researcher-collaboration-portal.git
@@ -46,12 +50,18 @@ Integrate the chat functionality for real-time messaging.
 
 The backend handles the logic for user authentication, storing research announcements, and messaging.
 
-API Endpoints: Built with Express.js to handle requests from the frontend.
-Authentication: JWT is used for authenticating users and providing secure API access.
-Database: Data is stored in a MySQL database, which holds tables like Users, Announcements, Collaborator Requests, Messages, etc.
-Real-Time Communication: Socket.io is used for implementing real-time messaging and notifications.
-Error Handling: Standard error handling mechanisms are implemented for API responses (e.g., 400, 404, 500 errors).
-Security: Protect sensitive data using encryption (e.g., bcrypt for passwords) and implement security measures (e.g., CORS, rate-limiting).
+## API Endpoints: Built with Express.js to handle requests from the frontend.
+
+## Authentication: JWT is used for authenticating users and providing secure API access.
+
+## Database: Data is stored in a MySQL database, which holds tables like Users, Announcements, Collaborator Requests, Messages, etc.
+
+## Real-Time Communication: Socket.io is used for implementing real-time messaging and notifications.
+
+## Error Handling: Standard error handling mechanisms are implemented for API responses (e.g., 400, 404, 500 errors).
+
+## Security: Protect sensitive data using encryption (e.g., bcrypt for passwords) and implement security measures (e.g., CORS, rate-limiting).
+
 Steps:
 
 Set up Express.js and create endpoints for user registration, login, profile management, posting announcements, and managing collaborator requests.
@@ -81,7 +91,10 @@ The database is structured to store the data related to users, announcements, co
 T
 Design the database schema for the Users, Announcements, Messages, and CollaboratorRequests tables.
 Create SQL queries for interacting with the database (e.g., adding new users, posting new announcements).
-Use an ORM (like Sequelize or TypeORM) if necessary for easier database interaction. 5. Real-Time Functionality (Socket.io)
+Use an ORM (like Sequelize or TypeORM) if necessary for easier database interaction.
+
+## 5. Real-Time Functionality (Socket.io)
+
 The application includes real-time features such as chat and notifications. These are powered by Socket.io.
 
 Chat Feature: Enables users to send and receive messages instantly.
