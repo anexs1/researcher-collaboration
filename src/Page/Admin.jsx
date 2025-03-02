@@ -1,161 +1,53 @@
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { Card, CardContent } from "../Component/Card"; // Assuming Card component exists
+import { Sidebar, Menu, MenuItem } from "react-pro-sidebar"; // Sidebar library
+import { BarChart, Users, FileText, ShieldCheck } from "lucide-react"; // Icon library
 
-function Admin() {
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [adminPassword, setAdminPassword] = useState("");
-  const [researchers, setResearchers] = useState([]);
-  const [formData, setFormData] = useState({
-    name: "",
-    field: "",
-    bio: "",
-    image: null,
-  });
-
-  // Handle admin login
-  const handleAdminLogin = () => {
-    const password = "admin123"; // Hardcoded for demo
-    if (adminPassword === password) {
-      setIsAdmin(true);
-      setAdminPassword("");
-      alert("Admin login successful!");
-    } else {
-      alert("Incorrect password. Access denied.");
-    }
-  };
-
-  // Handle delete
-  const handleDelete = (index) => {
-    const updatedResearchers = researchers.filter((_, i) => i !== index);
-    setResearchers(updatedResearchers);
-  };
-
-  // Handle edit
-  const handleEdit = (index) => {
-    const researcherToEdit = researchers[index];
-    setFormData(researcherToEdit);
-    const updatedResearchers = researchers.filter((_, i) => i !== index);
-    setResearchers(updatedResearchers);
-  };
-  const handleshare = (index) => {
-    const update = researchers[index].share;
-    setResearchers(
-      researchers.map((researcher, i) => {
-        if (i === index) {
-          return { ...researcher, share: !update };
-        }
-        return researcher;
-      })
-    );
-  };
+export default function Admin() {
+  const [selected, setSelected] = useState("Dashboard");
 
   return (
-    <div className="container mt-4">
-      <div className="row">
-        {/* Sidebar */}
-        <div className="col-md-3">
-          <div className="list-group">
-            <Link
-              to="/admin"
-              className="list-group-item list-group-item-action"
-            >
-              Dashboard
-            </Link>
-            <Link
-              to="/admin/users"
-              className="list-group-item list-group-item-action"
-            >
-              Users
-            </Link>
-            <Link
-              to="/admin/settings"
-              className="list-group-item list-group-item-action"
-            >
-              Settings
-            </Link>
-            <Link
-              to="/admin/publication"
-              className="list-group-item list-group-item-action"
-            >
-              Publications
-            </Link>
-          </div>
-        </div>
+    <div className="admin-container flex h-screen">
+      {/* Sidebar */}
+      <Sidebar className="sidebar bg-gray-900 text-white w-64 p-4">
+        <h2 className="text-xl font-bold mb-4">Admin Panel</h2>
+        <Menu>
+          <MenuItem
+            icon={<BarChart />}
+            onClick={() => setSelected("Dashboard")}
+          >
+            Dashboard
+          </MenuItem>
+          <MenuItem
+            icon={<FileText />}
+            onClick={() => setSelected("Announcements")}
+          >
+            Announcements
+          </MenuItem>
+          <MenuItem icon={<Users />} onClick={() => setSelected("Users")}>
+            Users
+          </MenuItem>
+          <MenuItem
+            icon={<ShieldCheck />}
+            onClick={() => setSelected("Requests")}
+          >
+            Collaboration Requests
+          </MenuItem>
+        </Menu>
+      </Sidebar>
 
-        {/* Main Content */}
-        <div className="col-md-9">
-          <div className="card mb-4">
-            <div className="card-header">
-              <h4>Admin Dashboard</h4>
-            </div>
-            <div className="card-body">
-              {!isAdmin ? (
-                <div>
-                  <h3>Admin Login</h3>
-                  <input
-                    type="password"
-                    className="form-control mb-2"
-                    placeholder="Enter admin password"
-                    value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)}
-                  />
-                  <button
-                    className="btn btn-warning"
-                    onClick={handleAdminLogin}
-                  >
-                    Login as Admin
-                  </button>
-                </div>
-              ) : (
-                <div>
-                  <h3>Admin Mode</h3>
-                  <button
-                    className="btn btn-danger"
-                    onClick={handleAdminLogout}
-                  >
-                    Logout
-                  </button>
-
-                  {/* Researcher Management */}
-                  <h3>Manage Researchers</h3>
-                  <ul className="list-group">
-                    {researchers.map((res, index) => (
-                      <li key={index} className="list-group-item">
-                        <h5>{res.name}</h5>
-                        <p>
-                          <strong>Field:</strong> {res.field}
-                        </p>
-                        <p>{res.bio}</p>
-                        {res.image && (
-                          <img
-                            src={res.image}
-                            alt={res.name}
-                            style={{ width: "100px", height: "100px" }}
-                          />
-                        )}
-                        <button
-                          className="btn btn-danger"
-                          onClick={() => handleDelete(index)}
-                        >
-                          Delete
-                        </button>
-                        <button
-                          className="btn btn-primary"
-                          onClick={() => handleEdit(index)}
-                        >
-                          Edit
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+      {/* Main Content */}
+      <div className="content flex-1 p-6">
+        <h1 className="text-2xl font-bold mb-4">{selected}</h1>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-gray-700">
+              Content for {selected} will be displayed here.
+            </p>
+            {/* Additional content logic goes here */}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
 }
-
-export default Admin;

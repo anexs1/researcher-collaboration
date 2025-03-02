@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Route,
+  Routes,
+  Navigate,
+} from "react-router-dom";
 import axios from "axios";
 import Admin from "./Page/Admin";
 import Home from "./Page/Home";
@@ -18,6 +23,8 @@ function App() {
   const [collaborationRequest, setCollaborationRequest] = useState("");
   const [status, setStatus] = useState("");
   const [collaborationRequests, setCollaborationRequests] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false); // Admin state to control admin access
+  const [isLoggedIn, setIsLoggedIn] = useState(false); // Add login state here
 
   // Fetch researchers
   useEffect(() => {
@@ -67,39 +74,38 @@ function App() {
     }
   };
 
+  // This effect triggers after login state changes to prevent infinite loops
+  useEffect(() => {
+    if (isLoggedIn) {
+      // Redirect to Admin page if logged in
+      window.location.href = "/admin";
+    }
+  }, [isLoggedIn]);
+
   return (
     <Router>
-      <Navbar />
+      <Navbar isAdmin={isAdmin} setIsLoggedIn={setIsLoggedIn} />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/researcher" element={<Researcher />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/login" element={<Login />} />
+        <Route
+          path="/login"
+          element={<Login setIsLoggedIn={setIsLoggedIn} />}
+        />
         <Route path="/publication-form" element={<PublicationForm />} />
         <Route path="/publication" element={<Publication />} />
-
-        {/* Collaboration Requests Page */}
         <Route
           path="/collaboration-requests"
           element={<CollaborationRequests requests={collaborationRequests} />}
         />
-
-        {/* Collaboration Request Form */}
-        <Route
-          path="/collaboration-request-form"
-          element={
-            <CollaborationRequestForm
-              researchers={researchers}
-              collaborationRequest={collaborationRequest}
-              setCollaborationRequest={setCollaborationRequest}
-              handleRequestSubmit={handleRequestSubmit}
-            />
-          }
-        />
-
         {/* Admin Section */}
-        <Route path="/admin" element={<Admin />} />
+        {isAdmin ? (
+          <Route path="/admin" element={<Admin />} />
+        ) : (
+          <Route path="/admin" element={<Navigate to="/" />} />
+        )}
       </Routes>
     </Router>
   );

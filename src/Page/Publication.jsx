@@ -1,132 +1,156 @@
-import React, { useEffect, useState } from "react";
 import axios from "axios";
+import { useEffect, useState } from "react";
 
-function Publication() {
+const API_URL = "http://localhost:5000/api/publications";
+
+const Publication = () => {
   const [publications, setPublications] = useState([]);
-  const [newPublication, setNewPublication] = useState("");
-  const [loading, setLoading] = useState(true); // Loading state
-  const userId = 1; // Replace with dynamic user ID from authentication
-  const userRole = "user"; // Replace with dynamic role (user/admin)
+  const [newPublication, setNewPublication] = useState({
+    userId: "",
+    content: "",
+  });
+  const [editingPublication, setEditingPublication] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  // Fetch Publications
+  const fetchPublications = async () => {
+    setLoading(true);
+    try {
+      const response = await axios.get(API_URL);
+      setPublications(response.data);
+      setError("");
+    } catch (error) {
+      console.error("Error fetching publications:", error);
+      setError("Failed to fetch publications. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Add a Publication
+  const handleAddPublication = async () => {
+    if (!newPublication.content) {
+      setError("Content is required.");
+      return;
+    } else if (newPublication.content.length < 10) {
+      setError("Content must be at least 10 characters long.");
+      return;
+    }
+
+    try {
+      await axios.post(API_URL, newPublication);
+      setNewPublication({ userId: "", content: "" });
+      fetchPublications();
+      setError("");
+    } catch (error) {
+      console.error("Error adding publication:", error);
+      setError("Failed to add publication. Please try again.");
+    }
+  };
+
+  // Edit a Publication
+  const handleEditPublication = async () => {
+    if (!editingPublication.content) {
+      setError("Content is required.");
+      return;
+    }
+
+    try {
+      await axios.put(`${API_URL}/${editingPublication.id}`, {
+        content: editingPublication.content,
+      });
+      setEditingPublication(null);
+      fetchPublications();
+      setError("");
+    } catch (error) {
+      console.error("Error editing publication:", error);
+      setError("Failed to edit publication. Please try again.");
+    }
+  };
+
+  // Delete a Publication
+  const handleDeletePublication = async (id) => {
+    try {
+      await axios.delete(`${API_URL}/${id}`);
+      fetchPublications();
+      setError("");
+    } catch (error) {
+      console.error("Error deleting publication:", error);
+      setError("Failed to delete publication. Please try again.");
+    }
+  };
 
   useEffect(() => {
     fetchPublications();
   }, []);
 
-  const fetchPublications = async () => {
-    try {
-      const response = await axios.get(
-        "http://localhost:5000/api/publications"
-      );
-      setPublications(response.data);
-      setLoading(false); // Stop loading after fetching
-    } catch (error) {
-      console.error("Error fetching publications:", error);
-      setLoading(false); // Stop loading even on error
-    }
-  };
-
-  const handleAddPublication = async () => {
-    if (!newPublication.trim()) return;
-
-    try {
-      await axios.post("http://localhost:5000/api/publications", {
-        userId,
-        content: newPublication,
-      });
-      setNewPublication(""); // Clear input field
-      fetchPublications(); // Refresh list after adding
-    } catch (error) {
-      console.error("Error adding publication:", error);
-    }
-  };
-
-  const handleEdit = async (id, oldContent) => {
-    const newContent = prompt("Edit your publication:", oldContent);
-    if (!newContent) return;
-
-    try {
-      await axios.put(`http://localhost:5000/api/publications/${id}`, {
-        content: newContent,
-        userId,
-        role: userRole,
-      });
-      fetchPublications(); // Refresh list after editing
-    } catch (error) {
-      console.error("Error updating publication:", error);
-    }
-  };
-
-  const handleDelete = async (id) => {
-    try {
-      await axios.delete(`http://localhost:5000/api/publications/${id}`, {
-        data: { userId, role: userRole },
-      });
-      fetchPublications(); // Refresh list after deletion
-    } catch (error) {
-      console.error("Error deleting publication:", error);
-    }
-  };
-
-  const handleShare = async (id) => {
-    try {
-      await axios.post(`http://localhost:5000/api/publications/share`, { id });
-      alert("Publication shared successfully!");
-    } catch (error) {
-      console.error("Error sharing publication:", error);
-    }
-  };
-
   return (
-    <div className="publication-container">
-      <h3>Recent Publications</h3>
+    <div>
+      <h1>Publications</h1>
+      {error && <p style={{ color: "red" }}>{error}</p>}
 
-      {/* Publication Form */}
-      <div className="publication-form">
+      {/* Add Form */}
+      <div>
         <input
           type="text"
-          placeholder="Share your publication..."
-          value={newPublication}
-          onChange={(e) => setNewPublication(e.target.value)}
+          placeholder="User ID"
+          value={newPublication.userId}
+          onChange={(e) =>
+            setNewPublication({ ...newPublication, userId: e.target.value })
+          }
         />
-        <button onClick={handleAddPublication}>Post</button>
+        <textarea
+          placeholder="Content"
+          value={newPublication.content}
+          onChange={(e) =>
+            setNewPublication({ ...newPublication, content: e.target.value })
+          }
+        />
+        <button onClick={handleAddPublication}>Add Publication</button>
       </div>
 
-      <hr />
-
-      {/* Loading State */}
+      {/* Publication List */}
       {loading ? (
-        <p>Loading publications...</p>
-      ) : publications.length === 0 ? (
-        <p>No publications yet.</p>
+        <p>Loading...</p>
       ) : (
-        publications.map((pub) => (
-          <div key={pub.id} className="publication-card">
-            <div className="publication-author">
-              <img src="https://via.placeholder.com/50" alt="User" />
-              <div>
-                <h5>{pub.author || "Anonymous"}</h5>
-                <p className="publication-date">{pub.createdAt}</p>
-              </div>
-            </div>
-            <p className="publication-content">{pub.content}</p>
+        <ul>
+          {publications.map((pub) => (
+            <li key={pub.id}>
+              <h3>User ID: {pub.userId}</h3>
+              <p>{pub.content}</p>
+              <small>
+                Created at: {new Date(pub.createdAt).toLocaleString()}
+              </small>
+              <button onClick={() => setEditingPublication(pub)}>Edit</button>
+              <button onClick={() => handleDeletePublication(pub.id)}>
+                Delete
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
-            {/* Edit and Delete Buttons (Only for Author or Admin) */}
-            {userId === pub.userId || userRole === "admin" ? (
-              <div className="publication-actions">
-                <button onClick={() => handleEdit(pub.id, pub.content)}>
-                  Edit
-                </button>
-                <button onClick={() => handleDelete(pub.id)}>Delete</button>
-              </div>
-            ) : null}
-
-            {/* Share Button */}
-            <button onClick={() => handleShare(pub.id)}>Share</button>
-          </div>
-        ))
+      {/* Edit Form (if editing) */}
+      {editingPublication && (
+        <div>
+          <h2>Edit Publication</h2>
+          <textarea
+            placeholder="Content"
+            value={editingPublication.content}
+            onChange={(e) =>
+              setEditingPublication({
+                ...editingPublication,
+                content: e.target.value,
+              })
+            }
+          />
+          <button onClick={handleEditPublication}>Update Publication</button>
+          <button onClick={() => setEditingPublication(null)}>Cancel</button>
+        </div>
       )}
     </div>
   );
-}
+};
 
 export default Publication;

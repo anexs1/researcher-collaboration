@@ -1,9 +1,8 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-function Navbar() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false); // Track login status
-  const [showLoginForm, setShowLoginForm] = useState(false); // Control login form visibility
+function Navbar({ isAdmin, setIsLoggedIn }) {
+  const [showLoginForm, setShowLoginForm] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
@@ -11,35 +10,14 @@ function Navbar() {
   // Handle login form submission
   const handleLogin = (e) => {
     e.preventDefault();
+
     // Simulate login logic (replace with actual authentication)
     if (username === "admin" && password === "password") {
-      setIsLoggedIn(true);
-      setShowLoginForm(false);
-      alert("Login successful!");
+      setIsLoggedIn(true); // Set logged-in state
+      setShowLoginForm(false); // Hide login form after login
+      navigate("/admin"); // Navigate to Admin page
     } else {
       alert("Invalid credentials!");
-    }
-  };
-
-  // Handle admin link click
-  const handleAdminClick = (e) => {
-    if (!isLoggedIn) {
-      e.preventDefault();
-      alert("Please login to access the Admin page.");
-      setShowLoginForm(true); // Show login form if not logged in
-    }
-  };
-
-  // Handle search query change
-  const handleSearchChange = (e) => {
-    setSearchQuery(e.target.value);
-  };
-
-  // Handle form submission (or search action)
-  const handleSearchSubmit = (e) => {
-    e.preventDefault();
-    if (searchQuery) {
-      navigate(`/researchers?search=${searchQuery}`); // Redirect to researcher search page with query
     }
   };
 
@@ -53,7 +31,6 @@ function Navbar() {
         <li>
           <Link to="/">Home</Link>
         </li>
-
         <li>
           <Link to="/researcher">Researchers</Link>
         </li>
@@ -61,9 +38,7 @@ function Navbar() {
           <Link to="/publication">Publications</Link>
         </li>
         <li>
-          <Link to="/admin" onClick={handleAdminClick}>
-            Admin
-          </Link>
+          <Link to="/admin">Admin</Link>
         </li>
         <li>
           <Link to="/profile">Profile</Link>
@@ -112,3 +87,4 @@ function Navbar() {
 }
 
 export default Navbar;
+// Compare this snippet from src/Page/Profile.jsx:  import { useEffect, useState } from "react";

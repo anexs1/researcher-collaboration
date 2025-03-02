@@ -17,6 +17,12 @@ Project Setup
 git commit for committing changes
 git push for pushing changes to the remote repository -->
 
+✅ Manage Announcements (Edit/Delete researcher posts)
+✅ Approve/Reject Collaboration Requests
+✅ User Management (Activate/Deactivate researchers)
+✅ Monitor Chats (Only if needed for moderation)
+✅ Dashboard Analytics (See collaboration trends, active users, etc.)
+
 ## 1. Clone the repository:
 
 git clone https://github.com/yourusername/researcher-collaboration-portal.git
