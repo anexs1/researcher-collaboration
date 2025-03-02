@@ -22,6 +22,10 @@ git push for pushing changes to the remote repository -->
 ✅ User Management (Activate/Deactivate researchers)
 ✅ Monitor Chats (Only if needed for moderation)
 ✅ Dashboard Analytics (See collaboration trends, active users, etc.)
+✅ i need the place where the file repositry is stored and the database is stored
+✅ i need to be able to add a researcher to the database and i need to be able to edit a researcher's profile and i need to be able to delete a researcher from the database
+✅ i need to be able to add a collaboration request and i need to be able to edit a collaboration request and i need to be able to delete a collaboration request
+✅ i need to be able to view a researcher's profile and i need to be able to view a collaboration request
 
 ## 1. Clone the repository:
 
@@ -105,3 +109,44 @@ Steps:
 
 Implement event listeners on the frontend for new messages and notifications.
 Set up a backend listener to handle real-time events like new messages or collaborator request approvals.
+
+## 1. User Management (Researchers, Admins)
+
+Feature-Specific Tasks:
+✅ User Registration (Researchers only, Admins are added manually).
+✅ Login with JWT authentication.
+✅ Password Reset via email verification.
+✅ Role-based access control (Researcher vs Admin).
+✅ Update profile information (name, expertise, bio, image, etc.).
+✅ List all registered users (Admin only).
+✅ Ban/unban users (Admin only).
+
+## 2. Announcements (Collaboration Requests)
+
+Feature-Specific Tasks:
+✅ Post a new announcement with a title, description, and criteria.
+✅ Edit or delete own announcements.
+✅ Filter/search announcements by research area, keywords, or posted date.
+✅ View list of all announcements.
+✅ Moderate announcements (Admin only).
+✅ Close an announcement to stop receiving collaboration requests.
+
+## 3. Collaboration Requests (Request-Approval System)
+
+Feature-Specific Tasks:
+✅ Researchers can send collaboration requests to announcements.
+✅ Cancel pending requests before approval.
+✅ Announcement owner can approve or decline requests.
+✅ View request status (pending, approved, declined).
+✅ Admin can view all collaboration requests.
+
+## 4.4. Chat System (Appears Only After Approval)
+
+Feature-Specific Tasks:
+✅ Chat with other researchers after approval.
+✅ Send private messages to specific users.
+✅ View chat history.
+✅ Admin can view all chat messages.
+✅ Real-time messaging between approved collaborators.
+✅ View chat history.
+✅ Block chat access for pending/declined requests.

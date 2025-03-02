@@ -73,7 +73,6 @@ function App() {
       setStatus("Error sending request");
     }
   };
-
   // This effect triggers after login state changes to prevent infinite loops
   useEffect(() => {
     if (isLoggedIn && isAdmin) {
@@ -84,7 +83,6 @@ function App() {
       window.location.href = "/";
     }
   }, [isLoggedIn, isAdmin]);
-
   return (
     <Router>
       <Navbar
@@ -112,7 +110,7 @@ function App() {
         {/* Admin Section */}
         <Route
           path="/admin"
-          element={isAdmin ? <Admin /> : <Navigate to="/" />}
+          element={isAdmin ? <Admin /> : <Navigate to="/ Admin" />}
         />
       </Routes>
     </Router>

@@ -1,16 +1,13 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-
 function Navbar({ isLoggedIn, setIsLoggedIn, setIsAdmin }) {
   const [showLoginForm, setShowLoginForm] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
-
   // Handle login form submission
   const handleLogin = (e) => {
     e.preventDefault();
-
     // Simulate login logic (replace with actual authentication)
     if (username === "admin" && password === "password") {
       setIsLoggedIn(true); // Set logged-in state
@@ -57,7 +54,7 @@ function Navbar({ isLoggedIn, setIsLoggedIn, setIsAdmin }) {
             onClick={() => {
               setIsLoggedIn(false); // Set logged-out state
               setIsAdmin(false); // Clear admin status
-              navigate("/"); // Redirect to home page
+              navigate("/Admin"); // Redirect to home page
             }}
           >
             Logout

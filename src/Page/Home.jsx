@@ -181,10 +181,12 @@ const Home = () => {
 
       {/* Footer */}
       <footer className="footer">
-        <p>© 2025 Researcher Collaboration Portal. All Rights Reserved.</p>
+        <p>
+          © 2025 Researcher Collaboration Portal. All Rights Reserved.worked by
+          G4 IT{" "}
+        </p>
       </footer>
     </div>
   );
 };
-
 export default Home;
