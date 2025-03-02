@@ -100,7 +100,6 @@ Use an ORM (like Sequelize or TypeORM) if necessary for easier database interact
 ## 5. Real-Time Functionality (Socket.io)
 
 The application includes real-time features such as chat and notifications. These are powered by Socket.io.
-
 Chat Feature: Enables users to send and receive messages instantly.
 Notifications: Notifies users when they receive a new collaborator request or message.
 Steps:
@@ -118,6 +117,10 @@ Feature-Specific Tasks:
 ✅ Password Reset via email verification.
 ✅ Role-based access control (Researcher vs Admin).
 ✅ Update profile information (name, expertise, bio, image, etc.).
+✅ Create a new announcement.
+✅ Edit or delete own announcements.
+✅ Filter/search announcements by research area, keywords, or posted date.
+✅ View list of all announcements.
 ✅ List all registered users (Admin only).
 ✅ Ban/unban users (Admin only).
 
@@ -140,7 +143,7 @@ Feature-Specific Tasks:
 ✅ View request status (pending, approved, declined).
 ✅ Admin can view all collaboration requests.
 
-## 4.4. Chat System (Appears Only After Approval)
+## 4. Chat System (Appears Only After Approval)
 
 Feature-Specific Tasks:
 ✅ Chat with other researchers after approval.
