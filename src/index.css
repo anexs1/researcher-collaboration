@@ -1206,3 +1206,151 @@ h3 {
   color: #666;
   margin-top: 1rem;
 }
+/* General container styling with animation */
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+  background-color: #f9f9f9;
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+}
+
+.container:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+}
+
+/* Header styling */
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+  background-color: #007bff;
+  color: white;
+  width: 100%; /* Make the header full width */
+  border-radius: 0; /* Remove rounded corners */
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); /* Subtle shadow for header */
+  animation: slideIn 1s ease-out; /* Add animation */
+}
+
+/* Navbar hover effect */
+.navbar:hover {
+  background-color: #0056b3;
+}
+
+/* Navbar animation */
+@keyframes slideIn {
+  0% {
+    transform: translateY(-50px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Hero Section with animation */
+.hero-section {
+  text-align: center;
+  padding: 50px 20px;
+  background: linear-gradient(135deg, #6a11cb, #2575fc);
+  color: white;
+  border-radius: 10px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  animation: fadeIn 1.2s ease-out; /* Fade in animation */
+}
+
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero-title {
+  font-size: 2.5rem;
+  margin-bottom: 20px;
+}
+
+.hero-description {
+  font-size: 1.2rem;
+  margin-bottom: 30px;
+}
+
+.cta-button {
+  background-color: #2575fc;
+  color: white;
+  padding: 15px 25px;
+  font-size: 1.1rem;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  animation: scaleUp 0.8s ease-out; /* Animation to scale up */
+}
+
+.cta-button:hover {
+  background-color: #6a11cb;
+}
+
+@keyframes scaleUp {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Other Sections Animation */
+.features-section,
+.how-it-works-section,
+.about-section,
+.testimonials-section,
+.contact-section {
+  padding: 60px 20px;
+  text-align: center;
+  animation: fadeInSection 1s ease-out; /* Fade in for sections */
+}
+
+@keyframes fadeInSection {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Footer with animation */
+.footer {
+  background-color: #007bff;
+  color: white;
+  text-align: center;
+  padding: 30px;
+  font-size: 1rem;
+  animation: fadeInFooter 1s ease-out; /* Fade-in animation for footer */
+}
+
+@keyframes fadeInFooter {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

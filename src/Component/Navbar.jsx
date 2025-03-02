@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-function Navbar({ isAdmin, setIsLoggedIn }) {
+function Navbar({ isLoggedIn, setIsLoggedIn, setIsAdmin }) {
   const [showLoginForm, setShowLoginForm] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -14,6 +14,7 @@ function Navbar({ isAdmin, setIsLoggedIn }) {
     // Simulate login logic (replace with actual authentication)
     if (username === "admin" && password === "password") {
       setIsLoggedIn(true); // Set logged-in state
+      setIsAdmin(true); // Set user as admin
       setShowLoginForm(false); // Hide login form after login
       navigate("/admin"); // Navigate to Admin page
     } else {
@@ -46,9 +47,22 @@ function Navbar({ isAdmin, setIsLoggedIn }) {
       </ul>
 
       <div className="auth-buttons">
-        <button className="login-btn" onClick={() => setShowLoginForm(true)}>
-          Login
-        </button>
+        {!isLoggedIn ? (
+          <button className="login-btn" onClick={() => setShowLoginForm(true)}>
+            Login
+          </button>
+        ) : (
+          <button
+            className="logout-btn"
+            onClick={() => {
+              setIsLoggedIn(false); // Set logged-out state
+              setIsAdmin(false); // Clear admin status
+              navigate("/"); // Redirect to home page
+            }}
+          >
+            Logout
+          </button>
+        )}
         <Link to="/register">
           <button className="register-btn">Register</button>
         </Link>
@@ -87,4 +101,3 @@ function Navbar({ isAdmin, setIsLoggedIn }) {
 }
 
 export default Navbar;
-// Compare this snippet from src/Page/Profile.jsx:  import { useEffect, useState } from "react";

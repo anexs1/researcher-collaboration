@@ -76,15 +76,22 @@ function App() {
 
   // This effect triggers after login state changes to prevent infinite loops
   useEffect(() => {
-    if (isLoggedIn) {
-      // Redirect to Admin page if logged in
+    if (isLoggedIn && isAdmin) {
+      // Redirect to Admin page if logged in and is Admin
       window.location.href = "/admin";
+    } else if (isLoggedIn) {
+      // Redirect to Home if logged in but not an Admin
+      window.location.href = "/";
     }
-  }, [isLoggedIn]);
+  }, [isLoggedIn, isAdmin]);
 
   return (
     <Router>
-      <Navbar isAdmin={isAdmin} setIsLoggedIn={setIsLoggedIn} />
+      <Navbar
+        isLoggedIn={isLoggedIn}
+        setIsLoggedIn={setIsLoggedIn}
+        setIsAdmin={setIsAdmin}
+      />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/profile" element={<Profile />} />
@@ -92,7 +99,9 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route
           path="/login"
-          element={<Login setIsLoggedIn={setIsLoggedIn} />}
+          element={
+            <Login setIsLoggedIn={setIsLoggedIn} setIsAdmin={setIsAdmin} />
+          }
         />
         <Route path="/publication-form" element={<PublicationForm />} />
         <Route path="/publication" element={<Publication />} />
@@ -101,11 +110,10 @@ function App() {
           element={<CollaborationRequests requests={collaborationRequests} />}
         />
         {/* Admin Section */}
-        {isAdmin ? (
-          <Route path="/admin" element={<Admin />} />
-        ) : (
-          <Route path="/admin" element={<Navigate to="/" />} />
-        )}
+        <Route
+          path="/admin"
+          element={isAdmin ? <Admin /> : <Navigate to="/" />}
+        />
       </Routes>
     </Router>
   );
