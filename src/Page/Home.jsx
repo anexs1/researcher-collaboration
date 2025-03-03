@@ -47,7 +47,7 @@ const Home = () => {
             <p>Sign up and showcase your research expertise.</p>
           </div>
           <div className="step-item hover-effect">
-            <h3>2. Find Collaboration Opportunities</h3>
+            <h3>2. Find Collaboration for the collaboration</h3>
             <p>Search for collaboration projects and apply easily.</p>
           </div>
           <div className="step-item hover-effect">
