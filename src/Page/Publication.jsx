@@ -12,7 +12,6 @@ const Publication = () => {
   const [editingPublication, setEditingPublication] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
   // Fetch Publications
   const fetchPublications = async () => {
     setLoading(true);

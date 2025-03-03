@@ -1,46 +1,101 @@
 const express = require("express");
 const cors = require("cors");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const { Sequelize, DataTypes } = require("sequelize");
+require("dotenv").config();
+
 const app = express();
 
-// Apply CORS middleware first
-app.use(
-  cors({
-    origin: "http://localhost:5173",
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    credentials: true,
-  })
-);
-
-// Parse JSON request bodies
+// Middleware
+app.use(cors({ origin: "http://localhost:5173", credentials: true }));
 app.use(express.json());
 
-// Handle preflight requests
-app.options("/api/publications", (req, res) => {
-  res.header("Access-Control-Allow-Origin", "http://localhost:5173");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE");
-  res.header("Access-Control-Allow-Headers", "Content-Type");
-  res.send();
-});
-const handleLogin = async (username, password) => {
-  // Example: Check credentials with the backend
-  const response = await axios.post("/api/login", { username, password });
+// Database Connection (MySQL with Sequelize)
+const sequelize = new Sequelize(
+  process.env.MYSQL_DB,
+  process.env.MYSQL_USER,
+  process.env.MYSQL_PASS,
+  {
+    host: process.env.MYSQL_HOST,
+    dialect: "mysql",
+  }
+);
 
-  if (response.data.role === "admin") {
-    setIsAdmin(true); // If the user is an admin, set isAdmin to true
+// User Model
+const User = sequelize.define("User", {
+  id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+  name: { type: DataTypes.STRING, allowNull: false },
+  email: { type: DataTypes.STRING, unique: true, allowNull: false },
+  password: { type: DataTypes.STRING, allowNull: false },
+  researchArea: { type: DataTypes.STRING, allowNull: false },
+  profileImage: { type: DataTypes.STRING, allowNull: true }, // URL for profile image
+});
+
+// Sync database (Create tables if not exist)
+sequelize.sync().then(() => console.log("Database & tables ready!"));
+
+// 🔹 Register Endpoint
+app.post("/api/register", async (req, res) => {
+  const { name, email, password, researchArea, profileImage } = req.body;
+  const hashedPassword = await bcrypt.hash(password, 10);
+  try {
+    const user = await User.create({
+      name,
+      email,
+      password: hashedPassword,
+      researchArea,
+      profileImage,
+    });
+    res.json({ message: "User registered successfully" });
+  } catch (err) {
+    res.status(400).json({ error: "Email already exists" });
+  }
+});
+
+// 🔹 Login Endpoint
+app.post("/api/login", async (req, res) => {
+  const { email, password } = req.body;
+  const user = await User.findOne({ where: { email } });
+  if (!user) return res.status(400).json({ error: "User not found" });
+
+  const isMatch = await bcrypt.compare(password, user.password);
+  if (!isMatch) return res.status(400).json({ error: "Invalid credentials" });
+
+  const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
+    expiresIn: "1h",
+  });
+  res.json({ token });
+});
+
+// 🔹 Protected Profile Endpoint
+const verifyToken = (req, res, next) => {
+  const token = req.header("Authorization")?.split(" ")[1];
+  if (!token) return res.status(401).json({ message: "Access Denied" });
+
+  try {
+    const verified = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = verified;
+    next();
+  } catch (err) {
+    res.status(401).json({ message: "Invalid Token" });
   }
 };
 
-// Your routes
-app.get("/api/publications", (req, res) => {
-  res.json([{ id: 1, content: "Example publication" }]);
+app.get("/api/profile", verifyToken, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.userId, {
+      attributes: { exclude: ["password"] },
+    });
+    if (!user) return res.status(404).json({ error: "User not found" });
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch profile data" });
+  }
 });
 
-app.post("/api/publications", (req, res) => {
-  const { content } = req.body;
-  res.status(201).json({ id: 2, content });
-});
-
-// Start the server
-app.listen(5000, () => {
-  console.log("Server is running on http://localhost:5000");
-});
+// Start Server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () =>
+  console.log(`Server running on http://localhost:${PORT}`)
+);

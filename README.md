@@ -1,16 +1,5 @@
 # React + Vite
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript and enable type-aware lint rules. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
-
-to make some change first run this onn cmd 1. git pull origin main
-2.git checkout -b feature/your-feature-name
-Project Setup
-
 ## Project Setup
 
 <!-- git add for adding files
@@ -74,20 +63,6 @@ Set up Express.js and create endpoints for user registration, login, profile man
 Implement JWT-based authentication and middleware to secure routes.
 Set up the MySQL database and write queries for storing and retrieving data.
 Implement real-time chat functionality using Socket.io
-
-## Database Design
-
-The database is designed to store user information, research announcements, and collaboration requests.
-
-## Tables: Some key tables include:
-
-## Users: Stores user information such as name, email, password, and role.
-
-## Announcements: Stores research opportunities and requests for collaborators.
-
-## CollaboratorRequests: Stores requests from users to participate in research projects.
-
-## Relationships: Use foreign keys to establish relationships between users and their announcements or collaborator requests.
 
 Design the database schema for the Users, Announcements, and CollaboratorRequests tables.
 Create SQL queries for interacting with the database (e.g., adding new users, posting new announcements).
