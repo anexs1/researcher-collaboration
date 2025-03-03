@@ -59,7 +59,6 @@ function Researcher() {
           </div>
         </div>
       </div>
-
       {/* Option to edit the profile if the user is authorized */}
       <div className="mt-3">
         <button
@@ -72,5 +71,4 @@ function Researcher() {
     </div>
   );
 }
-
 export default Researcher;

@@ -18,12 +18,6 @@ git push for pushing changes to the remote repository -->
 
 ## 1. Clone the repository:
 
-git clone https://github.com/yourusername/researcher-collaboration-portal.git
-Install dependencies:
-
-cd researcher-collaboration-portal
-npm install
-
 ## 2. Frontend Development (React.js)
 
 The frontend is developed using React.js, where users can interact with the portal.
