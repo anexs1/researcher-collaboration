@@ -4,9 +4,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { Sequelize, DataTypes } = require("sequelize");
 require("dotenv").config();
-
 const app = express();
-
 // Middleware
 app.use(cors({ origin: "http://localhost:5173", credentials: true }));
 app.use(express.json());
@@ -31,7 +29,6 @@ const User = sequelize.define("User", {
   researchArea: { type: DataTypes.STRING, allowNull: false },
   profileImage: { type: DataTypes.STRING, allowNull: true }, // URL for profile image
 });
-
 // Sync database (Create tables if not exist)
 sequelize.sync().then(() => console.log("Database & tables ready!"));
 
@@ -52,7 +49,6 @@ app.post("/api/register", async (req, res) => {
     res.status(400).json({ error: "Email already exists" });
   }
 });
-
 // 🔹 Login Endpoint
 app.post("/api/login", async (req, res) => {
   const { email, password } = req.body;
@@ -67,7 +63,6 @@ app.post("/api/login", async (req, res) => {
   });
   res.json({ token });
 });
-
 // 🔹 Protected Profile Endpoint
 const verifyToken = (req, res, next) => {
   const token = req.header("Authorization")?.split(" ")[1];
@@ -81,7 +76,6 @@ const verifyToken = (req, res, next) => {
     res.status(401).json({ message: "Invalid Token" });
   }
 };
-
 app.get("/api/profile", verifyToken, async (req, res) => {
   try {
     const user = await User.findByPk(req.user.userId, {
@@ -93,7 +87,6 @@ app.get("/api/profile", verifyToken, async (req, res) => {
     res.status(500).json({ error: "Failed to fetch profile data" });
   }
 });
-
 // Start Server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () =>

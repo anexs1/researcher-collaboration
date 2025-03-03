@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import axios from "axios";
-
 function Researcher() {
   const { id } = useParams(); // Get the researcher ID from the URL
   const [researcher, setResearcher] = useState(null); // Store researcher data
