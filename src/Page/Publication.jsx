@@ -67,7 +67,6 @@ const Publication = () => {
       setError("Failed to edit publication. Please try again.");
     }
   };
-
   // Delete a Publication
   const handleDeletePublication = async (id) => {
     try {
@@ -79,7 +78,6 @@ const Publication = () => {
       setError("Failed to delete publication. Please try again.");
     }
   };
-
   useEffect(() => {
     fetchPublications();
   }, []);
@@ -108,7 +106,6 @@ const Publication = () => {
         />
         <button onClick={handleAddPublication}>Add Publication</button>
       </div>
-
       {/* Publication List */}
       {loading ? (
         <p>Loading...</p>
@@ -129,7 +126,6 @@ const Publication = () => {
           ))}
         </ul>
       )}
-
       {/* Edit Form (if editing) */}
       {editingPublication && (
         <div>
