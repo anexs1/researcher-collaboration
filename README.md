@@ -1,8 +1,12 @@
 ## Project Setup
 
-<!-- git add for adding files
-git commit for committing changes
-git push for pushing changes to the remote repository -->
+to save all change at once on github
+
+## git add .
+
+## git commit -m "Your commit message"
+
+## git push origin main
 
 ✅ Manage Announcements (Edit/Delete researcher posts)
 ✅ Approve/Reject Collaboration Requests
