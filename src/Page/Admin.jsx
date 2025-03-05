@@ -1,12 +1,22 @@
 import React from "react";
 
-function Admin() {
+export default function Admin() {
   return (
     <div>
-      <h1>Welcome to the Admin Panel</h1>
-      {/* Other admin content */}
+      <Sidebar>
+        <Menu>
+          <MenuItem icon={<BarChart />}>Dashboard</MenuItem>
+          <MenuItem icon={<Users />}>Users</MenuItem>
+          <MenuItem icon={<FileText />}>Reports</MenuItem>
+          <MenuItem icon={<ShieldCheck />}>Security</MenuItem>
+        </Menu>
+      </Sidebar>
+      <Card>
+        <CardContent>
+          <h1>Admin Dashboard</h1>
+          <Button>Click Me</Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }
-
-export default Admin;

@@ -864,203 +864,121 @@ h2 {
   font-weight: bold;
   margin-bottom: 10px;
 }
-.publication-container {
-  width: 90%;
-  max-width: 800px;
-  margin: auto;
-  padding: 20px;
-  background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
-}
-
-h3 {
-  text-align: center;
-  color: #333;
-}
-
-.publication-form {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 15px;
-}
-
-.publication-form input {
-  flex: 1;
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-}
-
-.publication-form button {
-  padding: 10px 20px;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: 0.3s;
-}
-
-.publication-form button:hover {
-  background-color: #0056b3;
-}
-
-/* Publications in Horizontal Layout */
-.publication-list {
-  display: flex;
-  overflow-x: auto;
-  gap: 15px;
-  padding: 10px;
-}
-
-.publication-card {
-  min-width: 300px;
-  padding: 15px;
-  background: #f9f9f9;
-  border-radius: 8px;
-  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
-  flex-shrink: 0;
-}
-
-.publication-author {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.user-img {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-}
-
-.publication-date {
-  font-size: 12px;
-  color: gray;
-}
-
-.publication-content {
-  color: #444;
-  font-size: 14px;
-}
-
-.publication-page {
-  width: 80%;
-  max-width: 900px;
-  margin: auto;
-  padding: 20px;
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-}
-
-h3 {
+/* Keep the header as is */
+/* Keep the header as is */
+.publication-container h1 {
+  font-size: 24px;
+  font-weight: bold;
   text-align: center;
   margin-bottom: 20px;
-  font-size: 1.8rem;
-  color: #333;
 }
 
+/* Style the container */
 .publication-container {
-  max-width: 800px;
-  margin: auto;
-}
-
-.publication-form {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.publication-form textarea {
-  width: 100%;
-  height: 80px;
-  padding: 10px;
-}
-
-.publication-card {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid #ddd;
-  padding: 10px;
-  margin: 10px 0;
-}
-
-.publication-actions button {
-  margin-right: 10px;
-}
-/* Basic styles for publication form */
-.publication-form-container {
-  max-width: 600px;
+  max-width: 800px; /* Limit the overall width */
   margin: 0 auto;
   padding: 20px;
-  background-color: #f9f9f9;
-  border-radius: 8px;
+  background-color: #f4f4f4;
 }
 
-.publication-form h2 {
-  text-align: center;
-}
-
-.publication-form .form-group {
-  margin-bottom: 15px;
-}
-
-.publication-form label {
-  display: block;
-  font-weight: bold;
-  margin-bottom: 5px;
-}
-
-.publication-form textarea {
+/* Compact form styles */
+.publication-container input,
+.publication-container textarea {
   width: 100%;
-  padding: 10px;
+  padding: 8px; /* Reduced padding for a more compact look */
+  margin: 5px 0;
   border: 1px solid #ccc;
   border-radius: 4px;
-  font-size: 16px;
-  resize: vertical;
+  font-size: 14px; /* Reduced font size */
 }
 
-.publication-form .form-actions {
-  text-align: center;
-}
-
-.publication-form button {
-  padding: 10px 20px;
+/* Smaller button styles */
+.publication-container button {
   background-color: #4caf50;
   color: white;
+  padding: 8px 16px; /* Smaller padding */
   border: none;
-  border-radius: 4px;
+  border-radius: 4px; /* Slightly reduced border-radius for smaller look */
   cursor: pointer;
-  font-size: 16px;
+  font-size: 14px; /* Reduced font size */
+  width: auto; /* Let the button shrink to fit the content */
+  margin: 5px 0; /* Add a little margin between buttons */
 }
 
-.publication-form button:disabled {
-  background-color: #ccc;
-  cursor: not-allowed;
+.publication-container button:hover {
+  background-color: #45a049;
 }
 
+/* Error message styling */
 .error-message {
   color: red;
   font-size: 14px;
+  margin-top: 10px;
   text-align: center;
 }
-.register-form {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  margin-bottom: 15px;
-  align-items: center;
-  background-color: white;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 
-  text-align: center;
+/* Edit form styles */
+.edit-form {
+  margin-top: 20px;
+  background-color: #e2e2e2;
+  padding: 20px;
+  border-radius: 4px;
+  width: 100%; /* Ensure edit form fits within the container */
 }
+
+.edit-form input,
+.edit-form textarea {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+/* Publication list styles */
+.publication-container ul {
+  list-style-type: none;
+  padding: 0;
+  margin-top: 20px;
+}
+
+.publication-container li {
+  background-color: white;
+  padding: 10px;
+  margin: 5px 0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px; /* Reduced font size for list items */
+}
+
+.publication-container li h3 {
+  font-size: 16px; /* Smaller title font */
+  font-weight: bold;
+}
+
+.publication-container li p {
+  margin: 5px 0;
+  font-size: 14px; /* Reduced font size */
+}
+
+.publication-container li small {
+  display: block;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #666;
+}
+
+.publication-container li button {
+  background-color: #f44336;
+  color: white;
+  padding: 8px 16px; /* Matching smaller padding with other buttons */
+  border: none;
+  border-radius: 4px; /* Same border-radius for consistency */
+  cursor: pointer;
+  font-size: 14px; /* Smaller font size */
+}
+
+.publication-container li button:hover {
+  background-color: #e53935;
+}
+
 /* Admin.css */
 
 /* Admin container */
@@ -1422,4 +1340,223 @@ h3 {
 
 .register-button:hover {
   background-color: #0056b3;
+}
+.login-page {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-color: #f0f2f5;
+}
+
+.login-container {
+  background-color: #fff;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+}
+
+.login-title {
+  margin-bottom: 1.5rem;
+  font-size: 1.5rem;
+  color: #333;
+}
+
+.input-group {
+  margin-bottom: 1rem;
+  text-align: left;
+}
+
+.input-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: bold;
+  color: #555;
+}
+
+.input-field {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.login-button {
+  width: 100%;
+  padding: 0.75rem;
+  background-color: #007bff;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  margin-top: 1rem;
+}
+
+.login-button:hover {
+  background-color: #0056b3;
+}
+
+.footer-text {
+  margin-top: 1.5rem;
+  font-size: 0.875rem;
+  color: #777;
+}
+/* General Styling */
+.container {
+  max-width: 800px;
+  margin: auto;
+  padding: 20px;
+  background-color: #f9f9f9;
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+/* General Styles */
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.title {
+  font-size: 1.8rem;
+  color: #333;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.error-message {
+  color: red;
+  font-weight: bold;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.researcher-form {
+  max-width: 600px;
+  margin: 0 auto;
+  background-color: #f9f9f9;
+  padding: 25px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.3s ease;
+}
+
+.researcher-form:hover {
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+label {
+  font-weight: bold;
+  display: block;
+  margin-bottom: 8px;
+}
+
+input,
+textarea,
+select {
+  width: 100%;
+  padding: 12px;
+  margin-top: 5px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  transition: border-color 0.3s ease;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: #4caf50;
+  outline: none;
+}
+
+textarea {
+  height: 100px;
+  resize: vertical;
+}
+
+.submit-btn {
+  padding: 12px 20px;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  width: 100%;
+  font-size: 16px;
+  transition: background-color 0.3s ease;
+}
+
+.submit-btn:hover {
+  background-color: #45a049;
+}
+
+.submit-btn:active {
+  background-color: #388e3c;
+}
+
+.profile-card {
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 20px;
+  background-color: #fff;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  max-width: 700px;
+  margin: 20px auto;
+  transition: transform 0.3s ease;
+}
+
+.profile-card:hover {
+  transform: translateY(-5px);
+}
+
+.profile-card h3 {
+  font-size: 1.6rem;
+  color: #333;
+  margin-bottom: 10px;
+}
+
+.profile-card .row {
+  display: flex;
+  align-items: center;
+}
+
+.profile-card .col-md-4 {
+  max-width: 150px;
+  flex: 0 0 150px;
+  padding-right: 20px;
+}
+
+.profile-card .col-md-8 {
+  flex: 1;
+}
+
+.profile-img {
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.profile-card p {
+  font-size: 1rem;
+  color: #555;
+  margin-bottom: 8px;
+}
+
+.profile-card a {
+  color: #4caf50;
+  text-decoration: none;
+}
+
+.profile-card a:hover {
+  text-decoration: underline;
 }

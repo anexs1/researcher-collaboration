@@ -97,7 +97,7 @@ const Home = () => {
           </div>
 
           <div className="testimonial-item">
-            <img src="C:\Users\Anuwar\Desktop\what\src\assets\IMG_3959.PNG" />
+            <img src="" />
             <div className="testimonial-content">
               <p>"Collaborating has never been easier. Great experience!"</p>
               <h4>- Prof. Mulu A.</h4>
