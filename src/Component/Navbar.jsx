@@ -4,15 +4,24 @@ import "./Navbar.css";
 
 const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const closeMenu = () => {
     setMenuOpen(false);
+    setDropdownOpen(false);
+  };
+
+  // Ensure smooth navigation before closing the menu
+  const closeMenuAndNavigate = () => {
+    setTimeout(() => {
+      closeMenu();
+    }, 100);
   };
 
   return (
     <header className="navbar">
       <div className="logo">
-        <h1>Researcher Collaboration</h1>
+        <h1>Researcher Collaboration Portal</h1>
       </div>
 
       {/* Mobile Menu Toggle */}
@@ -38,7 +47,7 @@ const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
             </Link>
           </li>
 
-          {/* Show Admin Panel only for Admin Users */}
+          {/* Admin Panel - Only Visible to Admins */}
           {isAdmin && (
             <li>
               <Link to="/admin" onClick={closeMenu}>
@@ -47,20 +56,26 @@ const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
             </li>
           )}
 
-          {/* Show Login if not logged in, otherwise show Profile/Logout */}
+          {/* User Login/Profile Dropdown */}
           {isLoggedIn ? (
-            <li className="profile-dropdown">
-              <button className="profile-btn">Profile ▼</button>
-              <ul className="dropdown-menu">
-                <li>
-                  <Link to="/profile" onClick={closeMenu}>
-                    View Profile
-                  </Link>
-                </li>
-                <li>
-                  <button onClick={onLogout}>Logout</button>
-                </li>
-              </ul>
+            <li
+              className="profile-dropdown"
+              onMouseEnter={() => setDropdownOpen(true)}
+              onMouseLeave={() => setDropdownOpen(false)}
+            >
+              <button className="profile-btn">👤 Profile</button>
+              {dropdownOpen && (
+                <ul className="dropdown-menu">
+                  <li>
+                    <Link to="/profile" onClick={closeMenuAndNavigate}>
+                      View Profile
+                    </Link>
+                  </li>
+                  <li>
+                    <button onClick={onLogout}>Logout</button>
+                  </li>
+                </ul>
+              )}
             </li>
           ) : (
             <li>

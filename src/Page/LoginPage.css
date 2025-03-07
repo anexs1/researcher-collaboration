@@ -1,0 +1,103 @@
+/* General Page Styling */
+.auth-page {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background: linear-gradient(to right, #4facfe, #00f2fe);
+  font-family: "Arial", sans-serif;
+}
+
+/* Container */
+.auth-container {
+  background: #ffffff;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+/* Title */
+.auth-title {
+  font-size: 1.8rem;
+  color: #333;
+  margin-bottom: 1rem;
+}
+
+/* Input Group */
+.input-group {
+  margin-bottom: 1rem;
+  text-align: left;
+}
+
+.input-label {
+  font-size: 0.9rem;
+  color: #666;
+  font-weight: bold;
+  display: block;
+  margin-bottom: 5px;
+}
+
+.input-field {
+  width: 100%;
+  padding: 10px;
+  font-size: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  transition: 0.3s;
+}
+
+.input-field:focus {
+  border-color: #4facfe;
+  outline: none;
+}
+
+/* Buttons */
+.auth-button {
+  background: #4facfe;
+  color: white;
+  padding: 12px;
+  font-size: 1rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  width: 100%;
+  transition: 0.3s;
+}
+
+.auth-button:hover {
+  background: #00c6ff;
+}
+
+/* Footer Text */
+.footer-text {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.link {
+  color: #4facfe;
+  font-weight: bold;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+/* Animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

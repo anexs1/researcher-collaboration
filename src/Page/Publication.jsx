@@ -28,6 +28,19 @@ const Publication = () => {
       publicationLink: "http://example.com/blockchain-healthcare",
       createdAt: new Date(),
     },
+    {
+      id: 2,
+      userId: "User456",
+      title: "Blockchain in Healthcare",
+      abstract:
+        "This research investigates the potential of blockchain technology in healthcare systems.",
+      keywords: "Blockchain, Healthcare, Security",
+      methodology:
+        "Case study analysis of blockchain implementation in hospitals",
+      conclusion: "Blockchain improves data security and patient privacy.",
+      publicationLink: "http://example.com/blockchain-healthcare",
+      createdAt: new Date(),
+    },
   ]);
 
   const [newPublication, setNewPublication] = useState({

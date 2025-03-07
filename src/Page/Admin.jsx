@@ -1,4 +1,5 @@
 import { useState } from "react";
+import "./Admin.css";
 
 function Admin() {
   const [researchers, setResearchers] = useState([

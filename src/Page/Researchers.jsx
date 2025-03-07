@@ -13,6 +13,20 @@ const sampleResearchers = [
     contact: "johndoe@university.edu",
   },
   {
+    id: 1,
+    name: "Dr. John Doe",
+    field: "Computer Science",
+    qualifications: "Ph.D. in AI",
+    contact: "johndoe@university.edu",
+  },
+  {
+    id: 1,
+    name: "Dr. John Doe",
+    field: "Computer Science",
+    qualifications: "Ph.D. in AI",
+    contact: "johndoe@university.edu",
+  },
+  {
     id: 2,
     name: "Dr. Jane Smith",
     field: "Environmental Science",

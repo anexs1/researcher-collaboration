@@ -1,0 +1,122 @@
+/* Admin.css */
+body {
+  font-family: Arial, sans-serif;
+  background-color: #f4f7fc;
+  color: #333;
+  margin: 0;
+  padding: 0;
+}
+
+h1 {
+  text-align: center;
+  margin: 20px 0;
+  color: #444;
+}
+
+main {
+  width: 80%;
+  margin: 20px auto;
+  background-color: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+section.task {
+  margin-bottom: 30px;
+}
+
+h3 {
+  color: #5c6bc0;
+  font-size: 1.2rem;
+}
+
+.researcher-list {
+  list-style-type: none;
+  padding: 0;
+}
+
+.researcher-item {
+  background-color: #f9f9f9;
+  border: 1px solid #e0e0e0;
+  margin-bottom: 10px;
+  padding: 15px;
+  border-radius: 5px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.researcher-item p {
+  margin: 0;
+  color: #555;
+}
+
+.researcher-item button {
+  padding: 8px 16px;
+  margin-left: 10px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.researcher-item button:hover {
+  opacity: 0.8;
+}
+
+.researcher-item button:focus {
+  outline: none;
+}
+
+.researcher-item button:first-child {
+  background-color: #4caf50;
+  color: white;
+}
+
+.researcher-item button:last-child {
+  background-color: #f44336;
+  color: white;
+}
+
+.submit-btn {
+  padding: 10px 20px;
+  background-color: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.submit-btn:hover {
+  opacity: 0.8;
+}
+
+.submit-btn:focus {
+  outline: none;
+}
+
+ul {
+  list-style-type: none;
+  padding: 0;
+}
+
+ul li {
+  margin: 10px 0;
+}
+
+ul li a {
+  text-decoration: none;
+  color: #2196f3;
+  font-size: 1rem;
+}
+
+ul li a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+  main {
+    width: 90%;
+  }
+}

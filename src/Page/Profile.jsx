@@ -1,47 +1,10 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React from "react";
 
-const LoginPage = ({ setIsLoggedIn, setIsAdmin }) => {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const navigate = useNavigate();
-
-  const handleLogin = () => {
-    if (username === "admin" && password === "admin123") {
-      setIsAdmin(true);
-      setIsLoggedIn(true);
-      navigate("/admin"); // Redirect to Admin Page
-    } else if (username === "user" && password === "user") {
-      setIsAdmin(false);
-      setIsLoggedIn(true);
-      navigate("/"); // Redirect to Home Page
-    } else {
-      setError("Invalid username or password!");
-    }
-  };
-
+export default function Profile() {
   return (
-    <div className="login-container">
-      <div className="login-box">
-        <h2>Login</h2>
-        {error && <p className="error-message">{error}</p>}
-        <input
-          type="text"
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        <button onClick={handleLogin}>Login</button>
-      </div>
+    <div>
+      <h2>Welcome to Your Profile</h2>
+      <p>This is your profile page.</p>
     </div>
   );
-};
-
-export default LoginPage;
+}

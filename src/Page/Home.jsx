@@ -1,6 +1,15 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import "./Home.css";
+
 const Home = () => {
+  const navigate = useNavigate();
+
+  // Function to navigate to the login page
+  const handleGetStartedClick = () => {
+    navigate("/login"); // Change this to '/signup' if you want to redirect to the signup page
+  };
+
   return (
     <div className="home-container">
       {/* Hero Section */}
@@ -11,7 +20,12 @@ const Home = () => {
         <p className="hero-description">
           Connect, collaborate, and innovate with researchers worldwide.
         </p>
-        <button className="cta-button hover-effect">Get Started</button>
+        <button
+          className="cta-button hover-effect"
+          onClick={handleGetStartedClick} // Added onClick handler
+        >
+          Get Started
+        </button>
       </section>
 
       {/* Features Section */}
@@ -88,7 +102,7 @@ const Home = () => {
         <h2 className="section-title">What Our Users Say</h2>
         <div className="testimonials-grid">
           <div className="testimonial-item">
-            <img src="" />
+            <img src="" alt="testimonial 1" />
             <div className="testimonial-content">
               <p>
                 "This platform helped me find the perfect research partner!"
@@ -98,7 +112,7 @@ const Home = () => {
           </div>
 
           <div className="testimonial-item">
-            <img src="" />
+            <img src="" alt="testimonial 2" />
             <div className="testimonial-content">
               <p>"Collaborating has never been easier. Great experience!"</p>
               <h4>- Prof. Mulu A.</h4>
@@ -184,10 +198,11 @@ const Home = () => {
       <footer className="footer">
         <p>
           © 2025 Researcher Collaboration Portal. All Rights Reserved.worked by
-          G4 IT{" "}
+          G4 IT
         </p>
       </footer>
     </div>
   );
 };
+
 export default Home;

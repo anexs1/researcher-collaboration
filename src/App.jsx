@@ -10,6 +10,7 @@ import LoginPage from "./Page/LoginPage";
 import Researchers from "./Page/Researchers";
 
 function App() {
+  // Check localStorage for login state
   const [isAdmin, setIsAdmin] = useState(
     () => localStorage.getItem("isAdmin") === "true"
   );
@@ -33,7 +34,6 @@ function App() {
     <>
       <Navbar
         isLoggedIn={isLoggedIn}
-        setIsLoggedIn={setIsLoggedIn}
         isAdmin={isAdmin}
         onLogout={handleLogout}
       />
@@ -50,12 +50,14 @@ function App() {
             <LoginPage setIsLoggedIn={setIsLoggedIn} setIsAdmin={setIsAdmin} />
           }
         />
+
+        {/* Profile Page - Only for Logged-in Users */}
         <Route
           path="/profile"
           element={isLoggedIn ? <Profile /> : <Navigate to="/login" />}
         />
 
-        {/* Admin Route (Protected) */}
+        {/* Admin Panel - Only for Admins */}
         <Route
           path="/admin"
           element={isAdmin ? <Admin /> : <Navigate to="/" />}
