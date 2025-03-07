@@ -12,7 +12,7 @@ const LoginPage = ({ setIsLoggedIn, setIsAdmin }) => {
       setIsAdmin(true);
       setIsLoggedIn(true);
       navigate("/admin"); // Redirect to Admin Page
-    } else if (username === "user" && password === "user123") {
+    } else if (username === "user" && password === "user") {
       setIsAdmin(false);
       setIsLoggedIn(true);
       navigate("/"); // Redirect to Home Page
@@ -23,21 +23,23 @@ const LoginPage = ({ setIsLoggedIn, setIsAdmin }) => {
 
   return (
     <div className="login-container">
-      <h2>Login</h2>
-      {error && <p className="error-message">{error}</p>}
-      <input
-        type="text"
-        placeholder="Username"
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-      />
-      <input
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
-      <button onClick={handleLogin}>Login</button>
+      <div className="login-box">
+        <h2>Login</h2>
+        {error && <p className="error-message">{error}</p>}
+        <input
+          type="text"
+          placeholder="Username"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+        />
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        <button onClick={handleLogin}>Login</button>
+      </div>
     </div>
   );
 };

@@ -1,0 +1,152 @@
+/* General Styling */
+.publication-container {
+  max-width: 800px;
+  margin: 60px auto;
+  padding: 20px;
+  background: #f9f9f9;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+  font-family: "Poppins", sans-serif;
+  transition: transform 0.3s ease-in-out;
+}
+
+/* Title */
+.publication-container h1 {
+  text-align: center;
+  font-size: 26px;
+  color: #333;
+}
+
+/* Error Message */
+.error-message {
+  color: red;
+  text-align: center;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+/* Add Form & Edit Form */
+.add-form,
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 15px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+  transition: transform 0.3s ease-in-out;
+}
+
+.add-form:hover,
+.edit-form:hover {
+  transform: scale(1.02);
+}
+
+/* Input Fields */
+.add-form input,
+.add-form textarea,
+.edit-form input,
+.edit-form textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  font-size: 14px;
+  transition: border 0.3s ease-in-out;
+}
+
+/* Input Focus Effect */
+.add-form input:focus,
+.add-form textarea:focus,
+.edit-form input:focus,
+.edit-form textarea:focus {
+  border-color: #6e8efb;
+  outline: none;
+}
+
+/* Buttons */
+button {
+  background: linear-gradient(135deg, #6e8efb, #a777e3);
+  color: white;
+  padding: 10px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: transform 0.2s ease-in-out, background 0.3s ease-in-out;
+}
+
+button:hover {
+  background: linear-gradient(135deg, #5b7af7, #9059d7);
+  transform: scale(1.05);
+}
+
+/* Publication List */
+ul {
+  list-style: none;
+  padding: 0;
+}
+
+/* Individual Publication Card */
+li {
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 15px;
+  transition: transform 0.3s ease-in-out;
+}
+
+li:hover {
+  transform: scale(1.02);
+}
+
+/* Title Styling */
+li h3 {
+  color: #333;
+  margin-bottom: 8px;
+}
+
+/* Publication Details */
+li p {
+  font-size: 14px;
+  color: #555;
+  margin-bottom: 5px;
+}
+
+/* Timestamp */
+li small {
+  display: block;
+  font-size: 12px;
+  color: #777;
+  margin-top: 8px;
+}
+
+/* Buttons inside List */
+.edit-btn,
+.delete-btn {
+  margin-top: 10px;
+  margin-right: 8px;
+}
+
+.delete-btn {
+  background: #e74c3c;
+}
+
+.delete-btn:hover {
+  background: #c0392b;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .publication-container {
+    width: 90%;
+    padding: 15px;
+  }
+
+  button {
+    width: 100%;
+  }
+}

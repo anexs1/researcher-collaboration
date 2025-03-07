@@ -1,0 +1,335 @@
+
+/* General Styling */
+body,
+html {
+  margin: 0;
+  padding: 0;
+  font-family: "Arial", sans-serif;
+  background-color: #f8f9fa;
+  color: #007bff;
+}
+
+/* Centering Containers */
+.home-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* Hero Section */
+.hero-section {
+  text-align: center;
+  background: #007bff;
+  color: white;
+  padding: 60px 20px;
+  border-radius: 10px;
+}
+
+.hero-title {
+  font-size: 2.5rem;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.hero-description {
+  font-size: 1.2rem;
+  margin-bottom: 20px;
+}
+
+.cta-button {
+  background: white;
+  color: #007bff;
+  padding: 12px 24px;
+  font-size: 1rem;
+  border: none;
+  cursor: pointer;
+  border-radius: 5px;
+  transition: 0.3s;
+}
+
+.cta-button:hover {
+  background: #0056b3;
+  color: white;
+}
+
+/* Features Section */
+.features-section,
+.how-it-works-section,
+.research-categories-section,
+.about-section,
+.testimonials-section,
+.faq-section,
+.contact-section {
+  margin-top: 50px;
+}
+
+.section-title {
+  text-align: center;
+  font-size: 2rem;
+  margin-bottom: 20px;
+  color: #007bff;
+}
+
+.features-grid,
+.steps-grid,
+.categories-grid,
+.testimonials-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  padding: 10px;
+}
+
+.feature-item,
+.step-item,
+.category-item,
+.testimonial-item,
+.faq-item {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  text-align: center;
+  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.hover-effect {
+  transition: transform 0.3s ease-in-out;
+}
+
+.hover-effect:hover {
+  transform: scale(1.05);
+}
+
+/* Testimonials */
+.testimonial-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.testimonial-item img {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: lightgray;
+}
+
+/* FAQ Section */
+.faq-item {
+  background: #fff;
+  padding: 15px;
+  border-radius: 5px;
+  border-left: 5px solid #007bff;
+}
+
+.faq-item h3 {
+  font-size: 1.2rem;
+}
+
+/* Contact Section */
+.contact-form {
+  display: flex;
+  flex-direction: column;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.contact-form input,
+.contact-form textarea {
+  padding: 10px;
+  margin: 10px 0;
+  width: 100%;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
+
+.contact-form button {
+  background: #007bff;
+  color: white;
+  padding: 10px;
+  border: none;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.contact-form button:hover {
+  background: #0056b3;
+}
+
+/* Footer */
+.footer {
+  text-align: center;
+  margin-top: 50px;
+  padding: 20px;
+  background: #0056b3;
+  color: white;
+  font-size: 0.9rem;
+  border-radius: 5px;
+}
+/* General Styling */
+body,
+html {
+  margin: 0;
+  padding: 0;
+  font-family: "Arial", sans-serif;
+  background-color: #f8f9fa;
+  color: #333;
+}
+
+/* Centering Containers */
+.home-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* Hero Section */
+.hero-section {
+  text-align: center;
+  background: #007bff;
+  color: white;
+  padding: 60px 20px;
+  border-radius: 10px;
+}
+
+.hero-title {
+  font-size: 2.5rem;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.hero-description {
+  font-size: 1.2rem;
+  margin-bottom: 20px;
+}
+
+.cta-button {
+  background: white;
+  color: #007bff;
+  padding: 12px 24px;
+  font-size: 1rem;
+  border: none;
+  cursor: pointer;
+  border-radius: 5px;
+  transition: 0.3s;
+}
+
+.cta-button:hover {
+  background: #0056b3;
+  color: white;
+}
+
+/* Features Section */
+.features-section,
+.how-it-works-section,
+.research-categories-section,
+.about-section,
+.testimonials-section,
+.faq-section,
+.contact-section {
+  margin-top: 50px;
+}
+
+.section-title {
+  text-align: center;
+  font-size: 2rem;
+  margin-bottom: 20px;
+  color: #333;
+}
+
+.features-grid,
+.steps-grid,
+.categories-grid,
+.testimonials-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  padding: 10px;
+}
+
+.feature-item,
+.step-item,
+.category-item,
+.testimonial-item,
+.faq-item {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  text-align: center;
+  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.hover-effect {
+  transition: transform 0.3s ease-in-out;
+}
+
+.hover-effect:hover {
+  transform: scale(1.05);
+}
+
+/* Testimonials */
+.testimonial-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.testimonial-item img {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: lightgray;
+}
+
+/* FAQ Section */
+.faq-item {
+  background: #fff;
+  padding: 15px;
+  border-radius: 5px;
+  border-left: 5px solid #007bff;
+}
+
+.faq-item h3 {
+  font-size: 1.2rem;
+}
+
+/* Contact Section */
+.contact-form {
+  display: flex;
+  flex-direction: column;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.contact-form input,
+.contact-form textarea {
+  padding: 10px;
+  margin: 10px 0;
+  width: 100%;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
+
+.contact-form button {
+  background: #007bff;
+  color: white;
+  padding: 10px;
+  border: none;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.contact-form button:hover {
+  background: #0056b3;
+}
+
+/* Footer */
+.footer {
+  text-align: center;
+  margin-top: 50px;
+  padding: 20px;
+  background: #007bff;
+  color: white;
+  font-size: 0.9rem;
+  border-radius: 5px;
+}

@@ -1,44 +1,77 @@
 import { Link } from "react-router-dom";
+import { useState } from "react";
+import "./Navbar.css";
 
-const Navbar = ({ isLoggedIn, setIsLoggedIn, isAdmin }) => {
+const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const closeMenu = () => {
+    setMenuOpen(false);
+  };
+
   return (
-    <nav>
-      <ul>
-        <li>
-          <Link to="/">Home</Link>
-        </li>
-        <li>
-          <Link to="/profile">Profile</Link>
-        </li>
-        <li>
-          <Link to="/researcher">Researchers</Link>
-        </li>
-        <li>
-          <Link to="/publication">Publications</Link>
-        </li>
+    <header className="navbar">
+      <div className="logo">
+        <h1>Researcher Collaboration</h1>
+      </div>
 
-        {isAdmin && (
-          <li>
-            <Link to="/admin">Admin</Link>
-          </li>
-        )}
+      {/* Mobile Menu Toggle */}
+      <button className="menu-toggle" onClick={() => setMenuOpen(!menuOpen)}>
+        ☰
+      </button>
 
-        {isLoggedIn ? (
+      <nav className={`nav-links ${menuOpen ? "open" : ""}`}>
+        <ul>
           <li>
-            <button onClick={() => setIsLoggedIn(false)}>Logout</button>
+            <Link to="/" onClick={closeMenu}>
+              Home
+            </Link>
           </li>
-        ) : (
-          <>
+          <li>
+            <Link to="/researchers" onClick={closeMenu}>
+              Researchers
+            </Link>
+          </li>
+          <li>
+            <Link to="/publication" onClick={closeMenu}>
+              Publications
+            </Link>
+          </li>
+
+          {/* Show Admin Panel only for Admin Users */}
+          {isAdmin && (
             <li>
-              <Link to="/login">Login</Link>
+              <Link to="/admin" onClick={closeMenu}>
+                Admin Panel
+              </Link>
             </li>
+          )}
+
+          {/* Show Login if not logged in, otherwise show Profile/Logout */}
+          {isLoggedIn ? (
+            <li className="profile-dropdown">
+              <button className="profile-btn">Profile ▼</button>
+              <ul className="dropdown-menu">
+                <li>
+                  <Link to="/profile" onClick={closeMenu}>
+                    View Profile
+                  </Link>
+                </li>
+                <li>
+                  <button onClick={onLogout}>Logout</button>
+                </li>
+              </ul>
+            </li>
+          ) : (
             <li>
-              <Link to="/register">Register</Link>
+              <Link to="/login" onClick={closeMenu}>
+                Login
+              </Link>
             </li>
-          </>
-        )}
-      </ul>
-    </nav>
+          )}
+        </ul>
+      </nav>
+    </header>
   );
 };
 
