@@ -41,6 +41,14 @@ const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
               Researchers
             </Link>
           </li>
+
+          {/* Announcements - Always Visible */}
+          <li>
+            <Link to="/announcements" onClick={closeMenu}>
+              Announcements
+            </Link>
+          </li>
+
           <li>
             <Link to="/publication" onClick={closeMenu}>
               Publications

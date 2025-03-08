@@ -6,6 +6,7 @@ to save all change at once on github
 ** git commit -m "Your commit message"
 
 \*\* git push origin main
+i want the researchers
 
 ✅ Manage Announcements (Edit/Delete researcher posts)
 ✅ Approve/Reject Collaboration Requests

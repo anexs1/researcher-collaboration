@@ -8,9 +8,9 @@ import Navbar from "./Component/Navbar";
 import Register from "./Page/Register";
 import LoginPage from "./Page/LoginPage";
 import Researchers from "./Page/Researchers";
+import Announcements from "./Page/Announcements"; // ✅ Import the new component
 
 function App() {
-  // Check localStorage for login state
   const [isAdmin, setIsAdmin] = useState(
     () => localStorage.getItem("isAdmin") === "true"
   );
@@ -39,31 +39,26 @@ function App() {
       />
 
       <Routes>
-        {/* Public Routes */}
         <Route path="/" element={<Home />} />
         <Route path="/researchers" element={<Researchers />} />
         <Route path="/publication" element={<Publication />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/announcements" element={<Announcements />} />{" "}
+        {/* ✅ Add new route */}
         <Route
           path="/login"
           element={
             <LoginPage setIsLoggedIn={setIsLoggedIn} setIsAdmin={setIsAdmin} />
           }
         />
-
-        {/* Profile Page - Only for Logged-in Users */}
         <Route
           path="/profile"
           element={isLoggedIn ? <Profile /> : <Navigate to="/login" />}
         />
-
-        {/* Admin Panel - Only for Admins */}
         <Route
           path="/admin"
           element={isAdmin ? <Admin /> : <Navigate to="/" />}
         />
-
-        {/* Redirect unknown routes to Home */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </>

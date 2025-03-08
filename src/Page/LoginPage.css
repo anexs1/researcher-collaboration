@@ -1,96 +1,61 @@
-/* General Page Styling */
+/* Reset Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+/* Fix overlapping content issue */
+body,
+html {
+  width: 100%;
+  height: 100%;
+  font-family: "Roboto", sans-serif;
+  background: linear-gradient(135deg, #6c7ae0, #a5b3e5);
+  display: flex;
+  flex-direction: column; /* Stack content vertically */
+  align-items: center;
+  overflow-y: auto; /* Allow scrolling */
+}
+
+/* Fix login/signup positioning */
 .auth-page {
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 100vh;
-  background: linear-gradient(to right, #4facfe, #00f2fe);
-  font-family: "Arial", sans-serif;
+  width: 100%;
+  min-height: calc(100vh - 70px); /* Adjust height considering navbar */
+  padding: 20px;
+  margin-top: 70px; /* Push down below navbar */
+  overflow-y: auto;
+  position: relative;
+  z-index: 1;
 }
 
-/* Container */
+/* Ensure navbar height is defined */
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 60px; /* Adjust navbar height */
+  background: linear-gradient(135deg, #007bff, #00d4ff);
+  z-index: 1000;
+}
+
+/* Container for Login and Signup Forms */
 .auth-container {
+  width: 100%;
+  max-width: 450px; /* Form width */
+  padding: 30px;
+  border-radius: 15px;
   background: #ffffff;
-  padding: 2rem;
-  border-radius: 12px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-  width: 100%;
-  max-width: 400px;
+  box-shadow: 0px 0px 20px rgba(0, 0, 0, 0.2);
   text-align: center;
-  animation: fadeIn 0.5s ease-in-out;
+  position: relative;
+  animation: fadeIn 0.8s ease-in-out;
+  overflow: hidden; /* Stop content overflow */
 }
 
-/* Title */
-.auth-title {
-  font-size: 1.8rem;
-  color: #333;
-  margin-bottom: 1rem;
-}
-
-/* Input Group */
-.input-group {
-  margin-bottom: 1rem;
-  text-align: left;
-}
-
-.input-label {
-  font-size: 0.9rem;
-  color: #666;
-  font-weight: bold;
-  display: block;
-  margin-bottom: 5px;
-}
-
-.input-field {
-  width: 100%;
-  padding: 10px;
-  font-size: 1rem;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  transition: 0.3s;
-}
-
-.input-field:focus {
-  border-color: #4facfe;
-  outline: none;
-}
-
-/* Buttons */
-.auth-button {
-  background: #4facfe;
-  color: white;
-  padding: 12px;
-  font-size: 1rem;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  width: 100%;
-  transition: 0.3s;
-}
-
-.auth-button:hover {
-  background: #00c6ff;
-}
-
-/* Footer Text */
-.footer-text {
-  margin-top: 1rem;
-  font-size: 0.9rem;
-  color: #666;
-}
-
-.link {
-  color: #4facfe;
-  font-weight: bold;
-  cursor: pointer;
-  transition: 0.3s;
-}
-
-.link:hover {
-  text-decoration: underline;
-}
-
-/* Animation */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -99,5 +64,107 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* Title */
+.auth-title {
+  font-size: 28px;
+  color: #333;
+  margin-bottom: 20px;
+  font-weight: bold;
+}
+
+/* Input Group Wrapper */
+.input-group {
+  text-align: left;
+  margin-bottom: 20px;
+}
+
+.input-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8px;
+  display: block; /* Make sure label stays on top */
+}
+
+/* Input Fields */
+.input-field {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.3s ease-in-out;
+}
+
+.input-field:focus {
+  border-color: #6c7ae0; /* Blue border on focus */
+}
+
+/* Error Message */
+.error-message {
+  color: red;
+  font-size: 14px;
+  margin-bottom: 10px;
+  text-align: center;
+  font-weight: bold;
+}
+
+/* Password Validation */
+.password-validation {
+  font-size: 12px;
+  color: #ff9800;
+  text-align: left;
+  margin-top: -10px;
+  margin-bottom: 10px;
+}
+
+/* Buttons */
+.auth-button {
+  width: 100%;
+  padding: 12px;
+  background-color: #6c7ae0;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.3s ease-in-out;
+}
+
+.auth-button:hover {
+  background-color: #5a69c6;
+}
+
+/* Footer Text */
+.footer-text {
+  margin-top: 20px;
+  font-size: 14px;
+}
+
+.link {
+  color: #6c7ae0;
+  cursor: pointer;
+  font-weight: bold;
+  transition: text-decoration 0.3s ease-in-out;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+/* Scroll Fix on Small Screens */
+@media (max-width: 768px) {
+  .auth-page {
+    align-items: flex-start; /* Content starts from the top */
+  }
+
+  .auth-container {
+    width: 90%;
+    padding: 20px;
+    margin-top: 40px; /* Add space from the top */
   }
 }
