@@ -5,6 +5,8 @@ export default function Profile() {
     <div>
       <h2>Welcome to Your Profile</h2>
       <p>This is your profile page.</p>
+
+      <p> there us ut profile here </p>
     </div>
   );
 }

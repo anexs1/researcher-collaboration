@@ -36,7 +36,7 @@ export default function LoginPage({ setIsLoggedIn, setIsAdmin }) {
     ) {
       setIsLoggedIn(true);
       setIsAdmin(storedUserDetails.username === "admin"); // Assuming 'admin' is the admin user
-      navigate("/home"); // Redirect to the home page after successful login
+      navigate("/profile"); // Redirect to the profile page after successful login
     } else {
       setErrorMessage("Invalid credentials");
     }
