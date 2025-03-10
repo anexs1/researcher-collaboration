@@ -1,0 +1,32 @@
+.profile-dropdown {
+  position: relative;
+}
+
+.profile-btn {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.dropdown-menu {
+  position: absolute;
+  background: white;
+  color: black;
+  list-style: none;
+  padding: 10px;
+  border-radius: 5px;
+  top: 30px;
+  right: 0;
+}
+
+.dropdown-menu li {
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.dropdown-menu a {
+  color: black;
+  text-decoration: none;
+}

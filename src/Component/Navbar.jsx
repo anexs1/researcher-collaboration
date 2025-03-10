@@ -1,28 +1,21 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
+import Notifications from "./Notifications";
+import ProfileMenu from "./ProfileMenu";
+import SearchBar from "./SearchBar";
+
 import "./Navbar.css";
 
 const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
 
-  const closeMenu = () => {
-    setMenuOpen(false);
-    setDropdownOpen(false);
-  };
-
-  // Ensure smooth navigation before closing the menu
-  const closeMenuAndNavigate = () => {
-    setTimeout(() => {
-      closeMenu();
-    }, 100);
-  };
+  const closeMenu = () => setMenuOpen(false);
 
   return (
     <header className="navbar">
-      <div className="logo">
-        <h1>Researcher Collaboration Portal</h1>
-      </div>
+      {/* Search Bar Component */}
+      <SearchBar />
 
       {/* Mobile Menu Toggle */}
       <button className="menu-toggle" onClick={() => setMenuOpen(!menuOpen)}>
@@ -33,65 +26,65 @@ const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
         <ul>
           <li>
             <Link to="/" onClick={closeMenu}>
-              Home
+              🏠 Home
             </Link>
           </li>
           <li>
-            <Link to="/researchers" onClick={closeMenu}>
-              Researchers
+            <Link to="/explore" onClick={closeMenu}>
+              🔬 Explore
             </Link>
           </li>
-
-          {/* Announcements - Always Visible */}
           <li>
-            <Link to="/announcements" onClick={closeMenu}>
-              Announcements
+            <Link to="/my-projects" onClick={closeMenu}>
+              📁 My Projects
             </Link>
           </li>
-
           <li>
-            <Link to="/publication" onClick={closeMenu}>
-              Publications
+            <Link to="/messages" onClick={closeMenu}>
+              💬 Messages
             </Link>
           </li>
 
-          {/* Admin Panel - Only Visible to Admins */}
+          {/* Notifications Component */}
+          {isLoggedIn && <Notifications />}
+
+          {/* Admin Panel - Dropdown for Admins */}
           {isAdmin && (
-            <li>
-              <Link to="/admin" onClick={closeMenu}>
-                Admin Panel
-              </Link>
-            </li>
-          )}
-
-          {/* User Login/Profile Dropdown */}
-          {isLoggedIn ? (
             <li
-              className="profile-dropdown"
-              onMouseEnter={() => setDropdownOpen(true)}
-              onMouseLeave={() => setDropdownOpen(false)}
+              className="admin-dropdown"
+              onMouseEnter={() => setAdminDropdownOpen(true)}
+              onMouseLeave={() => setAdminDropdownOpen(false)}
             >
-              <button className="profile-btn">👤 Profile</button>
-              {dropdownOpen && (
+              <button className="admin-btn">⚙️ Admin</button>
+              {adminDropdownOpen && (
                 <ul className="dropdown-menu">
                   <li>
-                    <Link to="/profile" onClick={closeMenuAndNavigate}>
-                      View Profile
+                    <Link to="/admin" onClick={closeMenu}>
+                      Dashboard
                     </Link>
                   </li>
                   <li>
-                    <button onClick={onLogout}>Logout</button>
+                    <Link to="/admin/users" onClick={closeMenu}>
+                      Manage Users
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/admin/reports" onClick={closeMenu}>
+                      View Reports
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/admin/settings" onClick={closeMenu}>
+                      Settings
+                    </Link>
                   </li>
                 </ul>
               )}
             </li>
-          ) : (
-            <li>
-              <Link to="/login" onClick={closeMenu}>
-                Login
-              </Link>
-            </li>
           )}
+
+          {/* Profile Menu Component */}
+          <ProfileMenu isLoggedIn={isLoggedIn} onLogout={onLogout} />
         </ul>
       </nav>
     </header>

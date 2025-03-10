@@ -1,0 +1,51 @@
+/* Notifications Styles */
+.notifications {
+  position: relative;
+  display: inline-block;
+}
+
+.notifications-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: white;
+  transition: transform 0.2s ease;
+}
+
+.notifications-btn:hover {
+  transform: scale(1.2);
+}
+
+.notifications-list {
+  display: none;
+  position: absolute;
+  top: 35px;
+  right: 0;
+  background: #ff7eb3;
+  color: white;
+  border-radius: 5px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  width: 200px;
+  padding: 10px 0;
+  list-style: none;
+  z-index: 1000;
+}
+
+.notifications:hover .notifications-list {
+  display: block;
+}
+
+.notifications-list li {
+  padding: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  transition: background 0.3s;
+}
+
+.notifications-list li:last-child {
+  border-bottom: none;
+}
+
+.notifications-list li:hover {
+  background: #ff477e;
+}

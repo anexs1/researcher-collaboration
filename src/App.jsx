@@ -8,7 +8,10 @@ import Navbar from "./Component/Navbar";
 import Register from "./Page/Register";
 import LoginPage from "./Page/LoginPage";
 import Researchers from "./Page/Researchers";
-import Announcements from "./Page/Announcements"; // ✅ Import the new component
+import Announcements from "./Page/Announcements";
+import Explore from "./Page/Explore";
+import MyProjects from "./Page/MyProjects";
+import Messages from "./Page/Messages";
 
 function App() {
   const [isAdmin, setIsAdmin] = useState(
@@ -40,16 +43,38 @@ function App() {
 
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/researchers" element={<Researchers />} />
-        <Route path="/publication" element={<Publication />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/announcements" element={<Announcements />} />{" "}
-        {/* ✅ Add new route */}
         <Route
           path="/login"
           element={
             <LoginPage setIsLoggedIn={setIsLoggedIn} setIsAdmin={setIsAdmin} />
           }
+        />
+        <Route path="/register" element={<Register />} />
+
+        {/* Protected Routes */}
+        <Route
+          path="/explore"
+          element={isLoggedIn ? <Explore /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/messages"
+          element={isLoggedIn ? <Messages /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/researchers"
+          element={isLoggedIn ? <Researchers /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/publication"
+          element={isLoggedIn ? <Publication /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/my-projects"
+          element={isLoggedIn ? <MyProjects /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/announcements"
+          element={isLoggedIn ? <Announcements /> : <Navigate to="/login" />}
         />
         <Route
           path="/profile"
@@ -59,6 +84,7 @@ function App() {
           path="/admin"
           element={isAdmin ? <Admin /> : <Navigate to="/" />}
         />
+
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </>

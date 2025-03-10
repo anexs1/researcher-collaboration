@@ -102,7 +102,7 @@ const Home = () => {
         <h2 className="section-title">What Our Users Say</h2>
         <div className="testimonials-grid">
           <div className="testimonial-item">
-            <img src="" alt="testimonial 1" />
+            <img src="../assets/react.svg" alt="" />
             <div className="testimonial-content">
               <p>
                 "This platform helped me find the perfect research partner!"

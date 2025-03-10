@@ -4,7 +4,7 @@ html {
   margin: 0;
   padding: 0;
   font-family: "Arial", sans-serif;
-  background-color: #f8f9fa;
+  background-color: hsl(210, 98%, 51%);
   color: #007bff;
 }
 
@@ -19,7 +19,7 @@ html {
 .hero-section {
   text-align: center;
   background: #007bff;
-  color: white;
+  color: #d40909;
   padding: 60px 20px;
   border-radius: 10px;
 }

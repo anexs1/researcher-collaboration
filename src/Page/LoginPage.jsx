@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import "./LoginPage.css";
 
@@ -25,74 +26,49 @@ export default function LoginPage({ setIsLoggedIn, setIsAdmin }) {
     setIsPasswordValid(passwordRegex.test(password));
   };
 
+  // Handle login
   const handleLogin = () => {
-    // Fetch stored user details from localStorage
-    const storedUserDetails = JSON.parse(localStorage.getItem("userDetails"));
-
-    if (
-      storedUserDetails &&
-      storedUserDetails.username === username &&
-      storedUserDetails.password === password
-    ) {
-      setIsLoggedIn(true);
-      setIsAdmin(storedUserDetails.username === "admin"); // Assuming 'admin' is the admin user
-      navigate("/profile"); // Redirect to the profile page after successful login
-    } else {
-      setErrorMessage("Invalid credentials");
-    }
+    axios
+      .post("http://localhost:5000/login", { username, password })
+      .then((response) => {
+        setIsLoggedIn(true);
+        // Save JWT token and other user info if needed
+        localStorage.setItem("authToken", response.data.token);
+        setIsAdmin(username === "admin"); // Assuming 'admin' is the admin user
+        navigate("/profile"); // Redirect to the profile page after successful login
+      })
+      .catch((error) => {
+        setErrorMessage("Invalid credentials");
+      });
   };
 
+  // Handle signup
   const handleSignup = () => {
-    // Basic validation for required fields
-    if (
-      !username ||
-      !email ||
-      !password ||
-      !confirmPassword ||
-      !expertise ||
-      !profileImage ||
-      !bio ||
-      !location ||
-      !phone
-    ) {
-      setErrorMessage("Please fill in all fields.");
-      return;
-    }
+    // Ensure passwords match
     if (password !== confirmPassword) {
-      setErrorMessage("Passwords do not match.");
-      return;
-    }
-    if (!isPasswordValid) {
-      setErrorMessage(
-        "Password must be at least 8 characters long and include letters, numbers, and special characters."
-      );
+      setErrorMessage("Passwords do not match");
       return;
     }
 
-    // Profile Image URL validation (basic check)
-    try {
-      new URL(profileImage); // Validate the URL
-    } catch (_) {
-      setErrorMessage("Please enter a valid URL for the profile image.");
-      return;
-    }
-
-    // Save the user details to localStorage (encrypt password in real-world scenarios)
-    const userDetails = {
-      username,
-      email,
-      password,
-      expertise,
-      profileImage,
-      bio,
-      location,
-      phone,
-    };
-
-    localStorage.setItem("userDetails", JSON.stringify(userDetails));
-
-    alert("Account created successfully! You can now log in.");
-    setIsSignup(false); // After successful signup, show the login form
+    // Send signup request to the backend
+    axios
+      .post("http://localhost:5000/signup", {
+        username,
+        email,
+        password,
+        expertise,
+        profileImage,
+        bio,
+        location,
+        phone,
+      })
+      .then((response) => {
+        alert("Account created successfully! You can now log in.");
+        setIsSignup(false); // After successful signup, show the login form
+      })
+      .catch((error) => {
+        setErrorMessage(error.response.data.error);
+      });
   };
 
   return (
@@ -103,104 +79,99 @@ export default function LoginPage({ setIsLoggedIn, setIsAdmin }) {
             <h2 className="auth-title">Sign Up</h2>
             {errorMessage && <p className="error-message">{errorMessage}</p>}
             <div className="input-group">
-              <label className="input-label">Username</label>
+              <label>Username</label>
               <input
                 type="text"
-                placeholder="Enter username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="input-field"
+                placeholder="Enter your username"
               />
             </div>
             <div className="input-group">
-              <label className="input-label">Email</label>
+              <label>Email</label>
               <input
                 type="email"
-                placeholder="Enter email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="input-field"
+                placeholder="Enter your email"
               />
             </div>
             <div className="input-group">
-              <label className="input-label">Password</label>
+              <label>Password</label>
               <input
                 type="password"
-                placeholder="Enter password"
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value);
                   validatePassword(e.target.value);
                 }}
-                className="input-field"
+                placeholder="Enter your password"
               />
             </div>
             {!isPasswordValid && (
-              <p className="password-validation">
+              <p className="error-message">
                 Password must be at least 8 characters long and include letters,
                 numbers, and special characters.
               </p>
             )}
             <div className="input-group">
-              <label className="input-label">Confirm Password</label>
+              <label>Confirm Password</label>
               <input
                 type="password"
-                placeholder="Confirm password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="input-field"
+                placeholder="Confirm your password"
               />
             </div>
             <div className="input-group">
-              <label className="input-label">Expertise</label>
+              <label>Expertise</label>
               <input
                 type="text"
-                placeholder="Enter your expertise"
                 value={expertise}
                 onChange={(e) => setExpertise(e.target.value)}
-                className="input-field"
+                placeholder="Enter your area of expertise"
               />
             </div>
             <div className="input-group">
-              <label className="input-label">Profile Image URL</label>
+              <label>Profile Image URL</label>
               <input
                 type="text"
-                placeholder="Enter profile image URL"
                 value={profileImage}
                 onChange={(e) => setProfileImage(e.target.value)}
-                className="input-field"
+                placeholder="Enter profile image URL"
               />
             </div>
             <div className="input-group">
-              <label className="input-label">Bio</label>
+              <label>Bio</label>
               <textarea
-                placeholder="Write a short bio"
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
-                className="input-field"
+                placeholder="Write a short bio"
               />
             </div>
             <div className="input-group">
-              <label className="input-label">Location</label>
+              <label>Location</label>
               <input
                 type="text"
-                placeholder="Enter your location"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                className="input-field"
+                placeholder="Enter your location (optional)"
               />
             </div>
             <div className="input-group">
-              <label className="input-label">Phone Number</label>
+              <label>Phone</label>
               <input
                 type="text"
-                placeholder="Enter phone number"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                className="input-field"
+                placeholder="Enter your phone number"
               />
             </div>
-            <button onClick={handleSignup} className="auth-button">
+            <button
+              onClick={handleSignup}
+              className="auth-button"
+              disabled={!isPasswordValid}
+            >
               Sign Up
             </button>
             <p className="footer-text">
@@ -215,23 +186,21 @@ export default function LoginPage({ setIsLoggedIn, setIsAdmin }) {
             <h2 className="auth-title">User Login</h2>
             {errorMessage && <p className="error-message">{errorMessage}</p>}
             <div className="input-group">
-              <label className="input-label">Username</label>
+              <label>Username</label>
               <input
                 type="text"
-                placeholder="Enter username"
                 value={username}
-                onChange={(e) => setUsername(e.target.value)} // Login uses username
-                className="input-field"
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Enter your username"
               />
             </div>
             <div className="input-group">
-              <label className="input-label">Password</label>
+              <label>Password</label>
               <input
                 type="password"
-                placeholder="Enter password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="input-field"
+                placeholder="Enter your password"
               />
             </div>
             <button onClick={handleLogin} className="auth-button">
