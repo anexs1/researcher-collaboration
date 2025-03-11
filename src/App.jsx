@@ -1,17 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
+
+// Pages
 import Admin from "./Page/Admin";
 import Home from "./Page/Home";
 import Profile from "./Page/Profile";
 import Publication from "./Page/Publication";
-import Navbar from "./Component/Navbar";
-import Register from "./Page/Register";
+import SignupPage from "./Page/SignupPage";
 import LoginPage from "./Page/LoginPage";
 import Researchers from "./Page/Researchers";
 import Announcements from "./Page/Announcements";
 import Explore from "./Page/Explore";
 import MyProjects from "./Page/MyProjects";
 import Messages from "./Page/Messages";
+
+// Components
+import Navbar from "./Component/Navbar";
 
 function App() {
   const [isAdmin, setIsAdmin] = useState(
@@ -21,17 +25,19 @@ function App() {
     () => localStorage.getItem("isLoggedIn") === "true"
   );
 
+  // Sync localStorage with state
   useEffect(() => {
     localStorage.setItem("isLoggedIn", isLoggedIn);
     localStorage.setItem("isAdmin", isAdmin);
   }, [isLoggedIn, isAdmin]);
 
-  const handleLogout = () => {
+  // Logout handler
+  const handleLogout = useCallback(() => {
     setIsLoggedIn(false);
     setIsAdmin(false);
     localStorage.removeItem("isLoggedIn");
     localStorage.removeItem("isAdmin");
-  };
+  }, []);
 
   return (
     <>
@@ -42,49 +48,48 @@ function App() {
       />
 
       <Routes>
+        {/* Public Routes */}
         <Route path="/" element={<Home />} />
         <Route
           path="/login"
           element={
-            <LoginPage setIsLoggedIn={setIsLoggedIn} setIsAdmin={setIsAdmin} />
+            isLoggedIn ? (
+              <Navigate to="/profile" />
+            ) : (
+              <LoginPage
+                setIsLoggedIn={setIsLoggedIn}
+                setIsAdmin={setIsAdmin}
+              />
+            )
           }
         />
-        <Route path="/register" element={<Register />} />
+        <Route
+          path="/signup"
+          element={isLoggedIn ? <Navigate to="/profile" /> : <SignupPage />}
+        />
+        <Route path="/explore" element={<Explore />} />
 
         {/* Protected Routes */}
-        <Route
-          path="/explore"
-          element={isLoggedIn ? <Explore /> : <Navigate to="/login" />}
-        />
-        <Route
-          path="/messages"
-          element={isLoggedIn ? <Messages /> : <Navigate to="/login" />}
-        />
-        <Route
-          path="/researchers"
-          element={isLoggedIn ? <Researchers /> : <Navigate to="/login" />}
-        />
-        <Route
-          path="/publication"
-          element={isLoggedIn ? <Publication /> : <Navigate to="/login" />}
-        />
-        <Route
-          path="/my-projects"
-          element={isLoggedIn ? <MyProjects /> : <Navigate to="/login" />}
-        />
-        <Route
-          path="/announcements"
-          element={isLoggedIn ? <Announcements /> : <Navigate to="/login" />}
-        />
-        <Route
-          path="/profile"
-          element={isLoggedIn ? <Profile /> : <Navigate to="/login" />}
-        />
+        {isLoggedIn ? (
+          <>
+            <Route path="/messages" element={<Messages />} />
+            <Route path="/researchers" element={<Researchers />} />
+            <Route path="/publication" element={<Publication />} />
+            <Route path="/my-projects" element={<MyProjects />} />
+            <Route path="/announcements" element={<Announcements />} />
+            <Route path="/profile" element={<Profile />} />
+          </>
+        ) : (
+          <Route path="*" element={<Navigate to="/login" />} />
+        )}
+
+        {/* Admin Route */}
         <Route
           path="/admin"
           element={isAdmin ? <Admin /> : <Navigate to="/" />}
         />
 
+        {/* Catch-All Redirect */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </>

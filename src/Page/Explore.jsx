@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from "react";
+import axios from "axios";
+import "./Explore.css";
 
 // Component to display individual research opportunities
-const ResearchOpportunity = ({
+function ResearchOpportunity({
+  id,
   title,
   description,
   field,
   researcher,
   researcherProfile,
   onRequestJoin,
-}) => {
+}) {
   const [showFullDescription, setShowFullDescription] = useState(false);
 
   const handleReadMore = () => {
@@ -43,54 +46,46 @@ const ResearchOpportunity = ({
         {showFullDescription ? "Read Less" : "Read More"}
       </button>
       <button onClick={handleShare}>Share</button>
-      <button onClick={onRequestJoin}>Request to Join</button>
+      <button onClick={() => onRequestJoin(id)}>Request to Join</button>
     </div>
   );
-};
+}
 
 const Explore = () => {
   const [researchOpportunities, setResearchOpportunities] = useState([]);
-  const [userProfile, setUserProfile] = useState({
+  const [userProfile] = useState({
+    id: 1, // Example user ID (should be dynamic)
     name: "Dr. Samuel",
     role: "Researcher",
   });
 
-  // Simulated fetch of research opportunities from an API
+  // Fetch research opportunities from an API
   useEffect(() => {
-    const fetchedOpportunities = [
-      {
-        title: "Machine Learning in Healthcare",
-        description:
-          "Explore the application of machine learning techniques in predicting healthcare outcomes, improving diagnostics, and enhancing treatment decisions.",
-        field: "Machine Learning",
-        researcher: "Dr. John Doe",
-        researcherProfile: "https://researcher-profile-link.com/john-doe",
-      },
-      {
-        title: "Blockchain for Supply Chain",
-        description:
-          "Research on how blockchain technology can improve transparency and efficiency in supply chains, preventing fraud and reducing costs.",
-        field: "Blockchain",
-        researcher: "Dr. Jane Smith",
-        researcherProfile: "https://researcher-profile-link.com/jane-smith",
-      },
-      {
-        title: "IoT in Smart Agriculture",
-        description:
-          "Investigating the use of IoT devices for optimizing agricultural practices, improving crop yield, and reducing waste in farming.",
-        field: "IoT",
-        researcher: "Dr. Ahmed Ali",
-        researcherProfile: "https://researcher-profile-link.com/ahmed-ali",
-      },
-    ];
-
-    setResearchOpportunities(fetchedOpportunities);
+    const fetchOpportunities = async () => {
+      try {
+        const response = await axios.get(
+          "http://localhost:5000/research_opportunities"
+        );
+        setResearchOpportunities(response.data);
+      } catch (error) {
+        console.error("Error fetching research opportunities:", error);
+      }
+    };
+    fetchOpportunities();
   }, []);
 
-  const handleRequestJoin = (opportunityTitle) => {
-    alert(
-      `Request sent to join the research opportunity: "${opportunityTitle}"`
-    );
+  // Function to send request to admin
+  const handleRequestJoin = async (researchId) => {
+    try {
+      const response = await axios.post("http://localhost:5000/send_request", {
+        sender_id: userProfile.id,
+        research_id: researchId,
+      });
+      alert(response.data.message);
+    } catch (error) {
+      console.error("Error sending request:", error);
+      alert("Failed to send request.");
+    }
   };
 
   return (
@@ -109,15 +104,16 @@ const Explore = () => {
 
       <div className="research-list">
         {researchOpportunities.length > 0 ? (
-          researchOpportunities.map((opportunity, index) => (
+          researchOpportunities.map((opportunity) => (
             <ResearchOpportunity
-              key={index}
+              key={opportunity.id}
+              id={opportunity.id}
               title={opportunity.title}
               description={opportunity.description}
               field={opportunity.field}
               researcher={opportunity.researcher}
               researcherProfile={opportunity.researcherProfile}
-              onRequestJoin={() => handleRequestJoin(opportunity.title)}
+              onRequestJoin={handleRequestJoin}
             />
           ))
         ) : (
