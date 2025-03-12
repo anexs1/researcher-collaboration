@@ -1,18 +1,14 @@
-import express from "express";
-import bodyParser from "body-parser";
-import cors from "cors";
-import dotenv from "dotenv";
-import authRoutes from "./routes/authRoutes";
-
-dotenv.config();
+const express = require("express");
+const mysql = require("mysql2");
+const bodyParser = require("body-parser");
+const db = require("./config/db"); // This should work if db.js uses CommonJS
 
 const app = express();
-const PORT = 5000;
 
-app.use(cors());
 app.use(bodyParser.json());
-app.use("/auth", authRoutes);
+app.use("/uploads", express.static("uploads")); // Serve uploaded files
+app.use("/api", publicationRoutes);
 
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+app.listen(5000, () => {
+  console.log("Server running on port 5000");
 });

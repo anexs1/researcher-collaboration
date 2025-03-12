@@ -44,6 +44,11 @@ const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
               💬 Messages
             </Link>
           </li>
+          <li>
+            <Link to="/publications" onClick={closeMenu}>
+              📰 Publications
+            </Link>
+          </li>
 
           {/* Notifications Component */}
           {isLoggedIn && <Notifications />}

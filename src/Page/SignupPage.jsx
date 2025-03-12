@@ -1,108 +1,158 @@
-// SignupPage.jsx
 import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import "./SignupPage.css"; // Import external CSS
 
 export default function SignupPage() {
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [expertise, setExpertise] = useState("");
-  const [profileImage, setProfileImage] = useState("");
-  const [bio, setBio] = useState("");
-  const [location, setLocation] = useState("");
-  const [phone, setPhone] = useState("");
+  const [formData, setFormData] = useState({
+    username: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    expertise: "",
+    profileImage: null,
+    bio: "",
+    location: "",
+    phone: "",
+  });
+
   const [errorMessage, setErrorMessage] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
+  };
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    setFormData({ ...formData, profileImage: file });
+  };
+
   const handleSignup = () => {
-    if (password !== confirmPassword) {
-      setErrorMessage("Passwords do not match");
+    if (
+      !formData.username ||
+      !formData.email ||
+      !formData.password ||
+      !formData.confirmPassword
+    ) {
+      setErrorMessage("Please fill in all required fields.");
       return;
     }
+    if (formData.password !== formData.confirmPassword) {
+      setErrorMessage("Passwords do not match.");
+      return;
+    }
+
+    setLoading(true);
+    const signupData = new FormData();
+    Object.entries(formData).forEach(([key, value]) => {
+      signupData.append(key, value);
+    });
+
     axios
-      .post("http://localhost:5000/signup", {
-        username,
-        email,
-        password,
-        expertise,
-        profileImage,
-        bio,
-        location,
-        phone,
+      .post("http://localhost:5000/signup", signupData, {
+        headers: { "Content-Type": "multipart/form-data" },
       })
       .then(() => {
         alert("Account created successfully!");
         navigate("/login");
       })
-      .catch((error) => setErrorMessage(error.response.data.error));
+      .catch((error) =>
+        setErrorMessage(error.response?.data?.error || "Signup failed.")
+      )
+      .finally(() => setLoading(false));
   };
 
   return (
-    <div className="auth-page">
-      <div className="auth-container">
-        <h2 className="auth-title">Sign Up</h2>
+    <div className="signup-container">
+      <div className="signup-box">
+        <h2 className="signup-title">Sign Up</h2>
+
         {errorMessage && <p className="error-message">{errorMessage}</p>}
+
         <input
           type="text"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          name="username"
+          value={formData.username}
+          onChange={handleChange}
           placeholder="Username"
+          className="input-field"
         />
         <input
           type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          name="email"
+          value={formData.email}
+          onChange={handleChange}
           placeholder="Email"
+          className="input-field"
         />
         <input
           type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          name="password"
+          value={formData.password}
+          onChange={handleChange}
           placeholder="Password"
+          className="input-field"
         />
         <input
           type="password"
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
+          name="confirmPassword"
+          value={formData.confirmPassword}
+          onChange={handleChange}
           placeholder="Confirm Password"
+          className="input-field"
         />
         <input
           type="text"
-          value={expertise}
-          onChange={(e) => setExpertise(e.target.value)}
+          name="expertise"
+          value={formData.expertise}
+          onChange={handleChange}
           placeholder="Expertise"
+          className="input-field"
         />
         <input
-          type="text"
-          value={profileImage}
-          onChange={(e) => setProfileImage(e.target.value)}
-          placeholder="Profile Image URL"
+          type="file"
+          accept="image/*"
+          onChange={handleImageUpload}
+          className="input-field"
         />
         <textarea
-          value={bio}
-          onChange={(e) => setBio(e.target.value)}
+          name="bio"
+          value={formData.bio}
+          onChange={handleChange}
           placeholder="Short Bio"
+          className="input-field"
         ></textarea>
         <input
           type="text"
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
+          name="location"
+          value={formData.location}
+          onChange={handleChange}
           placeholder="Location (optional)"
+          className="input-field"
         />
         <input
           type="text"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
+          name="phone"
+          value={formData.phone}
+          onChange={handleChange}
           placeholder="Phone Number"
+          className="input-field"
         />
-        <button onClick={handleSignup} className="auth-button">
-          Sign Up
+
+        <button
+          onClick={handleSignup}
+          disabled={loading}
+          className="signup-button"
+        >
+          {loading ? "Signing Up..." : "Sign Up"}
         </button>
-        <p className="footer-text">
+
+        <p className="login-link">
           Already have an account?{" "}
-          <span className="link" onClick={() => navigate("/login")}>
+          <span onClick={() => navigate("/login")} className="login-text">
             Log in
           </span>
         </p>

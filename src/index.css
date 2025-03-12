@@ -8,8 +8,8 @@
   left: 0;
   width: 100%;
   z-index: 1000; /* Ensures the header stays on top */
-  height: 60px; /* Adjust according to your actual header height */
-  background-color: #ff69b4; /* Match your header color */
+  height: 6px; /* Adjust according to your actual header height */
+  background-color: hsl(145, 71%, 47%); /* Match your header color */
 }
 
 .form-container {

@@ -1,136 +1,44 @@
-/* Publication Container */
+/* src/Page/Publication.css */
 .publication-container {
-  width: 80%;
+  width: 60%;
   margin: auto;
-  margin-top: 90px; /* Moves the container down slightly from the header */
-  font-family: Arial, sans-serif;
-  padding: 20px;
-  background: #f9f9f9;
-  border-radius: 10px;
-  box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
-}
-
-.publication-container h1 {
-  text-align: center;
-  color: #333;
-}
-
-/* Error Message */
-.error-message {
-  color: red;
-  font-weight: bold;
   text-align: center;
 }
 
-/* Add Form */
-.add-form {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  background: #ffffff;
-  padding: 15px;
-  border-radius: 5px;
-  box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.1);
+.search-bar {
   margin-bottom: 20px;
 }
 
-.add-form h2 {
-  text-align: center;
-  color: #444;
+.search-bar input {
+  width: 60%;
+  padding: 8px;
 }
 
-.add-form input,
-.add-form textarea {
-  width: 100%;
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
+.upload-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.upload-form input {
+  padding: 8px;
   font-size: 16px;
 }
 
-.add-form button {
-  background: #007bff;
+button {
+  padding: 8px;
+  background-color: #007bff;
   color: white;
   border: none;
+  cursor: pointer;
+}
+
+.publication-list {
+  text-align: left;
+}
+
+.publication-item {
   padding: 10px;
-  cursor: pointer;
-  border-radius: 5px;
-  font-size: 16px;
-  transition: background 0.3s ease-in-out;
-}
-
-.add-form button:hover {
-  background: #0056b3;
-}
-
-/* Publication List */
-ul {
-  list-style-type: none;
-  padding: 0;
-}
-
-li {
-  background: white;
-  padding: 15px;
-  border-radius: 5px;
-  box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.1);
-  margin-bottom: 15px;
-}
-
-li h3 {
-  margin: 0;
-  color: #333;
-}
-
-li p {
-  margin: 5px 0;
-}
-
-li a {
-  color: #007bff;
-  text-decoration: none;
-}
-
-li a:hover {
-  text-decoration: underline;
-}
-
-small {
-  display: block;
-  margin-top: 10px;
-  color: #666;
-}
-
-/* Buttons */
-.edit-btn,
-.delete-btn {
-  background: #28a745;
-  color: white;
-  border: none;
-  padding: 8px 12px;
-  margin-right: 5px;
-  cursor: pointer;
-  border-radius: 5px;
-  font-size: 14px;
-  transition: background 0.3s ease-in-out;
-}
-
-.delete-btn {
-  background: #dc3545;
-}
-
-.edit-btn:hover {
-  background: #218838;
-}
-
-.delete-btn:hover {
-  background: #c82333;
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-  .publication-container {
-    width: 90%;
-    margin-top: 80px; /* Adjusting spacing for smaller screens */
-  }
+  border-bottom: 1px solid #ccc;
 }

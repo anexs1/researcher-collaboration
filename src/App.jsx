@@ -5,7 +5,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import Admin from "./Page/Admin";
 import Home from "./Page/Home";
 import Profile from "./Page/Profile";
-import Publication from "./Page/Publication";
+import Publication from "./Page/Publication"; // Ensure this import is correct
 import SignupPage from "./Page/SignupPage";
 import LoginPage from "./Page/LoginPage";
 import Researchers from "./Page/Researchers";
@@ -68,7 +68,10 @@ function App() {
           element={isLoggedIn ? <Navigate to="/profile" /> : <SignupPage />}
         />
         <Route path="/explore" element={<Explore />} />
-
+        <Route path="/messages" element={<Messages />} />
+        <Route path="/my-projects" element={<MyProjects />} />
+        <Route path="/publications" element={<Publication />} />{" "}
+        {/* Ensure this route is correct */}
         {/* Protected Routes */}
         {isLoggedIn ? (
           <>
@@ -82,13 +85,11 @@ function App() {
         ) : (
           <Route path="*" element={<Navigate to="/login" />} />
         )}
-
         {/* Admin Route */}
         <Route
           path="/admin"
           element={isAdmin ? <Admin /> : <Navigate to="/" />}
         />
-
         {/* Catch-All Redirect */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>

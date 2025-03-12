@@ -1,172 +1,98 @@
-import { useState } from "react";
-import "./Publication.css";
+import React, { useState, useEffect } from "react";
 
 const Publication = () => {
-  const [currentUserId, setCurrentUserId] = useState("User123"); // Simulating a logged-in user
-  const [publications, setPublications] = useState([
-    {
-      id: 1,
-      userId: "User123",
-      title: "Research on AI in Agriculture",
-      abstract:
-        "This publication explores the use of AI in improving agricultural yields.",
-      keywords: "AI, Agriculture, Sustainability",
-      methodology: "Machine learning algorithms for data analysis",
-      conclusion: "AI can help optimize resource usage in agriculture.",
-      publicationLink: "http://example.com/research-article",
-      createdAt: new Date(),
-    },
-  ]);
-
+  const [publications, setPublications] = useState([]);
   const [newPublication, setNewPublication] = useState({
     title: "",
-    abstract: "",
-    keywords: "",
-    methodology: "",
-    conclusion: "",
-    publicationLink: "",
+    author: "",
+    content: "",
   });
 
-  const [error, setError] = useState("");
+  useEffect(() => {
+    fetchPublications();
+  }, []);
 
-  // Function to Add a New Publication
-  const handleAddPublication = () => {
-    if (
-      !newPublication.title ||
-      !newPublication.abstract ||
-      !newPublication.keywords
-    ) {
-      setError("Title, Abstract, and Keywords are required.");
-      return;
+  // Fetch publications from backend
+  const fetchPublications = async () => {
+    try {
+      const response = await fetch("http://localhost:5000/api/publications");
+      const data = await response.json();
+      setPublications(data);
+    } catch (error) {
+      console.error("Error fetching publications:", error);
     }
+  };
 
-    const newPub = {
-      id: publications.length + 1,
-      userId: currentUserId, // Assigning the logged-in user as the owner
-      title: newPublication.title,
-      abstract: newPublication.abstract,
-      keywords: newPublication.keywords,
-      methodology: newPublication.methodology,
-      conclusion: newPublication.conclusion,
-      publicationLink: newPublication.publicationLink,
-      createdAt: new Date(),
-    };
+  // Handle form input changes
+  const handleChange = (e) => {
+    setNewPublication({ ...newPublication, [e.target.name]: e.target.value });
+  };
 
-    setPublications([...publications, newPub]);
+  // Submit new publication
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await fetch("http://localhost:5000/api/publications", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: publicationTitle,
+          content: publicationContent,
+        }),
+      });
 
-    // Reset form fields
-    setNewPublication({
-      title: "",
-      abstract: "",
-      keywords: "",
-      methodology: "",
-      conclusion: "",
-      publicationLink: "",
-    });
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
 
-    setError("");
+      const data = await response.json();
+      console.log("Publication submitted successfully:", data);
+    } catch (error) {
+      console.error("Error submitting publication:", error);
+    }
   };
 
   return (
-    <div className="publication-container">
+    <div>
       <h1>Publications</h1>
-      {error && <p className="error-message">{error}</p>}
 
-      {/* Add New Publication Form */}
-      <div className="add-form">
-        <h2>Post a New Publication</h2>
+      {/* Add Publication Form */}
+      <form onSubmit={handleSubmit}>
         <input
           type="text"
+          name="title"
           placeholder="Title"
           value={newPublication.title}
-          onChange={(e) =>
-            setNewPublication({ ...newPublication, title: e.target.value })
-          }
-        />
-        <textarea
-          placeholder="Abstract"
-          value={newPublication.abstract}
-          onChange={(e) =>
-            setNewPublication({ ...newPublication, abstract: e.target.value })
-          }
+          onChange={handleChange}
+          required
         />
         <input
           type="text"
-          placeholder="Keywords"
-          value={newPublication.keywords}
-          onChange={(e) =>
-            setNewPublication({ ...newPublication, keywords: e.target.value })
-          }
+          name="author"
+          placeholder="Author"
+          value={newPublication.author}
+          onChange={handleChange}
+          required
         />
         <textarea
-          placeholder="Methodology"
-          value={newPublication.methodology}
-          onChange={(e) =>
-            setNewPublication({
-              ...newPublication,
-              methodology: e.target.value,
-            })
-          }
-        />
-        <textarea
-          placeholder="Conclusion"
-          value={newPublication.conclusion}
-          onChange={(e) =>
-            setNewPublication({ ...newPublication, conclusion: e.target.value })
-          }
-        />
-        <input
-          type="url"
-          placeholder="Publication Link"
-          value={newPublication.publicationLink}
-          onChange={(e) =>
-            setNewPublication({
-              ...newPublication,
-              publicationLink: e.target.value,
-            })
-          }
-        />
-        <button onClick={handleAddPublication}>Post Publication</button>
-      </div>
+          name="content"
+          placeholder="Content"
+          value={newPublication.content}
+          onChange={handleChange}
+          required
+        ></textarea>
+        <button type="submit">Add Publication</button>
+      </form>
 
-      {/* List of Publications */}
+      {/* Display Publications */}
       <ul>
         {publications.map((pub) => (
           <li key={pub.id}>
             <h3>{pub.title}</h3>
-            <p>
-              <strong>Abstract:</strong> {pub.abstract}
-            </p>
-            <p>
-              <strong>Keywords:</strong> {pub.keywords}
-            </p>
-            <p>
-              <strong>Methodology:</strong> {pub.methodology}
-            </p>
-            <p>
-              <strong>Conclusion:</strong> {pub.conclusion}
-            </p>
-            <p>
-              <strong>Link:</strong>{" "}
-              <a
-                href={pub.publicationLink}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {pub.publicationLink}
-              </a>
-            </p>
-            <small>
-              Created at: {new Date(pub.createdAt).toLocaleString()}
-            </small>
-
-            {/* Only allow edit/delete for the logged-in user */}
-            {pub.userId === currentUserId && (
-              <>
-                <button className="edit-btn">Edit</button>
-                <button className="delete-btn">Delete</button>
-              </>
-            )}
+            <p>By: {pub.author}</p>
+            <p>{pub.content}</p>
           </li>
         ))}
       </ul>

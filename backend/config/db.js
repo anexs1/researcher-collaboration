@@ -1,19 +1,19 @@
-import mysql from "mysql2";
-import process from "node:process";
+// db.js
+const { Sequelize } = require("sequelize");
 
-const db = mysql.createConnection({
+// Initialize Sequelize
+const sequelize = new Sequelize("researcher_portal", "root", "", {
   host: "localhost",
-  user: "root",
-  password: "",
-  database: "researcher_portal",
+  dialect: "mysql",
 });
 
-db.connect((err) => {
-  if (err) {
-    console.error("Database connection failed:", err);
-    process.exit(1);
-  }
-  console.log("Connected to MySQL database.");
-});
+sequelize
+  .authenticate()
+  .then(() => {
+    console.log("Database connected successfully.");
+  })
+  .catch((err) => {
+    console.error("Unable to connect to the database:", err);
+  });
 
-export default db;
+module.exports = sequelize;
