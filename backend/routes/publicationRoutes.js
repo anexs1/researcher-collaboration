@@ -8,9 +8,9 @@ const {
 
 const router = express.Router();
 
-// Define routes for publications
-router.post("/publications", upload.single("file"), createPublication); // To create a publication
-router.get("/publications", getAllPublications); // To get all publications
-router.get("/publications/search", searchPublications); // To search for publications
+// Define the routes with the correct controller functions
+router.post("/publications", upload.single("file"), createPublication);
+router.get("/publications", getAllPublications); // This should be a valid function
+router.get("/publications/search", searchPublications); // This should be a valid function
 
-module.exports = router; // Export the router once
+module.exports = router;

@@ -1,7 +1,6 @@
-// db.js
+require("dotenv").config();
 const { Sequelize } = require("sequelize");
 
-// Initialize Sequelize
 const sequelize = new Sequelize("researcher_portal", "root", "", {
   host: "localhost",
   dialect: "mysql",
@@ -16,4 +15,4 @@ sequelize
     console.error("Unable to connect to the database:", err);
   });
 
-module.exports = sequelize;
+module.exports = sequelize; // Export sequelize instance

@@ -1,14 +1,22 @@
 const { DataTypes } = require("sequelize");
-const sequelize = require("../config/db"); // Import the database connection
+const sequelize = require("../config/db"); // Corrected path to db.js
 
 const Publication = sequelize.define("Publication", {
   title: {
     type: DataTypes.STRING,
     allowNull: false,
   },
-  content: {
-    type: DataTypes.TEXT,
+  author: {
+    type: DataTypes.STRING,
     allowNull: false,
+  },
+  keywords: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  file_path: {
+    type: DataTypes.STRING,
+    allowNull: true,
   },
 });
 

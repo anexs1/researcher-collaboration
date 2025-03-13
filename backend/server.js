@@ -1,14 +1,15 @@
 const express = require("express");
-const mysql = require("mysql2");
-const bodyParser = require("body-parser");
-const db = require("./config/db"); // This should work if db.js uses CommonJS
-
+const cors = require("cors");
 const app = express();
+const publicationRoutes = require("./routes/publicationRoutes");
 
-app.use(bodyParser.json());
-app.use("/uploads", express.static("uploads")); // Serve uploaded files
-app.use("/api", publicationRoutes);
+app.use(cors()); // Enable CORS to allow the frontend to connect
+app.use(express.json()); // For parsing application/json
+app.use(express.urlencoded({ extended: true })); // For parsing application/x-www-form-urlencoded
 
-app.listen(5000, () => {
-  console.log("Server running on port 5000");
+app.use("/api/publications", publicationRoutes); // Your API routes
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });

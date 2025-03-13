@@ -1,101 +1,82 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 
 const Publication = () => {
-  const [publications, setPublications] = useState([]);
-  const [newPublication, setNewPublication] = useState({
-    title: "",
-    author: "",
-    content: "",
-  });
+  const [title, setTitle] = useState("");
+  const [author, setAuthor] = useState("");
+  const [keywords, setKeywords] = useState("");
+  const [file, setFile] = useState(null);
+  const [message, setMessage] = useState("");
 
-  useEffect(() => {
-    fetchPublications();
-  }, []);
-
-  // Fetch publications from backend
-  const fetchPublications = async () => {
-    try {
-      const response = await fetch("http://localhost:5000/api/publications");
-      const data = await response.json();
-      setPublications(data);
-    } catch (error) {
-      console.error("Error fetching publications:", error);
-    }
+  const handleFileChange = (e) => {
+    setFile(e.target.files[0]);
   };
 
-  // Handle form input changes
-  const handleChange = (e) => {
-    setNewPublication({ ...newPublication, [e.target.name]: e.target.value });
-  };
-
-  // Submit new publication
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!title || !author) {
+      alert("Title and Author are required!");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("title", title);
+    formData.append("author", author);
+    formData.append("keywords", keywords);
+    formData.append("file", file); // This sends the file data
+
     try {
       const response = await fetch("http://localhost:5000/api/publications", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          title: publicationTitle,
-          content: publicationContent,
-        }),
+        body: formData, // Automatically sets the content-type to multipart/form-data
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
+        throw new Error("Failed to submit publication");
       }
 
       const data = await response.json();
-      console.log("Publication submitted successfully:", data);
+      setMessage("Publication submitted successfully!");
+
+      // Reset form fields
+      setTitle("");
+      setAuthor("");
+      setKeywords("");
+      setFile(null);
     } catch (error) {
       console.error("Error submitting publication:", error);
+      setMessage("Error submitting publication");
     }
   };
 
   return (
     <div>
-      <h1>Publications</h1>
-
-      {/* Add Publication Form */}
+      <h2>Upload Publication</h2>
+      {message && <p>{message}</p>}
       <form onSubmit={handleSubmit}>
         <input
           type="text"
-          name="title"
           placeholder="Title"
-          value={newPublication.title}
-          onChange={handleChange}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
           required
         />
         <input
           type="text"
-          name="author"
           placeholder="Author"
-          value={newPublication.author}
-          onChange={handleChange}
+          value={author}
+          onChange={(e) => setAuthor(e.target.value)}
           required
         />
-        <textarea
-          name="content"
-          placeholder="Content"
-          value={newPublication.content}
-          onChange={handleChange}
-          required
-        ></textarea>
-        <button type="submit">Add Publication</button>
+        <input
+          type="text"
+          placeholder="Keywords"
+          value={keywords}
+          onChange={(e) => setKeywords(e.target.value)}
+        />
+        <input type="file" onChange={handleFileChange} required />
+        <button type="submit">Submit</button>
       </form>
-
-      {/* Display Publications */}
-      <ul>
-        {publications.map((pub) => (
-          <li key={pub.id}>
-            <h3>{pub.title}</h3>
-            <p>By: {pub.author}</p>
-            <p>{pub.content}</p>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 };
