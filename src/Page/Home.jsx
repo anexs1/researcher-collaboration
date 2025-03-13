@@ -101,21 +101,43 @@ const Home = () => {
       <section className="testimonials-section">
         <h2 className="section-title">What Our Users Say</h2>
         <div className="testimonials-grid">
+          {/* Testimonial Item 1 */}
           <div className="testimonial-item">
-            <img src="../assets/react.svg" alt="" />
+            <div className="testimonial-image">
+              <img src="../assets/react.svg" alt="Dr. Amanuel T." />
+            </div>
             <div className="testimonial-content">
               <p>
                 "This platform helped me find the perfect research partner!"
               </p>
               <h4>- Dr. Amanuel T.</h4>
+              <p className="role">Researcher</p>
             </div>
           </div>
 
+          {/* Testimonial Item 2 */}
           <div className="testimonial-item">
-            <img src="" alt="testimonial 2" />
+            <div className="testimonial-image">
+              <img src="../assets/react.svg" alt="Prof. Mulu A." />
+            </div>
             <div className="testimonial-content">
               <p>"Collaborating has never been easier. Great experience!"</p>
               <h4>- Prof. Mulu A.</h4>
+              <p className="role">Professor</p>
+            </div>
+          </div>
+
+          {/* Testimonial Item 3 */}
+          <div className="testimonial-item">
+            <div className="testimonial-image">
+              <img src="../assets/react.svg" alt="Dr. John S." />
+            </div>
+            <div className="testimonial-content">
+              <p>
+                "The platform is user-friendly and connects people seamlessly!"
+              </p>
+              <h4>- Dr. John S.</h4>
+              <p className="role">Researcher</p>
             </div>
           </div>
         </div>

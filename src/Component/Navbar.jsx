@@ -3,12 +3,13 @@ import { useState } from "react";
 import Notifications from "./Notifications";
 import ProfileMenu from "./ProfileMenu";
 import SearchBar from "./SearchBar";
-
+import ChatPopup from "./ChatPopup"; // Import Chat Component
 import "./Navbar.css";
 
 const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false); // State for Chat Popup
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -39,19 +40,33 @@ const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
               📁 My Projects
             </Link>
           </li>
-          <li>
-            <Link to="/messages" onClick={closeMenu}>
-              💬 Messages
-            </Link>
-          </li>
+
           <li>
             <Link to="/publications" onClick={closeMenu}>
               📰 Publications
             </Link>
           </li>
+          <li>
+            <Link to="/messages" onClick={closeMenu}>
+              💬 Messages
+            </Link>
+          </li>
 
           {/* Notifications Component */}
           {isLoggedIn && <Notifications />}
+
+          {/* Chat Icon */}
+          {isLoggedIn && (
+            <li className="chat-icon">
+              <button
+                className="chat-btn"
+                onClick={() => setChatOpen(!chatOpen)}
+              >
+                📩 Chat
+              </button>
+              {chatOpen && <ChatPopup closeChat={() => setChatOpen(false)} />}
+            </li>
+          )}
 
           {/* Admin Panel - Dropdown for Admins */}
           {isAdmin && (

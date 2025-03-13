@@ -266,19 +266,77 @@ html {
   transform: scale(1.05);
 }
 
-/* Testimonials */
-.testimonial-item {
-  display: flex;
-  align-items: center;
-  gap: 15px;
+/* General Styles */
+.testimonials-section {
+  padding: 60px 0;
+  background-color: #f9f9f9;
+  text-align: center;
 }
 
-.testimonial-item img {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  background: lightgray;
+.section-title {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 30px;
+  color: #333;
 }
+
+.testimonials-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 30px;
+  justify-content: center;
+}
+
+/* Testimonial Item Styles */
+.testimonial-item {
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.testimonial-item:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+}
+
+.testimonial-image img {
+  border-radius: 50%;
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  margin-bottom: 20px;
+}
+
+/* Testimonial Content Styles */
+.testimonial-content p {
+  font-style: italic;
+  color: #555;
+}
+
+.testimonial-content h4 {
+  margin-top: 10px;
+  font-weight: 600;
+  color: #333;
+}
+
+.testimonial-content .role {
+  font-size: 0.9rem;
+  color: #888;
+}
+
+/* Responsive Styles */
+@media (max-width: 768px) {
+  .testimonials-section {
+    padding: 40px 0;
+  }
+
+  .section-title {
+    font-size: 1.5rem;
+  }
+}
+
 /* FAQ Section */
 .faq-section {
   padding: 40px 20px;

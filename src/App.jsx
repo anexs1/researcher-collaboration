@@ -5,7 +5,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import Admin from "./Page/Admin";
 import Home from "./Page/Home";
 import Profile from "./Page/Profile";
-import Publication from "./Page/Publication"; // Ensure this import is correct
+import Publication from "./Page/Publication";
 import SignupPage from "./Page/SignupPage";
 import LoginPage from "./Page/LoginPage";
 import Researchers from "./Page/Researchers";
@@ -48,8 +48,13 @@ function App() {
       />
 
       <Routes>
-        {/* Public Routes */}
+        {/* Public Routes (Accessible without login) */}
         <Route path="/" element={<Home />} />
+        <Route path="/explore" element={<Explore />} />
+        <Route path="/publications" element={<Publication />} />
+
+        {/* Login and Signup Routes */}
+        <Route path="/admin/login" element={<LoginPage admin={true} />} />
         <Route
           path="/login"
           element={
@@ -67,30 +72,25 @@ function App() {
           path="/signup"
           element={isLoggedIn ? <Navigate to="/profile" /> : <SignupPage />}
         />
-        <Route path="/explore" element={<Explore />} />
-        <Route path="/messages" element={<Messages />} />
-        <Route path="/my-projects" element={<MyProjects />} />
-        <Route path="/publications" element={<Publication />} />{" "}
-        {/* Ensure this route is correct */}
-        {/* Protected Routes */}
-        {isLoggedIn ? (
+
+        {/* Protected Routes (Require login) */}
+        {isLoggedIn && (
           <>
             <Route path="/messages" element={<Messages />} />
             <Route path="/researchers" element={<Researchers />} />
-            <Route path="/publication" element={<Publication />} />
             <Route path="/my-projects" element={<MyProjects />} />
-            <Route path="/announcements" element={<Announcements />} />
+
             <Route path="/profile" element={<Profile />} />
           </>
-        ) : (
-          <Route path="*" element={<Navigate to="/login" />} />
         )}
+
         {/* Admin Route */}
         <Route
           path="/admin"
           element={isAdmin ? <Admin /> : <Navigate to="/" />}
         />
-        {/* Catch-All Redirect */}
+
+        {/* Catch-All Redirect (For Unauthenticated Users) */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </>
