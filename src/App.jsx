@@ -79,7 +79,6 @@ function App() {
             <Route path="/messages" element={<Messages />} />
             <Route path="/researchers" element={<Researchers />} />
             <Route path="/my-projects" element={<MyProjects />} />
-
             <Route path="/profile" element={<Profile />} />
           </>
         )}

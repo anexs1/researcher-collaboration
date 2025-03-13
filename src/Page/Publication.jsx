@@ -1,3 +1,4 @@
+// Publication.js (React Component)
 import React, { useState } from "react";
 
 const Publication = () => {
@@ -23,12 +24,12 @@ const Publication = () => {
     formData.append("title", title);
     formData.append("author", author);
     formData.append("keywords", keywords);
-    formData.append("file", file); // This sends the file data
+    formData.append("file", file);
 
     try {
       const response = await fetch("http://localhost:5000/api/publications", {
         method: "POST",
-        body: formData, // Automatically sets the content-type to multipart/form-data
+        body: formData,
       });
 
       if (!response.ok) {
@@ -38,7 +39,6 @@ const Publication = () => {
       const data = await response.json();
       setMessage("Publication submitted successfully!");
 
-      // Reset form fields
       setTitle("");
       setAuthor("");
       setKeywords("");

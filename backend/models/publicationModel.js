@@ -1,5 +1,6 @@
+// models/publicationModel.js
 const { DataTypes } = require("sequelize");
-const sequelize = require("../config/db"); // Corrected path to db.js
+const sequelize = require("../config/db"); // Ensure correct path
 
 const Publication = sequelize.define("Publication", {
   title: {

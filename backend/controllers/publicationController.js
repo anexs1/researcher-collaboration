@@ -1,10 +1,11 @@
-const Publication = require("../models/publicationModel");
+// controllers/publicationController.js
 const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
+const Publication = require("../models/publicationModel");
 const { Op } = require("sequelize");
 
-// Set up multer storage
+// Set up multer storage for file uploads
 const uploadDir = path.join(__dirname, "../uploads");
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir);
@@ -18,11 +19,10 @@ const storage = multer.diskStorage({
     cb(null, Date.now() + "-" + file.originalname);
   },
 });
-
 const upload = multer({ storage });
 
 // Create a new publication
-exports.createPublication = async (req, res) => {
+const createPublication = async (req, res) => {
   try {
     const { title, author, keywords } = req.body;
     const file_path = req.file ? `/uploads/${req.file.filename}` : null;
@@ -48,37 +48,47 @@ exports.createPublication = async (req, res) => {
 };
 
 // Get all publications
-exports.getAllPublications = async (req, res) => {
+const getAllPublications = async (req, res) => {
   try {
     const publications = await Publication.findAll();
     res.status(200).json(publications);
   } catch (error) {
+    console.error("Error fetching publications:", error);
     res.status(500).json({ message: "Error fetching publications", error });
   }
 };
 
 // Search publications by keyword
-// In your publicationController.js
-exports.createPublication = async (req, res) => {
+const searchPublications = async (req, res) => {
   try {
-    const { title, author, keywords } = req.body;
-    const fileUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    const { keyword } = req.query;
 
-    const publication = await Publication.create({
-      title,
-      author,
-      keywords,
-      fileUrl,
+    if (!keyword) {
+      return res
+        .status(400)
+        .json({ message: "Keyword query parameter is required" });
+    }
+
+    const publications = await Publication.findAll({
+      where: {
+        [Op.or]: [
+          { title: { [Op.like]: `%${keyword}%` } },
+          { author: { [Op.like]: `%${keyword}%` } },
+          { keywords: { [Op.like]: `%${keyword}%` } },
+        ],
+      },
     });
 
-    res
-      .status(201)
-      .json({ message: "Publication added successfully", publication });
+    res.status(200).json(publications);
   } catch (error) {
-    console.error("Error adding publication:", error); // Log the full error
-    res.status(500).json({ message: "Error adding publication", error });
+    console.error("Error searching publications:", error);
+    res.status(500).json({ message: "Error searching publications", error });
   }
 };
 
-module.exports.upload = upload;
-// Compare this snippet from backend/routes/publicationRoutes.js:
+module.exports = {
+  createPublication,
+  getAllPublications,
+  searchPublications,
+  upload,
+};

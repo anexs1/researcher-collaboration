@@ -1,3 +1,4 @@
+// routes/publicationRoutes.js
 const express = require("express");
 const {
   createPublication,
@@ -8,9 +9,13 @@ const {
 
 const router = express.Router();
 
-// Define the routes with the correct controller functions
+// Route to create a publication (with file upload)
 router.post("/publications", upload.single("file"), createPublication);
-router.get("/publications", getAllPublications); // This should be a valid function
-router.get("/publications/search", searchPublications); // This should be a valid function
+
+// Route to get all publications
+router.get("/publications", getAllPublications);
+
+// Route to search publications by keyword
+router.get("/publications/search", searchPublications);
 
 module.exports = router;
