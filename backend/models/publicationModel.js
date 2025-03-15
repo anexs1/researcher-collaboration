@@ -1,6 +1,5 @@
-// models/publicationModel.js
-const { DataTypes } = require("sequelize");
-const sequelize = require("../config/db"); // Ensure correct path
+import { DataTypes } from "sequelize"; // Import DataTypes
+import { sequelize } from "../config/db.js"; // Correctly import the named export
 
 const Publication = sequelize.define("Publication", {
   title: {
@@ -21,4 +20,4 @@ const Publication = sequelize.define("Publication", {
   },
 });
 
-module.exports = Publication;
+export default Publication; // ✅ Use 'export default'

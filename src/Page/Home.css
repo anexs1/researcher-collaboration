@@ -428,7 +428,14 @@ html {
   cursor: pointer;
   border-radius: 5px;
 }
-
+.contact-section {
+  text-align: center;
+  text-wrap-style: auto;
+  color: #0056b3;
+}
+.contact-section h2 {
+  text-decoration: dashed;
+}
 .contact-form button:hover {
   background: #0056b3;
 }

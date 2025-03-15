@@ -52,6 +52,8 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/explore" element={<Explore />} />
         <Route path="/publications" element={<Publication />} />
+        <Route path="/messages" element={<Messages />} />
+        <Route path="/my-projects" element={<MyProjects />} />
 
         {/* Login and Signup Routes */}
         <Route path="/admin/login" element={<LoginPage admin={true} />} />

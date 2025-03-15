@@ -1,26 +1,17 @@
-// server.js
-const express = require("express");
-const cors = require("cors");
-const publicationRoutes = require("./routes/publicationRoutes");
-const sequelize = require("./config/db");
+import express from "express";
+import dotenv from "dotenv";
+import publicationRoutes from "./routes/publicationRoutes.js";
+import authRoutes from "./routes/authRoutes.js";
+
+dotenv.config();
 
 const app = express();
-
-app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// Serve static uploads
-app.use("/uploads", express.static("uploads"));
+app.use("/api/publications", publicationRoutes);
+app.use("/api/auth", authRoutes);
 
-// Mount publication routes
-app.use("/api", publicationRoutes);
-
-// Sync database
-sequelize.sync().then(() => console.log("Database synced."));
-
-// Start the server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });

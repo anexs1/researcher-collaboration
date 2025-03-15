@@ -27,7 +27,6 @@ const Home = () => {
           Get Started
         </button>
       </section>
-
       {/* Features Section */}
       <section className="features-section">
         <h2 className="section-title">Key Features</h2>
@@ -173,6 +172,14 @@ const Home = () => {
             Absolutely! Our platform provides real-time messaging functionality,
             allowing you to connect with researchers directly. You can send
             inquiries or project proposals through private chats.
+          </p>
+        </div>
+        <div className="faq-item hover-effect">
+          <h3>How can I update my profile?</h3>
+          <p>
+            You can easily update your profile by accessing the "My Profile"
+            section from your dashboard. There, you can update your
+            qualifications, research interests, and contact details at any time.
           </p>
         </div>
 

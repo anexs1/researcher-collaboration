@@ -1,6 +1,20 @@
-import db from "../config/db";
+import User from "../models/user.js"; // ✅ Import User Model
 
-export const signup = (req, res) => {
+export const loginUser = async (req, res) => {
+  const { username, password } = req.body;
+  try {
+    const user = await User.findOne({ where: { username, password } });
+    if (user) {
+      res.json({ message: "Login successful", user });
+    } else {
+      res.status(401).json({ error: "Invalid credentials" });
+    }
+  } catch (error) {
+    res.status(500).json({ error: "Server error", details: error.message });
+  }
+};
+
+export const registerUser = async (req, res) => {
   const {
     username,
     email,
@@ -11,33 +25,19 @@ export const signup = (req, res) => {
     location,
     phone,
   } = req.body;
-  const query =
-    "INSERT INTO users (username, email, password, expertise, profileImage, bio, location, phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-
-  db.query(
-    query,
-    [username, email, password, expertise, profileImage, bio, location, phone],
-    (err) => {
-      if (err) {
-        return res.status(500).send({ error: "Error creating user" });
-      }
-      res.status(201).send({ message: "User created successfully" });
-    }
-  );
-};
-
-export const login = (req, res) => {
-  const { username, password } = req.body;
-  const query = "SELECT * FROM users WHERE username = ? AND password = ?";
-
-  db.query(query, [username, password], (err, results) => {
-    if (err) {
-      return res.status(500).send({ error: "Error logging in" });
-    }
-    if (results.length > 0) {
-      res.send({ token: "fake-jwt-token", user: results[0] });
-    } else {
-      res.status(401).send({ error: "Invalid credentials" });
-    }
-  });
+  try {
+    const newUser = await User.create({
+      username,
+      email,
+      password,
+      expertise,
+      profileImage,
+      bio,
+      location,
+      phone,
+    });
+    res.json({ message: "Registration successful", user: newUser });
+  } catch (error) {
+    res.status(500).json({ error: "Server error", details: error.message });
+  }
 };

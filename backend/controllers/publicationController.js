@@ -1,9 +1,10 @@
-// controllers/publicationController.js
-const multer = require("multer");
-const fs = require("fs");
-const path = require("path");
-const Publication = require("../models/publicationModel");
-const { Op } = require("sequelize");
+import multer from "multer";
+import fs from "fs";
+import path from "path";
+import { Op } from "sequelize";
+import Publication from "../models/publicationModel.js";
+
+const __dirname = path.resolve();
 
 // Set up multer storage for file uploads
 const uploadDir = path.join(__dirname, "../uploads");
@@ -19,10 +20,10 @@ const storage = multer.diskStorage({
     cb(null, Date.now() + "-" + file.originalname);
   },
 });
-const upload = multer({ storage });
+export const upload = multer({ storage });
 
 // Create a new publication
-const createPublication = async (req, res) => {
+export const createPublication = async (req, res) => {
   try {
     const { title, author, keywords } = req.body;
     const file_path = req.file ? `/uploads/${req.file.filename}` : null;
@@ -42,31 +43,26 @@ const createPublication = async (req, res) => {
       .status(201)
       .json({ message: "Publication added successfully", publication });
   } catch (error) {
-    console.error("Error adding publication:", error);
     res.status(500).json({ message: "Error adding publication", error });
   }
 };
 
 // Get all publications
-const getAllPublications = async (req, res) => {
+export const getAllPublications = async (req, res) => {
   try {
     const publications = await Publication.findAll();
     res.status(200).json(publications);
   } catch (error) {
-    console.error("Error fetching publications:", error);
     res.status(500).json({ message: "Error fetching publications", error });
   }
 };
 
 // Search publications by keyword
-const searchPublications = async (req, res) => {
+export const searchPublications = async (req, res) => {
   try {
     const { keyword } = req.query;
-
     if (!keyword) {
-      return res
-        .status(400)
-        .json({ message: "Keyword query parameter is required" });
+      return res.status(400).json({ message: "Keyword is required" });
     }
 
     const publications = await Publication.findAll({
@@ -81,14 +77,6 @@ const searchPublications = async (req, res) => {
 
     res.status(200).json(publications);
   } catch (error) {
-    console.error("Error searching publications:", error);
     res.status(500).json({ message: "Error searching publications", error });
   }
-};
-
-module.exports = {
-  createPublication,
-  getAllPublications,
-  searchPublications,
-  upload,
 };

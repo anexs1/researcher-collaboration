@@ -1,15 +1,19 @@
-// config/db.js
-require("dotenv").config();
-const { Sequelize } = require("sequelize");
+import { Sequelize } from "sequelize";
+import dotenv from "dotenv";
+dotenv.config();
 
-const sequelize = new Sequelize("researcher_portal", "root", "", {
+// Create a new Sequelize instance
+export const sequelize = new Sequelize("database", "username", "password", {
   host: "localhost",
   dialect: "mysql",
 });
 
-sequelize
-  .authenticate()
-  .then(() => console.log("Database connected successfully."))
-  .catch((err) => console.error("Unable to connect to the database:", err));
-
-module.exports = sequelize; // Export sequelize instance
+// Function to connect to the database
+export const connectDB = async () => {
+  try {
+    await sequelize.authenticate();
+    console.log("Database connected successfully.");
+  } catch (error) {
+    console.error("Database connection failed:", error);
+  }
+};

@@ -1,21 +1,15 @@
-// routes/publicationRoutes.js
-const express = require("express");
-const {
+import express from "express";
+import {
   createPublication,
   getAllPublications,
   searchPublications,
   upload,
-} = require("../controllers/publicationController");
+} from "../controllers/publicationController.js";
 
 const router = express.Router();
 
-// Route to create a publication (with file upload)
-router.post("/publications", upload.single("file"), createPublication);
+router.post("/create", upload.single("file"), createPublication);
+router.get("/", getAllPublications);
+router.get("/search", searchPublications);
 
-// Route to get all publications
-router.get("/publications", getAllPublications);
-
-// Route to search publications by keyword
-router.get("/publications/search", searchPublications);
-
-module.exports = router;
+export default router;
