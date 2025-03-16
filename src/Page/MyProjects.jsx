@@ -21,21 +21,25 @@ const MyProjects = () => {
       status: "Completed",
       collaborators: ["Dr. Eve", "Dr. Charlie"],
     },
+    {
+      id: 3,
+      title: "Quantum Computing Applications",
+      description:
+        "Exploring advanced quantum algorithms and real-world applications.",
+      status: "Completed",
+      collaborators: ["Dr. Eve", "Dr. Charlie"],
+    },
   ]);
-
   const [activeTab, setActiveTab] = useState("ongoing");
-
   // Filter projects by status
   const filteredProjects = projects.filter((project) =>
     activeTab === "ongoing"
       ? project.status === "Ongoing"
       : project.status === "Completed"
   );
-
   return (
     <div className="container">
       <h2 className="title">My Research Projects</h2>
-
       {/* Tabs for Ongoing and Completed Projects */}
       <div className="tabs">
         <button
@@ -51,7 +55,6 @@ const MyProjects = () => {
           Completed Projects
         </button>
       </div>
-
       {/* Project List */}
       {filteredProjects.length === 0 ? (
         <p className="empty-message">No projects found in this category.</p>
@@ -88,5 +91,4 @@ const MyProjects = () => {
     </div>
   );
 };
-
 export default MyProjects;

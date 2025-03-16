@@ -1,12 +1,11 @@
 /* Advanced Modern Responsive Navbar Styles */
-
 .navbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: linear-gradient(135deg, #4e54c8, #8f94fb);
+  background: linear-gradient(135deg, hsl(237, 97%, 45%), hsl(118, 98%, 51%));
   padding: 15px 30px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 15px rgba(252, 4, 4, 0.2);
   position: fixed;
   width: 100%;
   top: 0;
@@ -15,7 +14,6 @@
   min-height: 80px;
   transition: background 0.3s ease, box-shadow 0.3s ease;
 }
-
 /* Mobile Menu Toggle Button */
 .menu-toggle {
   display: none;
@@ -55,7 +53,6 @@
 .nav-links ul li:hover {
   transform: translateY(-3px);
 }
-
 .nav-links a,
 .admin-btn,
 .chat-btn {
@@ -70,18 +67,15 @@
   justify-content: center;
   min-width: 110px;
 }
-
 .nav-links a:hover,
 .admin-btn:hover,
 .chat-btn:hover {
   background: rgba(72, 84, 252, 0.8);
 }
-
 /* Chat Icon */
 .chat-icon {
   position: relative;
 }
-
 /* Admin Dropdown */
 .admin-dropdown .dropdown-menu {
   position: absolute;
@@ -94,32 +88,26 @@
   display: none;
   z-index: 1060;
 }
-
 .admin-dropdown:hover .dropdown-menu {
   display: block;
 }
-
 .admin-dropdown .dropdown-menu li {
   padding: 12px 25px;
 }
-
 .admin-dropdown .dropdown-menu a {
   color: #fff;
   text-decoration: none;
   display: block;
   transition: background 0.3s ease;
 }
-
 .admin-dropdown .dropdown-menu a:hover {
   background: #8f94fb;
 }
-
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
   .menu-toggle {
     display: block;
   }
-
   .nav-links {
     position: absolute;
     top: 80px;
@@ -132,22 +120,18 @@
     text-align: center;
     display: none;
   }
-
   .nav-links.open {
     display: flex;
   }
-
   .nav-links ul {
     flex-direction: column;
     gap: 25px;
   }
 }
-
 /* Ensure Main Content Visibility */
 .main-content {
   padding-top: 120px;
 }
-
 /* Form Container Adjustment */
 .form-container {
   margin-top: 150px;
@@ -160,7 +144,6 @@ body {
   box-sizing: border-box;
   overflow-x: hidden;
 }
-
 /* Auth Page Styling */
 .auth-page {
   display: flex;
@@ -169,7 +152,6 @@ body {
   min-height: 100vh;
   background: linear-gradient(135deg, #e9e9f7, #d4d4f9);
 }
-
 .auth-container {
   background: white;
   padding: 2.5rem;
@@ -182,7 +164,6 @@ body {
   align-items: center;
   box-sizing: border-box;
 }
-
 input,
 textarea {
   width: 100%;
@@ -193,12 +174,10 @@ textarea {
   font-size: 1rem;
   box-sizing: border-box;
 }
-
 textarea {
   resize: none;
   height: 100px;
 }
-
 .auth-button {
   width: 100%;
   background: #4e54c8;
@@ -210,11 +189,9 @@ textarea {
   cursor: pointer;
   transition: 0.3s ease;
 }
-
 .auth-button:hover {
   background: #373baf;
 }
-
 .error-message {
   color: red;
   font-size: 0.9rem;

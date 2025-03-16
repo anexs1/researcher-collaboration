@@ -1,6 +1,5 @@
 import { DataTypes } from "sequelize"; // Import DataTypes
-import { sequelize } from "../config/db.js"; // Correctly import the named export
-
+import sequelize from "../config/db.js"; // ✅ No curly braces
 const Publication = sequelize.define("Publication", {
   title: {
     type: DataTypes.STRING,

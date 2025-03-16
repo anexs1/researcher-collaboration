@@ -9,7 +9,6 @@ import Publication from "./Page/Publication";
 import SignupPage from "./Page/SignupPage";
 import LoginPage from "./Page/LoginPage";
 import Researchers from "./Page/Researchers";
-import Announcements from "./Page/Announcements";
 import Explore from "./Page/Explore";
 import MyProjects from "./Page/MyProjects";
 import Messages from "./Page/Messages";
@@ -88,7 +87,7 @@ function App() {
         {/* Admin Route */}
         <Route
           path="/admin"
-          element={isAdmin ? <Admin /> : <Navigate to="/" />}
+          element={isAdmin ? <Admin /> : <Navigate to="/admin" />}
         />
 
         {/* Catch-All Redirect (For Unauthenticated Users) */}

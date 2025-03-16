@@ -11,7 +11,7 @@ export default function LoginPage({ setIsLoggedIn, setIsAdmin }) {
 
   const handleLogin = () => {
     axios
-      .post("http://localhost:5000/login", { username, password })
+      .post("http://localhost:5000/api/auth/login", { username, password }) // Corrected URL
       .then((response) => {
         setIsLoggedIn(true);
         localStorage.setItem("authToken", response.data.token);

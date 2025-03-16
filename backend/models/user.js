@@ -1,12 +1,11 @@
-import { sequelize } from "../config/db.js"; // Correctly import the named export
-
-// Define your model (example)
-import { DataTypes } from "sequelize"; // Ensure you import DataTypes
+import { DataTypes } from "sequelize";
+import sequelize from "../config/db.js"; // Import sequelize instance
 
 const User = sequelize.define("User", {
-  name: {
+  username: {
     type: DataTypes.STRING,
     allowNull: false,
+    unique: true, // Make username unique
   },
   email: {
     type: DataTypes.STRING,
@@ -18,10 +17,6 @@ const User = sequelize.define("User", {
     allowNull: false,
   },
   expertise: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
-  profileImage: {
     type: DataTypes.STRING,
     allowNull: true,
   },
@@ -37,6 +32,15 @@ const User = sequelize.define("User", {
     type: DataTypes.STRING,
     allowNull: true,
   },
+  profileImage: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
 });
 
-export default User; // Export the model
+// Define a method to find user by username
+User.findUserByEmail = async function (email) {
+  return await this.findOne({ where: { email } });
+};
+
+export default User;
