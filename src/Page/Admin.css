@@ -1,34 +1,23 @@
-/* Admin.css */
-body {
+.admin-container {
+  padding: 20px;
   font-family: Arial, sans-serif;
-  background-color: #f4f7fc;
-  color: #333;
-  margin: 0;
-  padding: 0;
 }
 
 h1 {
   text-align: center;
-  margin: 20px 0;
-  color: #444;
+  color: #4a90e2;
 }
 
-main {
-  width: 80%;
-  margin: 20px auto;
-  background-color: #fff;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-}
-
-section.task {
+.task {
   margin-bottom: 30px;
 }
 
-h3 {
-  color: #5c6bc0;
-  font-size: 1.2rem;
+.task h3 {
+  background-color: #f1f1f1;
+  padding: 10px;
+  margin: 0;
+  font-size: 1.2em;
+  color: #333;
 }
 
 .researcher-list {
@@ -37,86 +26,52 @@ h3 {
 }
 
 .researcher-item {
-  background-color: #f9f9f9;
-  border: 1px solid #e0e0e0;
-  margin-bottom: 10px;
-  padding: 15px;
-  border-radius: 5px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-.researcher-item p {
-  margin: 0;
-  color: #555;
-}
-
-.researcher-item button {
-  padding: 8px 16px;
-  margin-left: 10px;
-  border: none;
+  background-color: #f9f9f9;
+  margin-bottom: 10px;
+  padding: 10px;
   border-radius: 5px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+button {
+  background-color: #4a90e2;
+  border: none;
+  color: white;
+  padding: 5px 10px;
   cursor: pointer;
+  border-radius: 3px;
+  font-size: 0.9em;
+  margin-left: 10px;
 }
 
-.researcher-item button:hover {
-  opacity: 0.8;
-}
-
-.researcher-item button:focus {
-  outline: none;
-}
-
-.researcher-item button:first-child {
-  background-color: #4caf50;
-  color: white;
-}
-
-.researcher-item button:last-child {
-  background-color: #f44336;
-  color: white;
+button:hover {
+  background-color: #357abd;
 }
 
 .submit-btn {
+  background-color: #ff9800;
   padding: 10px 20px;
-  background-color: #2196f3;
-  color: white;
-  border: none;
   border-radius: 5px;
+  color: white;
   cursor: pointer;
-  font-size: 1rem;
 }
 
 .submit-btn:hover {
-  opacity: 0.8;
-}
-
-.submit-btn:focus {
-  outline: none;
+  background-color: #e68900;
 }
 
 ul {
-  list-style-type: none;
-  padding: 0;
+  padding-left: 20px;
 }
 
-ul li {
-  margin: 10px 0;
-}
-
-ul li a {
+a {
+  color: #4a90e2;
   text-decoration: none;
-  color: #2196f3;
-  font-size: 1rem;
 }
 
-ul li a:hover {
+a:hover {
   text-decoration: underline;
-}
-
-@media (max-width: 768px) {
-  main {
-    width: 90%;
-  }
 }

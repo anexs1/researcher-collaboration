@@ -1,73 +1,89 @@
-/* Explore Page Styles */
 .explore-container {
-  margin-top: 60px; /* Ensure content starts below the fixed navbar */
   padding: 20px;
-  font-family: Arial, sans-serif;
+  max-width: 900px;
+  margin: auto;
 }
 
 h1 {
   text-align: center;
-  color: #ff477e;
+  color: #333;
+}
+
+.filters {
+  display: flex;
+  justify-content: space-between;
   margin-bottom: 20px;
 }
 
-/* Research List */
+.filters input,
+.filters select {
+  padding: 8px;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  width: 48%;
+}
+
 .research-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
+  gap: 15px;
   justify-content: center;
 }
 
 .research-card {
-  background: #ff7eb3;
-  border-radius: 8px;
-  padding: 20px;
-  width: 250px;
-  text-align: center;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  background: white;
+  padding: 15px;
+  border-radius: 10px;
+  box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+  width: 300px;
+  transition: 0.3s ease-in-out;
 }
 
 .research-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
+  transform: scale(1.03);
 }
 
 .research-card h2 {
-  color: white;
-  font-size: 18px;
-  margin-bottom: 10px;
+  font-size: 1.2rem;
+  color: #333;
 }
 
 .research-card p {
-  color: white;
-  font-size: 14px;
-  margin-bottom: 15px;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.card-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
 }
 
 .explore-btn {
-  background-color: #ff477e;
+  background-color: #007bff;
   color: white;
   border: none;
-  padding: 10px 15px;
+  padding: 8px 12px;
   border-radius: 5px;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: 0.3s;
 }
 
 .explore-btn:hover {
-  background-color: #ff758c;
+  background-color: #0056b3;
 }
 
-/* Responsive Design */
-@media (max-width: 768px) {
-  .research-list {
-    flex-direction: column;
-    align-items: center;
-  }
+.bookmark-btn {
+  background: none;
+  border: 1px solid #ddd;
+  padding: 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: 0.3s;
+}
 
-  .research-card {
-    width: 90%; /* Make cards more flexible on smaller screens */
-  }
+.bookmarked {
+  background-color: gold;
+  color: black;
 }

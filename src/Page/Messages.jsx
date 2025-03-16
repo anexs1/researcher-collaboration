@@ -1,32 +1,40 @@
-import React from "react";
-import "./messages.css";
-const messagesData = [
-  { id: 1, sender: "John Doe", message: "Hey, how are you?" },
-  { id: 2, sender: "Jane Doe", message: "Can you help me with this?" },
-];
+import { useState } from "react";
 
-const Messages = () => {
-  const handleReply = (sender) => {
-    alert(`Replying to ${sender}`);
+const Messages = ({ closeChat }) => {
+  const [messages, setMessages] = useState([]);
+  const [message, setMessage] = useState("");
+
+  const sendMessage = () => {
+    if (message.trim() !== "") {
+      setMessages([...messages, { text: message, sender: "You" }]);
+      setMessage("");
+    }
   };
 
   return (
-    <div className="messages-page">
-      <h1 className="messages-title">Messages</h1>
-
-      <div className="messages-container">
-        {messagesData.map((msg) => (
-          <div key={msg.id} className="message-card">
-            <h2 className="message-sender">{msg.sender}</h2>
-            <p className="message-text">{msg.message}</p>
-            <button
-              className="reply-btn"
-              onClick={() => handleReply(msg.sender)}
-            >
-              Reply
-            </button>
-          </div>
+    <div className="chat-popup">
+      <div className="chat-header">
+        <h4>Chat</h4>
+        <button className="close-btn" onClick={closeChat}>
+          ✖
+        </button>
+      </div>
+      <div className="chat-body">
+        {messages.map((msg, index) => (
+          <p key={index}>
+            <strong>{msg.sender}: </strong>
+            {msg.text}
+          </p>
         ))}
+      </div>
+      <div className="chat-footer">
+        <input
+          type="text"
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          placeholder="Type a message..."
+        />
+        <button onClick={sendMessage}>Send</button>
       </div>
     </div>
   );

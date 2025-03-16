@@ -1,37 +1,55 @@
 import React, { useState, useEffect } from "react";
+import axios from "axios";
 import "./Explore.css";
 
 const Explore = () => {
-  const [data, setData] = useState([]);
+  const [publications, setPublications] = useState([]);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Fetch data (or simulate it)
-    const fetchData = async () => {
-      // Simulating fetching data
-      const response = await fetch("/api/researchers"); // Replace with your actual API
-      const result = await response.json();
-      setData(result);
+    const fetchPublications = async () => {
+      try {
+        const response = await axios.get(
+          "http://localhost:5000/api/publications"
+        );
+        setPublications(response.data);
+      } catch (err) {
+        setError(err.message);
+      }
     };
 
-    fetchData();
+    fetchPublications();
   }, []);
+
+  if (error) {
+    return <p className="error-message">Error: {error}</p>;
+  }
 
   return (
     <div className="explore-container">
-      <h1>Explore Research & Collaborations</h1>
-      <div className="research-list">
-        {data.length > 0 ? (
-          data.map((item, index) => (
-            <div className="research-card" key={index}>
-              <h2>{item.name}</h2>
-              <p>{item.description}</p>
-              <button className="explore-btn">Explore</button>
+      <h1>Explore Research Publications</h1>
+      {publications.length > 0 ? (
+        <div className="publication-list">
+          {publications.map((pub, index) => (
+            <div className="publication-card" key={index}>
+              <h2>{pub.title}</h2>
+              <p>
+                <strong>Author:</strong> {pub.author}
+              </p>
+              <p>
+                <strong>Keywords:</strong> {pub.keywords}
+              </p>
+              {pub.fileUrl && (
+                <a href={pub.fileUrl} download>
+                  📄 Download Publication
+                </a>
+              )}
             </div>
-          ))
-        ) : (
-          <p>No research available. Please check back later.</p>
-        )}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <p>No publications found.</p>
+      )}
     </div>
   );
 };

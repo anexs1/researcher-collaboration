@@ -23,7 +23,7 @@ function Admin() {
   };
 
   return (
-    <div>
+    <div className="admin-container">
       <h1>Admin Panel</h1>
 
       <main>
@@ -56,7 +56,7 @@ function Admin() {
           <button className="submit-btn">Update System Settings</button>
         </section>
 
-        {/* Additional Admin Privileges */}
+        {/* Additional Admin Features */}
         <section className="task">
           <h3>Admin Features</h3>
           <ul>

@@ -2,8 +2,6 @@ import { Link } from "react-router-dom";
 import { useState } from "react";
 import Notifications from "./Notifications";
 import ProfileMenu from "./ProfileMenu";
-import SearchBar from "./SearchBar";
-import ChatPopup from "./ChatPopup"; // Import Chat Component
 import "./Navbar.css";
 
 const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
@@ -15,14 +13,7 @@ const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
 
   return (
     <header className="navbar">
-      {/* Search Bar Component */}
-      <SearchBar />
-
-      {/* Mobile Menu Toggle */}
-      <button className="menu-toggle" onClick={() => setMenuOpen(!menuOpen)}>
-        ☰
-      </button>
-
+      <p className=""> Researcher Collaboration Portal</p>
       <nav className={`nav-links ${menuOpen ? "open" : ""}`}>
         <ul>
           <li>
@@ -54,19 +45,6 @@ const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
 
           {/* Notifications Component */}
           {isLoggedIn && <Notifications />}
-
-          {/* Chat Icon */}
-          {isLoggedIn && (
-            <li className="chat-icon">
-              <button
-                className="chat-btn"
-                onClick={() => setChatOpen(!chatOpen)}
-              >
-                📩 Chat
-              </button>
-              {chatOpen && <ChatPopup closeChat={() => setChatOpen(false)} />}
-            </li>
-          )}
 
           {/* Admin Panel - Dropdown for Admins */}
           {isAdmin && (

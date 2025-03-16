@@ -87,7 +87,7 @@ function App() {
         {/* Admin Route */}
         <Route
           path="/admin"
-          element={isAdmin ? <Admin /> : <Navigate to="/admin" />}
+          element={isAdmin ? <Admin /> : <Navigate to="/" />}
         />
 
         {/* Catch-All Redirect (For Unauthenticated Users) */}
