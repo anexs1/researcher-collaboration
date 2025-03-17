@@ -1,9 +1,8 @@
 import React, { useState } from "react";
 import axios from "axios";
-import { useNavigate } from "react-router-dom"; // Import useNavigate
+import { useNavigate } from "react-router-dom";
 
 const SignupPage = () => {
-  // State management for form fields
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -13,29 +12,78 @@ const SignupPage = () => {
   const [location, setLocation] = useState("");
   const [phone, setPhone] = useState("");
   const [profileImage, setProfileImage] = useState(null);
-  const [errorMessage, setErrorMessage] = useState(""); // To store error messages
-  const navigate = useNavigate(); // For navigation after successful signup
+  const [previewImage, setPreviewImage] = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const navigate = useNavigate();
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+
+          const size = 600; // Passport size: 600x600 pixels
+          canvas.width = size;
+          canvas.height = size;
+
+          // Center and crop image
+          const scale = Math.min(img.width / size, img.height / size);
+          const sx = (img.width - size * scale) / 2;
+          const sy = (img.height - size * scale) / 2;
+
+          ctx.beginPath();
+          ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+          ctx.clip();
+
+          ctx.drawImage(
+            img,
+            sx,
+            sy,
+            size * scale,
+            size * scale,
+            0,
+            0,
+            size,
+            size
+          );
+
+          canvas.toBlob(
+            (blob) => {
+              setProfileImage(blob);
+              setPreviewImage(URL.createObjectURL(blob));
+            },
+            "image/jpeg",
+            0.9
+          );
+        };
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleSignup = async (event) => {
     event.preventDefault();
 
-    // Check if the username field is empty
     if (!username) {
       setErrorMessage("Username is required");
       return;
     }
 
-    // Check if password and confirm password match
     if (password !== confirmPassword) {
       setErrorMessage("Passwords do not match.");
       return;
     }
 
-    // Reset error message
     setErrorMessage("");
 
     const formData = new FormData();
-    formData.append("username", username); // Ensure the username is appended
+    formData.append("username", username);
     formData.append("email", email);
     formData.append("password", password);
     formData.append("confirmPassword", confirmPassword);
@@ -48,24 +96,34 @@ const SignupPage = () => {
       formData.append("profileImage", profileImage);
     }
 
-    console.log("Form data being sent:", formData); // Log to check if 'username' is present
-
     try {
       const response = await axios.post(
         "http://localhost:5000/api/auth/signup",
         formData,
         {
           headers: {
-            "Content-Type": "multipart/form-data", // Ensure the correct content type for file uploads
+            "Content-Type": "multipart/form-data",
           },
         }
       );
+
       console.log("User signed up successfully", response);
 
-      // Redirect to login page
-      navigate("/login");
+      // Store user data in localStorage
+      const userData = {
+        username,
+        email,
+        expertise,
+        bio,
+        location,
+        phone,
+        profileImage: previewImage,
+      };
 
-      // Optionally, clear the form after successful submission
+      localStorage.setItem("user", JSON.stringify(userData));
+
+      navigate("/profile");
+
       setUsername("");
       setEmail("");
       setPassword("");
@@ -75,6 +133,7 @@ const SignupPage = () => {
       setLocation("");
       setPhone("");
       setProfileImage(null);
+      setPreviewImage(null);
     } catch (error) {
       console.error("Signup Error:", error.response?.data || error);
       setErrorMessage(
@@ -137,10 +196,14 @@ const SignupPage = () => {
             onChange={(e) => setPhone(e.target.value)}
             placeholder="Phone"
           />
-          <input
-            type="file"
-            onChange={(e) => setProfileImage(e.target.files[0])}
-          />
+          <input type="file" onChange={handleImageChange} />
+          {previewImage && (
+            <img
+              src={previewImage}
+              alt="Profile Preview"
+              className="rounded-full w-24 h-24 mt-4"
+            />
+          )}
           <button type="submit" className="auth-button">
             Signup
           </button>
