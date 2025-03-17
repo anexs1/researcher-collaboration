@@ -1,4 +1,3 @@
-// LoginPage.jsx
 import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
@@ -11,7 +10,7 @@ export default function LoginPage({ setIsLoggedIn, setIsAdmin }) {
 
   const handleLogin = () => {
     axios
-      .post("http://localhost:5000/api/auth/login", { username, password }) // Corrected URL
+      .post("http://localhost:5000/api/auth/login", { username, password })
       .then((response) => {
         setIsLoggedIn(true);
         localStorage.setItem("authToken", response.data.token);
