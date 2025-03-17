@@ -13,7 +13,7 @@ const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
 
   return (
     <header className="navbar">
-      <p className=""> Researcher Collaboration Portal</p>
+      <p className="navbar-title">Researcher Collaboration Portal</p>
       <nav className={`nav-links ${menuOpen ? "open" : ""}`}>
         <ul>
           <li>

@@ -1,55 +1,78 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
 import "./Explore.css";
 
 const Explore = () => {
   const [publications, setPublications] = useState([]);
-  const [error, setError] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("title");
 
   useEffect(() => {
     const fetchPublications = async () => {
       try {
-        const response = await axios.get(
-          "http://localhost:5000/api/publications"
-        );
-        setPublications(response.data);
-      } catch (err) {
-        setError(err.message);
+        const response = await fetch("http://localhost:5000/api/publications"); // Replace with actual API endpoint
+        const data = await response.json();
+        setPublications(data);
+      } catch (error) {
+        console.error("Error fetching publications:", error);
       }
     };
-
     fetchPublications();
   }, []);
 
-  if (error) {
-    return <p className="error-message">Error: {error}</p>;
-  }
+  const filteredPublications = publications
+    .filter(
+      (publication) =>
+        publication.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        publication.author.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        publication.keywords.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => a[sortBy].localeCompare(b[sortBy]));
 
   return (
     <div className="explore-container">
-      <h1>Explore Research Publications</h1>
-      {publications.length > 0 ? (
-        <div className="publication-list">
-          {publications.map((pub, index) => (
+      <h1>Explore Publications</h1>
+
+      <div className="filter-section">
+        <input
+          type="text"
+          placeholder="Search by title, author, or keywords..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+
+        <select onChange={(e) => setSortBy(e.target.value)}>
+          <option value="title">Sort by Title</option>
+          <option value="author">Sort by Author</option>
+        </select>
+      </div>
+
+      <div className="publication-list">
+        {filteredPublications.length > 0 ? (
+          filteredPublications.map((publication, index) => (
             <div className="publication-card" key={index}>
-              <h2>{pub.title}</h2>
+              <h2>{publication.title}</h2>
               <p>
-                <strong>Author:</strong> {pub.author}
+                <strong>Author:</strong> {publication.author}
               </p>
               <p>
-                <strong>Keywords:</strong> {pub.keywords}
+                <strong>Keywords:</strong> {publication.keywords}
               </p>
-              {pub.fileUrl && (
-                <a href={pub.fileUrl} download>
-                  📄 Download Publication
+              {publication.file && (
+                <a
+                  href={publication.file}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="download-btn"
+                >
+                  Download Publication
                 </a>
               )}
             </div>
-          ))}
-        </div>
-      ) : (
-        <p>No publications found.</p>
-      )}
+          ))
+        ) : (
+          <p>No publications available.</p>
+        )}
+      </div>
     </div>
   );
 };

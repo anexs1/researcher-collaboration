@@ -17,25 +17,34 @@ import Messages from "./Page/Messages";
 import Navbar from "./Component/Navbar";
 
 function App() {
-  const [isAdmin, setIsAdmin] = useState(
-    () => localStorage.getItem("isAdmin") === "true"
-  );
-  const [isLoggedIn, setIsLoggedIn] = useState(
-    () => localStorage.getItem("isLoggedIn") === "true"
-  );
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  // Sync localStorage with state
   useEffect(() => {
-    localStorage.setItem("isLoggedIn", isLoggedIn);
-    localStorage.setItem("isAdmin", isAdmin);
-  }, [isLoggedIn, isAdmin]);
+    const token = localStorage.getItem("token");
+    if (token) {
+      fetch("/api/auth/validate", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success) {
+            setIsLoggedIn(true);
+            setIsAdmin(data.role === "admin");
+          } else {
+            handleLogout();
+          }
+        });
+    }
+  }, []);
 
-  // Logout handler
   const handleLogout = useCallback(() => {
     setIsLoggedIn(false);
     setIsAdmin(false);
-    localStorage.removeItem("isLoggedIn");
-    localStorage.removeItem("isAdmin");
+    localStorage.removeItem("token");
   }, []);
 
   return (
@@ -47,14 +56,10 @@ function App() {
       />
 
       <Routes>
-        {/* Public Routes (Accessible without login) */}
         <Route path="/" element={<Home />} />
         <Route path="/explore" element={<Explore />} />
         <Route path="/publications" element={<Publication />} />
-        <Route path="/messages" element={<Messages />} />
-        <Route path="/my-projects" element={<MyProjects />} />
 
-        {/* Login and Signup Routes */}
         <Route path="/admin/login" element={<LoginPage admin={true} />} />
         <Route
           path="/login"
@@ -74,7 +79,6 @@ function App() {
           element={isLoggedIn ? <Navigate to="/profile" /> : <SignupPage />}
         />
 
-        {/* Protected Routes (Require login) */}
         {isLoggedIn && (
           <>
             <Route path="/messages" element={<Messages />} />
@@ -84,13 +88,8 @@ function App() {
           </>
         )}
 
-        {/* Admin Route */}
-        <Route
-          path="/admin"
-          element={isAdmin ? <Admin /> : <Navigate to="/" />}
-        />
+        {isAdmin && <Route path="/admin" element={<Admin />} />}
 
-        {/* Catch-All Redirect (For Unauthenticated Users) */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </>
