@@ -21,6 +21,7 @@ function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
+  // On mount, check if the user is logged in
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (token) {
@@ -38,10 +39,12 @@ function App() {
           } else {
             handleLogout();
           }
-        });
+        })
+        .catch(() => handleLogout());
     }
   }, []);
 
+  // Logout function
   const handleLogout = useCallback(() => {
     setIsLoggedIn(false);
     setIsAdmin(false);
@@ -50,6 +53,7 @@ function App() {
 
   return (
     <>
+      {/* Navbar with ProfileMenu component */}
       <Navbar
         isLoggedIn={isLoggedIn}
         isAdmin={isAdmin}
@@ -57,12 +61,15 @@ function App() {
       />
 
       <Routes>
+        {/* Public Routes */}
         <Route path="/" element={<Home />} />
         <Route path="/explore" element={<Explore />} />
         <Route path="/publications" element={<Publication />} />
         <Route path="/research" element={<ResearchPage />} />
 
+        {/* Authentication Routes */}
         <Route path="/admin/login" element={<LoginPage admin={true} />} />
+
         <Route
           path="/login"
           element={
@@ -76,24 +83,27 @@ function App() {
             )
           }
         />
+
         <Route
           path="/signup"
           element={isLoggedIn ? <Navigate to="/profile" /> : <SignupPage />}
         />
 
+        {/* Protected Routes - Only accessible if logged in */}
         {isLoggedIn && (
           <>
             <Route path="/messages" element={<Messages />} />
             <Route path="/researchers" element={<Researchers />} />
             <Route path="/my-projects" element={<MyProjects />} />
             <Route path="/profile" element={<Profile />} />
-            <Route path="/research" element={<ResearchPage />} />{" "}
-            {/* ✅ Changed "/" to "/research" */}
+            <Route path="/research" element={<ResearchPage />} />
           </>
         )}
 
+        {/* Admin Routes */}
         {isAdmin && <Route path="/admin" element={<Admin />} />}
 
+        {/* Redirect all other undefined routes to home */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </>
