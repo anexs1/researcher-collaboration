@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
-
+import "./index.css";
 // Pages
 import Admin from "./Page/Admin";
 import Home from "./Page/Home";
@@ -12,6 +12,7 @@ import Researchers from "./Page/Researchers";
 import Explore from "./Page/Explore";
 import MyProjects from "./Page/MyProjects";
 import Messages from "./Page/Messages";
+import ResearchPage from "./Page/ResearchPage";
 
 // Components
 import Navbar from "./Component/Navbar";
@@ -59,6 +60,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/explore" element={<Explore />} />
         <Route path="/publications" element={<Publication />} />
+        <Route path="/research" element={<ResearchPage />} />
 
         <Route path="/admin/login" element={<LoginPage admin={true} />} />
         <Route
@@ -85,6 +87,8 @@ function App() {
             <Route path="/researchers" element={<Researchers />} />
             <Route path="/my-projects" element={<MyProjects />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/research" element={<ResearchPage />} />{" "}
+            {/* ✅ Changed "/" to "/research" */}
           </>
         )}
 

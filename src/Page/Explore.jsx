@@ -78,3 +78,29 @@ const Explore = () => {
 };
 
 export default Explore;
+// //import React, { useEffect, useState } from "react";
+
+// const ExplorerPage = () => {
+//   const [publications, setPublications] = useState([]);
+
+//   useEffect(() => {
+//     fetch("http://localhost:5000/api/publications")
+//       .then((res) => res.json())
+//       .then((data) => setPublications(data))
+//       .catch((error) => console.error("Error fetching publications:", error));
+//   }, []);
+
+//   return (
+//     <div>
+//       <h1>Explorer Page</h1>
+//       {publications.map((pub) => (
+//         <div key={pub.id}>
+//           <h3>{pub.title}</h3>
+//           <p>{pub.description}</p>
+//         </div>
+//       ))}
+//     </div>
+//   );
+// };
+
+// export default ExplorerPage;

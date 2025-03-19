@@ -1,127 +1,207 @@
+// publication.js
 import React, { useState, useEffect } from "react";
-import axios from "axios";
-import "./Publication.css";
+import "./publication.css";
 
-const Publication = () => {
-  const [title, setTitle] = useState("");
-  const [author, setAuthor] = useState("");
-  const [keywords, setKeywords] = useState("");
-  const [file, setFile] = useState(null);
-  const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [publications, setPublications] = useState([]);
+export default function Publication() {
+  const [announcements, setAnnouncements] = useState([]);
+  const [formData, setFormData] = useState({
+    title: "",
+    description: "",
+    qualifications: "",
+    deadline: "",
+    contact: "",
+  });
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [collaborationRequest, setCollaborationRequest] = useState({
+    researcherName: "",
+    researcherEmail: "",
+    announcementIndex: null,
+  });
 
   useEffect(() => {
-    fetchPublications();
+    fetchAllPublications();
   }, []);
 
-  const fetchPublications = async () => {
-    try {
-      const response = await axios.get(
-        "http://localhost:5000/api/publications"
-      );
-      setPublications(response.data);
-    } catch (error) {
-      console.error("Error fetching publications:", error);
-    }
+  const fetchAllPublications = async () => {
+    const response = await fetch("/api/publications");
+    const data = await response.json();
+    setAnnouncements(data);
   };
 
-  const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!title || !author || !file) {
-      alert("Title, Author, and File are required!");
+
+    if (
+      !formData.title ||
+      !formData.description ||
+      !formData.qualifications ||
+      !formData.deadline ||
+      !formData.contact
+    ) {
+      alert("Please fill in all fields.");
       return;
     }
-    setLoading(true);
 
-    const formData = new FormData();
-    formData.append("title", title);
-    formData.append("author", author);
-    formData.append("keywords", keywords);
-    formData.append("file", file);
-
-    try {
-      const response = await axios.post(
-        "http://localhost:5000/api/publications",
-        formData
+    if (editingIndex !== null) {
+      // Update existing announcement
+      const updatedAnnouncement = { ...formData };
+      await fetch(`/api/publications/${announcements[editingIndex].id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updatedAnnouncement),
+      });
+      setAnnouncements((prev) =>
+        prev.map((item, index) =>
+          index === editingIndex ? updatedAnnouncement : item
+        )
       );
-      if (response.status === 201) {
-        setMessage("Publication submitted successfully!");
-        fetchPublications(); // Refresh list
-        setTitle("");
-        setAuthor("");
-        setKeywords("");
-        setFile(null);
-        document.querySelector('input[type="file"]').value = ""; // Reset file input
-      }
-    } catch (error) {
-      console.error("Error submitting publication:", error);
-      setMessage("Error submitting publication");
+      setEditingIndex(null);
+    } else {
+      // Add new announcement
+      const response = await fetch("/api/publications", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
+      const newAnnouncement = await response.json();
+      setAnnouncements([
+        ...announcements,
+        { ...formData, id: newAnnouncement.id },
+      ]);
     }
-    setLoading(false);
+
+    setFormData({
+      title: "",
+      description: "",
+      qualifications: "",
+      deadline: "",
+      contact: "",
+    });
+  };
+
+  const handleEdit = (index) => {
+    setEditingIndex(index);
+    setFormData(announcements[index]);
+  };
+
+  const handleDelete = async (id) => {
+    if (window.confirm("Are you sure you want to delete this announcement?")) {
+      await fetch(`/api/publications/${id}`, {
+        method: "DELETE",
+      });
+      setAnnouncements(
+        announcements.filter((announcement) => announcement.id !== id)
+      );
+    }
   };
 
   return (
-    <div className="publication-container">
-      <h2>Upload Publication</h2>
-      {message && <p className="message">{message}</p>}
-      <form onSubmit={handleSubmit} className="publication-form">
+    <div className="announcements-container">
+      <h1>
+        {editingIndex !== null
+          ? "Edit Announcement"
+          : "Post a Collaboration Announcement"}
+      </h1>
+
+      <form className="announcement-form" onSubmit={handleSubmit}>
         <input
           type="text"
-          placeholder="Title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          name="title"
+          placeholder="Announcement Title"
+          value={formData.title}
+          onChange={handleChange}
+          required
+        />
+        <textarea
+          name="description"
+          placeholder="Brief Description"
+          value={formData.description}
+          onChange={handleChange}
           required
         />
         <input
           type="text"
-          placeholder="Author"
-          value={author}
-          onChange={(e) => setAuthor(e.target.value)}
+          name="qualifications"
+          placeholder="Required Qualifications"
+          value={formData.qualifications}
+          onChange={handleChange}
           required
         />
         <input
-          type="text"
-          placeholder="Keywords"
-          value={keywords}
-          onChange={(e) => setKeywords(e.target.value)}
+          type="date"
+          name="deadline"
+          value={formData.deadline}
+          onChange={handleChange}
+          required
         />
-        <input type="file" onChange={handleFileChange} required />
-        {file && <p className="file-preview">File: {file.name}</p>}
-        <button type="submit" disabled={loading}>
-          {loading ? "Uploading..." : "Submit"}
+        <input
+          type="email"
+          name="contact"
+          placeholder="Your Contact Email"
+          value={formData.contact}
+          onChange={handleChange}
+          required
+        />
+        <button type="submit">
+          {editingIndex !== null ? "Update Announcement" : "Post Announcement"}
         </button>
       </form>
-      <hr />
-      <h2>Recent Publications</h2>
-      <div className="publication-list">
-        {publications.length > 0 ? (
-          publications.map((pub) => (
-            <div className="publication-card" key={pub.id}>
-              <h3>{pub.title}</h3>
+
+      <div className="announcement-list">
+        <h2>Active Collaboration Announcements</h2>
+        {announcements.length === 0 ? (
+          <p>No announcements yet.</p>
+        ) : (
+          announcements.map((announcement) => (
+            <div key={announcement.id} className="announcement-card">
+              <h3>{announcement.title}</h3>
               <p>
-                <strong>Author:</strong> {pub.author}
+                <strong>Description:</strong> {announcement.description}
               </p>
               <p>
-                <strong>Keywords:</strong> {pub.keywords}
+                <strong>Required Qualifications:</strong>{" "}
+                {announcement.qualifications}
               </p>
-              {pub.fileUrl && (
-                <a href={pub.fileUrl} target="_blank" rel="noopener noreferrer">
-                  View Publication
+              <p>
+                <strong>Deadline:</strong> {announcement.deadline}
+              </p>
+              <p>
+                <strong>Contact:</strong>{" "}
+                <a href={`mailto:${announcement.contact}`}>
+                  {announcement.contact}
                 </a>
-              )}
+              </p>
+              <div className="button-group">
+                <button
+                  className="edit-btn"
+                  onClick={() =>
+                    handleEdit(
+                      announcements.findIndex((a) => a.id === announcement.id)
+                    )
+                  }
+                >
+                  Edit
+                </button>
+                <button
+                  className="delete-btn"
+                  onClick={() => handleDelete(announcement.id)}
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           ))
-        ) : (
-          <p>No publications available.</p>
         )}
       </div>
     </div>
   );
-};
-
-export default Publication;
+}

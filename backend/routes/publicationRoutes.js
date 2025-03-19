@@ -1,15 +1,17 @@
 import express from "express";
 import {
-  createPublication,
+  uploadPublication,
   getAllPublications,
   searchPublications,
-  upload,
+  getPublication,
 } from "../controllers/publicationController.js";
+import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-router.post("/create", upload.single("file"), createPublication);
+router.post("/upload", authMiddleware, uploadPublication);
 router.get("/", getAllPublications);
 router.get("/search", searchPublications);
+router.get("/:id", getPublication);
 
 export default router;

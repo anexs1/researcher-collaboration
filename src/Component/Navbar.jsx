@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useState } from "react";
 import Notifications from "./Notifications";
 import ProfileMenu from "./ProfileMenu";
+
 import "./Navbar.css";
 
 const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
@@ -20,6 +21,9 @@ const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
             <Link to="/" onClick={closeMenu}>
               🏠 Home
             </Link>
+          </li>
+          <li>
+            <Link to="/research">Research</Link>
           </li>
           <li>
             <Link to="/explore" onClick={closeMenu}>

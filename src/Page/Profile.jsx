@@ -1,31 +1,49 @@
 import React, { useEffect, useState } from "react";
+import "./Profile.css";
 
 export default function Profile() {
   const [user, setUser] = useState(null);
   const [editing, setEditing] = useState(false);
   const [updatedUser, setUpdatedUser] = useState({});
   const [newProfileImage, setNewProfileImage] = useState(null);
+  const [errors, setErrors] = useState({});
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [loading, setLoading] = useState(true); // Loading state
 
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
     if (storedUser) {
-      setUser(JSON.parse(storedUser));
-      setUpdatedUser(JSON.parse(storedUser));
+      const parsedUser = JSON.parse(storedUser);
+      setUser(parsedUser);
+      setUpdatedUser(parsedUser);
     }
+    setLoading(false); // Stop loading once user is fetched
   }, []);
 
   const handleEditToggle = () => {
     setEditing(!editing);
+    setErrors({});
   };
 
   const handleChange = (e) => {
     setUpdatedUser({ ...updatedUser, [e.target.name]: e.target.value });
   };
 
+  const validateForm = () => {
+    const newErrors = {};
+    if (!updatedUser.username) newErrors.username = "Username is required.";
+    if (!updatedUser.bio) newErrors.bio = "Bio is required.";
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleSave = () => {
-    localStorage.setItem("user", JSON.stringify(updatedUser));
-    setUser(updatedUser);
-    setEditing(false);
+    if (validateForm()) {
+      localStorage.setItem("user", JSON.stringify(updatedUser));
+      setUser(updatedUser);
+      setEditing(false);
+    }
   };
 
   const handleImageChange = (e) => {
@@ -40,105 +58,165 @@ export default function Profile() {
     }
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem("user");
+    setUser(null);
+    window.location.href = "/login"; // Adjust this path as needed
+  };
+
+  const handleDeleteAccount = () => {
+    if (
+      window.confirm(
+        "Are you sure you want to delete your account? This action cannot be undone."
+      )
+    ) {
+      localStorage.removeItem("user");
+      setUser(null);
+      window.location.href = "/"; // Adjust this path as needed
+    }
+  };
+
+  const handleChangePassword = () => {
+    if (newPassword) {
+      // Simulate a password change
+      alert("Password changed successfully!");
+      setNewPassword("");
+      setShowChangePassword(false);
+    } else {
+      alert("Please enter a new password.");
+    }
+  };
+
+  if (loading) {
+    return <p>Loading...</p>; // Show loading state
+  }
+
   return (
-    <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-lg grid grid-cols-3 gap-6">
-      <div className="col-span-1 bg-blue-100 p-4 relative">
-        <div className="absolute -top-16 right-6 border-4 border-white rounded-lg">
-          <img
-            src={
-              newProfileImage ||
-              user?.profileImage ||
-              "https://via.placeholder.com/150"
-            }
-            alt="Profile"
-            className="w-48 h-56 object-cover rounded-lg"
-          />
-          <input
-            type="file"
-            className="hidden"
-            id="fileUpload"
-            onChange={handleImageChange}
-          />
-          <label
-            htmlFor="fileUpload"
-            className="absolute bottom-2 right-2 bg-blue-500 text-white p-1 rounded-full cursor-pointer"
-          >
-            📷
-          </label>
-        </div>
-        <h2 className="text-3xl font-semibold mt-40 mb-2">
-          {user?.username || "ROHIT KOHLI"}
-        </h2>
-        <h3 className="text-xl font-medium mb-6">Web Developer</h3>
-      </div>
+    <div className="profile-container">
+      {user && (
+        <>
+          <div className="profile-image-section">
+            <div className="image-wrapper">
+              <img
+                src={
+                  newProfileImage ||
+                  user.profileImage ||
+                  "https://via.placeholder.com/150"
+                }
+                alt="Profile"
+                className="profile-image"
+              />
+              <input
+                type="file"
+                className="hidden"
+                id="fileUpload"
+                onChange={handleImageChange}
+              />
+              <label htmlFor="fileUpload" className="upload-button">
+                📷
+              </label>
+            </div>
+          </div>
 
-      <div className="col-span-2 p-4">
-        <h2 className="text-2xl font-semibold mb-4">Profile</h2>
-        <p className="mb-6">
-          {user?.bio ||
-            "Write an enticing performance summary that impresses the recruiter. Showcase your uniqueness through your skills and accomplishments."}
-        </p>
+          <div className="profile-details">
+            <h2 className="profile-title">Profile</h2>
+            <p className="profile-bio">
+              {user.bio ||
+                "Write an enticing performance summary that impresses the recruiter."}
+            </p>
 
-        <h3 className="text-xl font-semibold mb-4">Education</h3>
-        <div className="mb-4">
-          <h4 className="text-lg font-bold">Masters of Arts</h4>
-          <p>University of ABC (2013-2015)</p>
-          <p>Lorem ipsum is simply dummy text of the printing industry.</p>
-        </div>
-        <div className="mb-4">
-          <h4 className="text-lg font-bold">Bachelors of Arts</h4>
-          <p>ABC State University (2010-2013)</p>
-          <p>Lorem ipsum is simply dummy text of the printing industry.</p>
-        </div>
+            <h3 className="education-title">Education</h3>
+            <div className="education-item">
+              <h4 className="degree">Masters of Arts</h4>
+              <p>University of ABC (2013-2015)</p>
+              <p>Lorem ipsum is simply dummy text of the printing industry.</p>
+            </div>
+            <div className="education-item">
+              <h4 className="degree">Bachelors of Arts</h4>
+              <p>ABC State University (2010-2013)</p>
+              <p>Lorem ipsum is simply dummy text of the printing industry.</p>
+            </div>
 
-        <h3 className="text-xl font-semibold mt-6 mb-4">Contact</h3>
-        <p>📞 +123456789</p>
-        <p>📧 emailaddress@gmail.com</p>
-        <p>📍 #Street number, city, state</p>
-        <p>🔗 www.yourwebsite.com</p>
+            <h3 className="contact-title">Contact</h3>
+            <p>📞 +123456789</p>
+            <p>📧 emailaddress@gmail.com</p>
+            <p>📍 #Street number, city, state</p>
+            <p>🔗 www.yourwebsite.com</p>
 
-        {editing ? (
-          <div className="mt-6">
-            <input
-              type="text"
-              name="username"
-              value={updatedUser.username || ""}
-              onChange={handleChange}
-              className="w-full p-2 mb-2 border rounded"
-              placeholder="Username"
-            />
-            <input
-              type="text"
-              name="expertise"
-              value={updatedUser.expertise || ""}
-              onChange={handleChange}
-              className="w-full p-2 mb-2 border rounded"
-              placeholder="Expertise"
-            />
-            <input
-              type="text"
-              name="bio"
-              value={updatedUser.bio || ""}
-              onChange={handleChange}
-              className="w-full p-2 mb-2 border rounded"
-              placeholder="Bio"
-            />
+            {editing ? (
+              <div className="edit-section">
+                <input
+                  type="text"
+                  name="username"
+                  value={updatedUser.username || ""}
+                  onChange={handleChange}
+                  className={`input-field ${errors.username ? "error" : ""}`}
+                  placeholder="Username"
+                />
+                {errors.username && (
+                  <p className="error-message">{errors.username}</p>
+                )}
+
+                <input
+                  type="text"
+                  name="expertise"
+                  value={updatedUser.expertise || ""}
+                  onChange={handleChange}
+                  className="input-field"
+                  placeholder="Expertise"
+                />
+                <textarea
+                  name="bio"
+                  value={updatedUser.bio || ""}
+                  onChange={handleChange}
+                  className={`input-field ${errors.bio ? "error" : ""}`}
+                  placeholder="Bio"
+                />
+                {errors.bio && <p className="error-message">{errors.bio}</p>}
+
+                <button onClick={handleSave} className="save-button">
+                  Save
+                </button>
+              </div>
+            ) : (
+              <button onClick={handleEditToggle} className="edit-button">
+                Edit
+              </button>
+            )}
+
             <button
-              onClick={handleSave}
-              className="bg-green-500 text-white px-4 py-2 rounded"
+              onClick={() => setShowChangePassword(!showChangePassword)}
+              className="change-password-button"
             >
-              Save
+              Change Password
+            </button>
+            {showChangePassword && (
+              <div className="change-password-section">
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="input-field"
+                  placeholder="New Password"
+                />
+                <button onClick={handleChangePassword} className="save-button">
+                  Save Password
+                </button>
+              </div>
+            )}
+
+            <button onClick={handleLogout} className="logout-button">
+              Logout
+            </button>
+            <button
+              onClick={handleDeleteAccount}
+              className="delete-account-button"
+            >
+              Delete Account
             </button>
           </div>
-        ) : (
-          <button
-            onClick={handleEditToggle}
-            className="mt-6 bg-blue-500 text-white px-4 py-2 rounded"
-          >
-            Edit
-          </button>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 }

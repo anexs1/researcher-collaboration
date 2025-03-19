@@ -1,22 +1,25 @@
-import { DataTypes } from "sequelize"; // Import DataTypes
-import sequelize from "../config/db.js"; // ✅ No curly braces
-const Publication = sequelize.define("Publication", {
-  title: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  author: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  keywords: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
-  file_path: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
-});
+import db from "../config/db.js";
 
-export default Publication; // ✅ Use 'export default'
+const Publication = {
+  create: (data, callback) => {
+    db.query("INSERT INTO publications SET ?", data, callback);
+  },
+
+  findAll: (callback) => {
+    db.query("SELECT * FROM publications", callback);
+  },
+
+  findById: (id, callback) => {
+    db.query("SELECT * FROM publications WHERE id = ?", [id], callback);
+  },
+
+  search: (keyword, callback) => {
+    db.query(
+      "SELECT * FROM publications WHERE title LIKE ? OR abstract LIKE ?",
+      [`%${keyword}%`, `%${keyword}%`],
+      callback
+    );
+  },
+};
+
+export default Publication;
