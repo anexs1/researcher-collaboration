@@ -17,9 +17,20 @@ function Admin() {
       prev.map((res) => (res.id === id ? { ...res, approved: true } : res))
     );
   };
-
   const deleteResearcher = (id) => {
     setResearchers((prev) => prev.filter((res) => res.id !== id));
+  };
+  // Add new researcher
+  const addResearcher = () => {
+    setResearchers((prev) => [
+      ...prev,
+      {
+        id: prev.length + 1,
+        name: "New Researcher",
+        field: "Field",
+        approved: false,
+      },
+    ]);
   };
 
   return (
@@ -47,6 +58,7 @@ function Admin() {
                 </button>
               </li>
             ))}
+            <button onClick={addResearcher}>Add New Researcher</button>
           </ul>
         </section>
 

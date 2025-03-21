@@ -1,29 +1,11 @@
-const Researcher = require("../models/researcherModel");
+import db from "../config/db.js"; // Ensure correct path
 
-exports.getResearchers = (req, res) => {
-  Researcher.getAll((err, results) => {
+export const getResearchers = (req, res) => {
+  db.query("SELECT * FROM researchers", (err, results) => {
     if (err) {
-      return res.status(500).json({ error: err.message });
+      console.error("Error fetching researchers:", err);
+      return res.status(500).json({ error: "Database error" });
     }
-    res.json(results);
-  });
-};
-
-exports.addResearcher = (req, res) => {
-  const { name, description } = req.body;
-  if (!name || !description) {
-    return res
-      .status(400)
-      .json({ message: "Name and description are required" });
-  }
-
-  Researcher.create(name, description, (err, result) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    res.json({
-      message: "Researcher added successfully",
-      id: result.insertId,
-    });
+    res.status(200).json(results);
   });
 };

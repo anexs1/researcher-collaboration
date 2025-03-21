@@ -1,8 +1,8 @@
-const express = require("express");
+import express from "express";
+import { getResearchers } from "../controllers/researcherController.js"; // Add `.js` extension
+
 const router = express.Router();
-const researcherController = require("../controllers/researcherController");
 
-router.get("/", researcherController.getResearchers);
-router.post("/add", researcherController.addResearcher);
+router.get("/", getResearchers);
 
-module.exports = router;
+export default router;

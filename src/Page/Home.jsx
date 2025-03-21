@@ -1,14 +1,31 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Home.css";
-
 const Home = () => {
   const navigate = useNavigate();
+  const [newUsers, setNewUsers] = useState([]);
 
   // Function to navigate to the login page
   const handleGetStartedClick = () => {
-    navigate("/login"); // Change this to '/signup' if you want to redirect to the signup page
+    navigate("/login");
   };
+
+  // Fetch New Users from API
+  useEffect(() => {
+    const fetchNewUsers = async () => {
+      try {
+        const response = await fetch("/api/new-users");
+        if (!response.ok) {
+          throw new Error("Failed to fetch new users");
+        }
+        const data = await response.json();
+        setNewUsers(data);
+      } catch (error) {
+        console.error("Error fetching new users:", error);
+      }
+    };
+    fetchNewUsers();
+  }, []);
 
   return (
     <div className="home-container">
@@ -22,11 +39,12 @@ const Home = () => {
         </p>
         <button
           className="cta-button hover-effect"
-          onClick={handleGetStartedClick} // Added onClick handler
+          onClick={handleGetStartedClick}
         >
           Get Started
         </button>
       </section>
+
       {/* Features Section */}
       <section className="features-section">
         <h2 className="section-title">Key Features</h2>
@@ -52,6 +70,28 @@ const Home = () => {
         </div>
       </section>
 
+      {/* Showcase New Users Section */}
+      <section className="new-users-section">
+        <h2 className="section-title">Meet Our New Researchers</h2>
+        <div className="users-grid">
+          {newUsers.length > 0 ? (
+            newUsers.map((user) => (
+              <div key={user.id} className="user-item hover-effect">
+                <img
+                  src={user.profileImage || "/assets/default-avatar.png"}
+                  alt={user.username}
+                  className="user-avatar"
+                />
+                <h4>{user.username}</h4>
+                <p>{user.expertise || "Researcher"}</p>
+              </div>
+            ))
+          ) : (
+            <p>No new researchers to showcase yet. Check back soon!</p>
+          )}
+        </div>
+      </section>
+
       {/* How It Works Section */}
       <section className="how-it-works-section">
         <h2 className="section-title">How It Works</h2>
@@ -61,7 +101,7 @@ const Home = () => {
             <p>Sign up and showcase your research expertise.</p>
           </div>
           <div className="step-item hover-effect">
-            <h3>2. Find Collaboration for the collaboration</h3>
+            <h3>2. Find Collaboration Projects</h3>
             <p>Search for collaboration projects and apply easily.</p>
           </div>
           <div className="step-item hover-effect">
@@ -174,6 +214,7 @@ const Home = () => {
             inquiries or project proposals through private chats.
           </p>
         </div>
+
         <div className="faq-item hover-effect">
           <h3>How can I update my profile?</h3>
           <p>
@@ -189,15 +230,6 @@ const Home = () => {
             Once you send a request, the researcher will be notified and can
             either approve or deny your request. If approved, you will be able
             to start collaborating and sharing relevant materials securely.
-          </p>
-        </div>
-
-        <div className="faq-item hover-effect">
-          <h3>How can I update my profile?</h3>
-          <p>
-            You can easily update your profile by accessing the "My Profile"
-            section from your dashboard. There, you can update your
-            qualifications, research interests, and contact details at any time.
           </p>
         </div>
 
@@ -226,7 +258,7 @@ const Home = () => {
       {/* Footer */}
       <footer className="footer">
         <p>
-          © 2025 Researcher Collaboration Portal. All Rights Reserved.worked by
+          © 2025 Researcher Collaboration Portal. All Rights Reserved. Worked by
           G4 IT
         </p>
       </footer>
