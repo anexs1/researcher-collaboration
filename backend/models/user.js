@@ -11,6 +11,9 @@ const User = sequelize.define("User", {
     type: DataTypes.STRING,
     allowNull: false,
     unique: true,
+    validate: {
+      isEmail: true, // Ensure email is valid
+    },
   },
   password: {
     type: DataTypes.STRING,
@@ -38,7 +41,7 @@ const User = sequelize.define("User", {
   },
 });
 
-// Define a method to find user by username
+// Define a method to find user by email
 User.findUserByEmail = async function (email) {
   return await this.findOne({ where: { email } });
 };

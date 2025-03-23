@@ -70,8 +70,9 @@ const SignupPage = () => {
   const handleSignup = async (event) => {
     event.preventDefault();
 
-    if (!username) {
-      setErrorMessage("Username is required");
+    // Validate inputs
+    if (!username || !email || !password || !confirmPassword) {
+      setErrorMessage("All fields are required.");
       return;
     }
 
@@ -93,7 +94,7 @@ const SignupPage = () => {
     formData.append("phone", phone);
 
     if (profileImage) {
-      formData.append("profileImage", profileImage);
+      formData.append("profileImage", profileImage, "profile.jpg"); // Add filename
     }
 
     try {
@@ -107,25 +108,15 @@ const SignupPage = () => {
         }
       );
 
-      console.log("User signed up successfully", response);
+      console.log("User signed up successfully", response.data);
 
-      // Store user data in localStorage
-      const userData = {
-        username,
-        email,
-        expertise,
-        bio,
-        location,
-        phone,
-        profileImage: previewImage,
-      };
+      // Remove Local Storage
+      //localStorage.removeItem("user")
 
-      localStorage.setItem("user", JSON.stringify(userData));
+      // Navigate to the login page
+      navigate("/login");
 
-      navigate("/profile");
-
-      setUsername("");
-      setEmail("");
+      // Reset form fields (but keep username and email for better UX)
       setPassword("");
       setConfirmPassword("");
       setExpertise("");
@@ -153,24 +144,28 @@ const SignupPage = () => {
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             placeholder="Username"
+            required
           />
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Email"
+            required
           />
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password"
+            required
           />
           <input
             type="password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             placeholder="Confirm Password"
+            required
           />
           <input
             type="text"
@@ -196,7 +191,7 @@ const SignupPage = () => {
             onChange={(e) => setPhone(e.target.value)}
             placeholder="Phone"
           />
-          <input type="file" onChange={handleImageChange} />
+          <input type="file" onChange={handleImageChange} accept="image/*" />
           {previewImage && (
             <img
               src={previewImage}

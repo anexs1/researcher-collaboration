@@ -15,7 +15,7 @@ export default function LoginPage({ setIsLoggedIn, setIsAdmin }) {
         setIsLoggedIn(true);
         localStorage.setItem("authToken", response.data.token);
         setIsAdmin(username === "admin");
-        navigate("/profile");
+        navigate("/"); // Changed from navigate("/profile") to navigate("/")
       })
       .catch(() => setErrorMessage("Invalid credentials"));
   };

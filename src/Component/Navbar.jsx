@@ -19,12 +19,10 @@ const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
         <ul>
           <li>
             <Link to="/" onClick={closeMenu}>
-              🏠 Home
+              🏠 Homes
             </Link>
           </li>
-          <li>
-            <Link to="/research">Research</Link>
-          </li>
+
           <li>
             <Link to="/explore" onClick={closeMenu}>
               🔬 Explore

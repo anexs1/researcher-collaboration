@@ -8,11 +8,9 @@ import Profile from "./Page/Profile";
 import Publication from "./Page/Publication";
 import SignupPage from "./Page/SignupPage";
 import LoginPage from "./Page/LoginPage";
-import Researchers from "./Page/Researchers";
 import Explore from "./Page/Explore";
 import MyProjects from "./Page/MyProjects";
 import Messages from "./Page/Messages";
-import ResearchPage from "./Page/ResearchPage";
 
 // Components
 import Navbar from "./Component/Navbar";
@@ -65,7 +63,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/explore" element={<Explore />} />
         <Route path="/publications" element={<Publication />} />
-        <Route path="/research" element={<ResearchPage />} />
+        {/* <Route path="/research" element={<ResearchPage />} /> */}
 
         {/* Authentication Routes */}
         <Route path="/admin/login" element={<LoginPage admin={true} />} />
@@ -93,10 +91,9 @@ function App() {
         {isLoggedIn && (
           <>
             <Route path="/messages" element={<Messages />} />
-            <Route path="/researchers" element={<Researchers />} />
             <Route path="/my-projects" element={<MyProjects />} />
             <Route path="/profile" element={<Profile />} />
-            <Route path="/research" element={<ResearchPage />} />
+            {/* <Route path="/research" element={<ResearchPage />} /> */}
           </>
         )}
 
