@@ -1,57 +1,96 @@
-import Publication from "../models/publicationModel.js";
-import multer from "multer";
-import path from "path";
+// controllers/publicationController.js
+import Publication from "../models/publication.js";
 
-// Setup storage for uploaded files
-const storage = multer.diskStorage({
-  destination: "./uploads/",
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
-  },
-});
+// controllers/publicationController.js
 
-const upload = multer({ storage }).single("file");
-
-// Upload Research Paper
-export const uploadPublication = (req, res) => {
-  upload(req, res, (err) => {
-    if (err) return res.status(500).json({ message: "File upload failed" });
-
-    const { title, abstract, author } = req.body;
-    const filePath = req.file.filename;
-
-    Publication.create({ title, abstract, author, filePath }, (error) => {
-      if (error) return res.status(500).json({ message: "Error saving data" });
-
-      res.status(201).json({ message: "Research paper uploaded successfully" });
+// Create a new publication
+export const createPublication = async (req, res) => {
+  try {
+    const { title, abstract, author, document_link } = req.body;
+    const newPublication = await Publication.create({
+      title,
+      abstract,
+      author,
+      document_link,
     });
-  });
+    res.status(201).json(newPublication);
+  } catch (error) {
+    console.error("Error creating publication:", error);
+    res.status(500).json({
+      message: "Failed to create publication",
+      error: error.message,
+    });
+  }
 };
 
-// Get All Research Papers
-export const getAllPublications = (req, res) => {
-  Publication.findAll((err, results) => {
-    if (err) return res.status(500).json({ message: "Error retrieving data" });
-    res.json(results);
-  });
+// Get all publications
+export const getAllPublications = async (req, res) => {
+  try {
+    const publications = await Publication.findAll();
+    res.status(200).json(publications);
+  } catch (error) {
+    console.error("Error fetching publications:", error);
+    res
+      .status(500)
+      .json({ message: "Failed to fetch publications", error: error.message });
+  }
 };
 
-// Search Research Papers
-export const searchPublications = (req, res) => {
-  const { keyword } = req.query;
-  Publication.search(keyword, (err, results) => {
-    if (err) return res.status(500).json({ message: "Search failed" });
-    res.json(results);
-  });
-};
-
-// Get a single paper
-export const getPublication = (req, res) => {
+// Get a single publication by ID
+export const getPublicationById = async (req, res) => {
   const { id } = req.params;
-  Publication.findById(id, (err, results) => {
-    if (err || results.length === 0) {
-      return res.status(404).json({ message: "Paper not found" });
+  try {
+    const publication = await Publication.findByPk(id);
+    if (publication) {
+      res.status(200).json(publication);
+    } else {
+      res.status(404).json({ message: "Publication not found" });
     }
-    res.json(results[0]);
-  });
+  } catch (error) {
+    console.error("Error fetching publication:", error);
+    res
+      .status(500)
+      .json({ message: "Failed to fetch publication", error: error.message });
+  }
+};
+
+// Update a publication by ID
+export const updatePublication = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [updated] = await Publication.update(req.body, {
+      where: { id: id },
+    });
+    if (updated) {
+      const updatedPublication = await Publication.findByPk(id);
+      res.status(200).json(updatedPublication);
+    } else {
+      res.status(404).json({ message: "Publication not found" });
+    }
+  } catch (error) {
+    console.error("Error updating publication:", error);
+    res
+      .status(500)
+      .json({ message: "Failed to update publication", error: error.message });
+  }
+};
+
+// Delete a publication by ID
+export const deletePublication = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const deleted = await Publication.destroy({
+      where: { id: id },
+    });
+    if (deleted) {
+      res.status(204).send();
+    } else {
+      res.status(404).json({ message: "Publication not found" });
+    }
+  } catch (error) {
+    console.error("Error deleting publication:", error);
+    res
+      .status(500)
+      .json({ message: "Failed to delete publication", error: error.message });
+  }
 };

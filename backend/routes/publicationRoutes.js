@@ -1,17 +1,13 @@
+// routes/publicationRoutes.js (Corrected - ES Module)
 import express from "express";
-import {
-  uploadPublication,
-  getAllPublications,
-  searchPublications,
-  getPublication,
-} from "../controllers/publicationController.js";
-import { authMiddleware } from "../middleware/authMiddleware.js";
+import * as publicationController from "../controllers/publicationController.js"; // Use * as to import the values
 
 const router = express.Router();
 
-router.post("/upload", authMiddleware, uploadPublication);
-router.get("/", getAllPublications);
-router.get("/search", searchPublications);
-router.get("/:id", getPublication);
+router.post("/", publicationController.createPublication);
+router.get("/", publicationController.getAllPublications);
+router.get("/:id", publicationController.getPublicationById);
+router.put("/:id", publicationController.updatePublication);
+router.delete("/:id", publicationController.deletePublication);
 
 export default router;

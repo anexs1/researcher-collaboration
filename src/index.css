@@ -1,137 +1,16 @@
-.main-content {
-  padding-top: 60px; /* Ensure the content is not hidden under the header */
-}
+/* src/index.css or src/app.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-.header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  z-index: 1000; /* Ensures the header stays on top */
-  height: 60px; /* Increased for better visibility */
-  background-color: hsl(145, 71%, 47%); /* Match your header color */
-}
-
-.form-container {
-  margin-top: 120px; /* Increase this value more if needed */
-}
-
-body {
-  padding-top: 100px !important; /* Adjust value as needed */
-  margin: 0;
-  box-sizing: border-box;
-  overflow-x: hidden; /* Prevent horizontal scrolling */
-}
-
-.auth-page {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh; /* Ensure full height on all devices */
-  background-color: #f4f4f4;
-}
-
-.auth-container {
-  background: white;
-  padding: 2rem;
-  border-radius: 10px;
-  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
-  width: 90%; /* Adjust for smaller screens */
-  max-width: 350px; /* Limit on larger screens */
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  box-sizing: border-box;
-}
-
-.auth-title {
-  font-size: 1.8rem;
-  color: #333;
-  margin-bottom: 1rem;
-  text-align: center;
-}
-
-input,
-textarea {
-  width: 100%;
-  padding: 10px;
-  margin: 8px 0;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  font-size: 1rem;
-  box-sizing: border-box;
-}
-
-textarea {
-  resize: none;
-  height: 80px;
-}
-
-.auth-button {
-  width: 100%;
-  background: #007bff;
-  color: white;
-  border: none;
-  padding: 10px;
-  font-size: 1rem;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: 0.3s ease;
-  box-sizing: border-box;
-}
-
-.auth-button:hover {
-  background: #0056b3;
-}
-
-.footer-text {
-  margin-top: 1rem;
-  font-size: 0.9rem;
-  text-align: center;
-}
-
-.link {
-  color: #007bff;
-  cursor: pointer;
-  font-weight: bold;
-}
-
-.link:hover {
-  text-decoration: underline;
-}
-
-.error-message {
-  color: red;
-  font-size: 0.9rem;
-  margin-bottom: 10px;
-}
-
-/* Responsive Adjustments */
-@media (max-width: 600px) {
-  .header {
-    height: 50px; /* Smaller header on very small screens */
+/* Your custom CSS (e.g., animations) goes below the Tailwind directives */
+@keyframes fade-in {
+  from {
+    opacity: 0;
   }
-
-  .auth-container {
-    padding: 1.5rem;
-    width: 95%;
-  }
-
-  .auth-title {
-    font-size: 1.5rem;
-  }
-
-  input,
-  textarea {
-    font-size: 0.9rem;
-  }
-
-  .auth-button {
-    padding: 8px;
-    font-size: 0.9rem;
-  }
-
-  .footer-text {
-    font-size: 0.8rem;
+  to {
+    opacity: 1;
   }
 }
+
+/* ... rest of your animation CSS ... */

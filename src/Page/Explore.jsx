@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import "./Explore.css";
+import "../index.css";
 
 const Explore = () => {
   const [publications, setPublications] = useState([]);
@@ -100,65 +100,89 @@ const Explore = () => {
     .sort((a, b) => a[sortBy].localeCompare(b[sortBy]));
 
   return (
-    <div className="explore-container">
-      <h1>Explore Publications</h1>
+    <div className="container mx-auto p-4">
+      <h1 className="text-3xl font-semibold mb-6">Explore Publications</h1>
 
-      <div className="filter-section">
+      {/* Filter Section */}
+      <div className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 mb-6">
         <input
           type="text"
           placeholder="Search by title, author, or keywords..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full md:w-auto p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
 
-        <select onChange={(e) => setSortBy(e.target.value)}>
+        <select
+          onChange={(e) => setSortBy(e.target.value)}
+          className="w-full md:w-auto p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
           <option value="title">Sort by Title</option>
           <option value="author">Sort by Author</option>
           <option value="date">Sort by Date</option>
-          <option value="views">Sort by Views</option>
-          <option value="downloads">Sort by Downloads</option>
-          <option value="reviews">Sort by Reviews</option>
         </select>
       </div>
 
-      <div className="publication-list">
+      {/* Publication List */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredPublications.length > 0 ? (
           filteredPublications.map((publication, index) => (
-            <div className="publication-card" key={index}>
-              <h2>{publication.title}</h2>
-              <p>
-                <strong>Author:</strong> {publication.author}
-              </p>
-              <p>
-                <strong>Keywords:</strong> {publication.keywords}
-              </p>
-              {publication.file && (
-                <a
-                  href={publication.file}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="download-btn"
+            <div
+              key={index}
+              className="bg-white rounded-lg shadow-md p-4 flex flex-col justify-between"
+            >
+              <div>
+                <h2 className="text-xl font-semibold mb-2">
+                  {publication.title}
+                </h2>
+                <p>
+                  <strong>Author:</strong> {publication.author}
+                </p>
+                <p>
+                  <strong>Keywords:</strong> {publication.keywords}
+                </p>
+              </div>
+              <div className="mt-4">
+                {publication.file && (
+                  <a
+                    href={publication.file}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mr-2"
+                  >
+                    Download Publication
+                  </a>
+                )}
+                <button
+                  onClick={() => sendRequest(publication.id)}
+                  className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
                 >
-                  Download Publication
-                </a>
-              )}
-              <button onClick={() => sendRequest(publication.id)}>
-                Request Collaboration
-              </button>
+                  Request Collaboration
+                </button>
+              </div>
             </div>
           ))
         ) : (
-          <p>No publications available.</p>
+          <p className="text-gray-500">No publications available.</p>
         )}
       </div>
 
-      <h2>Pending Requests</h2>
+      {/* Pending Requests Section */}
+      <h2 className="text-2xl font-semibold mt-8 mb-4">Pending Requests</h2>
       <ul>
         {requests.map((request) => (
-          <li key={request.id}>
-            {request.Publication.title} - {request.status}
+          <li
+            key={request.id}
+            className="flex items-center justify-between py-2 border-b"
+          >
+            <div>
+              {request.Publication.title} - {request.status}
+            </div>
             {request.status === "pending" && (
-              <button onClick={() => approveRequest(request.id)}>
+              <button
+                onClick={() => approveRequest(request.id)}
+                className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+              >
                 Approve
               </button>
             )}
