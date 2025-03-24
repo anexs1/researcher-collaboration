@@ -1,18 +1,21 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import "../index.css";
+import { FaStar, FaHeart, FaEye } from "react-icons/fa"; //Import heart and eye icon
 
 const Home = () => {
   const navigate = useNavigate();
-  const [publications, setPublications] = useState([]); // Changed to publications
-  const [refreshPublications, setRefreshPublications] = useState(false); // Changed to Publication
+  const [publications, setPublications] = useState([]);
+  const [refreshPublications, setRefreshPublications] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterOptions, setFilterOptions] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
-  const [loadingPublications, setLoadingPublications] = useState(false); // Changed to Publication
+  const [loadingPublications, setLoadingPublications] = useState(false);
   const [apiError, setApiError] = useState(null);
 
   const observer = useRef();
+  const [showFullAbout, setShowFullAbout] = useState(false); // State for About Us
+  const [showLess, setShowLess] = useState(true); //State for controlling height
 
   const testimonials = [
     {
@@ -75,36 +78,35 @@ const Home = () => {
 
   useEffect(() => {
     const fetchPublicationsData = async () => {
-      // Renamed fetchNewUsers
-      setLoadingPublications(true); // Renamed to loadingPublications
+      setLoadingPublications(true);
       setApiError(null);
       try {
         const response = await fetch(
-          `/api/publications?page=${currentPage}&limit=5` // Changed API Endpoint
+          `/api/publications?page=${currentPage}&limit=5`
         );
         if (!response.ok) {
           throw new Error(
             `Failed to fetch publications (HTTP ${response.status})`
-          ); // More useful
+          );
         }
         const data = await response.json();
         if (!Array.isArray(data)) {
           throw new Error("API returned non-array data");
         }
-        setPublications((prevPublications) => [...prevPublications, ...data]); // Added S to make it publications
+        setPublications((prevPublications) => [...prevPublications, ...data]);
       } catch (error) {
-        console.error("Error fetching publications:", error); // Logged it again in its own
+        console.error("Error fetching publications:", error);
         setApiError(error.message);
       } finally {
-        setLoadingPublications(false); // Changed to loadingPublications
+        setLoadingPublications(false);
       }
     };
     fetchPublicationsData();
-  }, [currentPage, refreshPublications]); // Changed to Publications
+  }, [currentPage, refreshPublications]);
 
   useEffect(() => {
     const handleNewPublicationPost = () => {
-      setRefreshPublications((prev) => !prev); // Toggle refreshPublications state
+      setRefreshPublications((prev) => !prev);
     };
 
     window.addEventListener("newpublicationpost", handleNewPublicationPost);
@@ -116,6 +118,10 @@ const Home = () => {
       );
     };
   }, []);
+
+  const toggleAboutSection = () => {
+    setShowFullAbout(!showFullAbout);
+  };
 
   return (
     <div className="bg-gradient-to-br from-gray-100 to-blue-100 font-sans overflow-hidden">
@@ -150,10 +156,10 @@ const Home = () => {
           />
           <select
             className="w-full md:w-1/4 p-4 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 animate-slide-in-bottom delay-100"
-            onChange={
-              (e) => setFilterOptions({ category: e.target.value }) // Adjust to publication property
-            }
+            onChange={(e) => setFilterOptions({ category: e.target.value })}
           >
+            {" "}
+            {/* Adjust to publication property */}
             <option value="">All Categories</option>
             <option value="AI">Artificial Intelligence</option>
             <option value="DS">Data Science</option>
@@ -217,37 +223,56 @@ const Home = () => {
             <span className="block sm:inline">{apiError}</span>
           </div>
         )}
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {filteredPublications.length > 0 ? (
             filteredPublications.map((publication, index) => {
               if (filteredPublications.length === index + 1) {
                 return (
                   <div
                     key={publication.id}
-                    className="bg-white p-6 rounded-3xl shadow-md hover:shadow-lg transition-shadow text-center animate-zoom-in"
+                    className="bg-white rounded-3xl shadow-md hover:shadow-lg transition-shadow animate-zoom-in"
                     ref={lastPublicationElementRef}
                   >
-                    {/* Change references to Publication */}
-                    <h4 className="text-lg font-semibold text-gray-700">
-                      {publication.title}
-                    </h4>
-                    <p className="text-gray-600">
-                      {publication.author || "Researcher"}
-                    </p>
+                    <div className="p-6 flex flex-col h-full">
+                      <h4 className="text-xl font-semibold text-gray-700 mb-2">
+                        {publication.title}
+                      </h4>
+                      <p className="text-gray-600 mb-4">
+                        {publication.author || "Unknown Author"}
+                      </p>
+                      <div className="mt-auto flex items-center justify-between">
+                        <button className="text-blue-600 hover:text-blue-800">
+                          <FaEye className="inline-block mr-1" /> View Details
+                        </button>
+                        <button className="text-red-600 hover:text-red-800">
+                          <FaHeart className="inline-block mr-1" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 );
               } else {
                 return (
                   <div
                     key={publication.id}
-                    className="bg-white p-6 rounded-3xl shadow-md hover:shadow-lg transition-shadow text-center animate-zoom-in"
+                    className="bg-white rounded-3xl shadow-md hover:shadow-lg transition-shadow animate-zoom-in"
                   >
-                    <h4 className="text-lg font-semibold text-gray-700">
-                      {publication.title}
-                    </h4>
-                    <p className="text-gray-600">
-                      {publication.author || "Researcher"}
-                    </p>
+                    <div className="p-6 flex flex-col h-full">
+                      <h4 className="text-xl font-semibold text-gray-700 mb-2">
+                        {publication.title}
+                      </h4>
+                      <p className="text-gray-600 mb-4">
+                        {publication.author || "Unknown Author"}
+                      </p>
+                      <div className="mt-auto flex items-center justify-between">
+                        <button className="text-blue-600 hover:text-blue-800">
+                          <FaEye className="inline-block mr-1" /> View Details
+                        </button>
+                        <button className="text-red-600 hover:text-red-800">
+                          <FaHeart className="inline-block mr-1" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 );
               }
@@ -332,7 +357,6 @@ const Home = () => {
           networking and collaboration for research projects.
         </p>
       </section>
-
       {/* Testimonials Section */}
       <section className="py-16 px-6 bg-gradient-to-br from-gray-200 to-blue-200">
         <h2 className="text-3xl font-semibold mb-12 text-center text-gray-800 animate-slide-in-right">
@@ -362,76 +386,68 @@ const Home = () => {
           ))}
         </div>
       </section>
-
       {/* FAQ Section */}
-      <section className="py-16 px-6">
+      <section className="py-16 px-6 bg-gray-100">
         <h2 className="text-3xl font-semibold mb-12 text-center text-gray-800 animate-slide-in-left">
           Frequently Asked Questions
         </h2>
-
         <div className="space-y-6">
-          <div className="faq-card bg-white p-8 rounded-2xl shadow-md hover:shadow-lg transition-shadow animate-fade-in">
-            <h3 className="text-xl font-semibold mb-4 text-gray-700">
+          <div className="faq-card p-8 rounded-2xl shadow-md hover:shadow-lg transition-shadow animate-fade-in">
+            <h3 className="text-xl font-semibold mb-4">
               How can I find a research partner?
             </h3>
-            <p className="text-gray-600">
+            <p>
               You can browse collaboration opportunities or search for
               researchers by expertise, field, or location. The platform also
               allows you to filter researchers by their qualifications and
               previous projects to ensure the best fit.
             </p>
           </div>
-
-          <div className="faq-card bg-white p-8 rounded-2xl shadow-md hover:shadow-lg transition-shadow animate-fade-in delay-100">
-            <h3 className="text-xl font-semibold mb-4 text-gray-700">
-              Is my data secure?
-            </h3>
-            <p className="text-gray-600">
+          <div className="faq-card p-8 rounded-2xl shadow-md hover:shadow-lg transition-shadow animate-fade-in delay-100">
+            <h3 className="text-xl font-semibold mb-4">Is my data secure?</h3>
+            <p>
               Yes! We ensure end-to-end encryption for all communications. We
               follow industry best practices to secure your personal and project
               data, using secure protocols and regular security audits to
               protect your information.
             </p>
           </div>
-
-          <div className="faq-card bg-white p-8 rounded-2xl shadow-md hover:shadow-lg transition-shadow animate-fade-in delay-200">
-            <h3 className="text-xl font-semibold mb-4 text-gray-700">
+          <div className="faq-card p-8 rounded-2xl shadow-md hover:shadow-lg transition-shadow animate-fade-in delay-200">
+            <h3 className="text-xl font-semibold mb-4">
               Can I send direct messages to researchers?
             </h3>
-            <p className="text-gray-600">
+            <p>
               Absolutely! Our platform provides real-time messaging
               functionality, allowing you to connect with researchers directly.
               You can send inquiries or project proposals through private chats.
             </p>
           </div>
-
-          <div className="faq-card bg-white p-8 rounded-2xl shadow-md hover:shadow-lg transition-shadow animate-fade-in delay-300">
-            <h3 className="text-xl font-semibold mb-4 text-gray-700">
+          <div className="faq-card p-8 rounded-2xl shadow-md hover:shadow-lg transition-shadow animate-fade-in delay-300">
+            <h3 className="text-xl font-semibold mb-4">
               How can I update my profile?
             </h3>
-            <p className="text-gray-600">
+            <p>
               You can easily update your profile by accessing the "My Profile"
               section from your dashboard. There, you can update your
               qualifications, research interests, and contact details at any
+              time.
             </p>
           </div>
-
-          <div className="faq-card bg-white p-8 rounded-2xl shadow-md hover:shadow-lg transition-shadow animate-fade-in delay-400">
-            <h3 className="text-xl font-semibold mb-4 text-gray-700">
+          <div className="faq-card p-8 rounded-2xl shadow-md hover:shadow-lg transition-shadow animate-fade-in delay-400">
+            <h3 className="text-xl font-semibold mb-4">
               What happens after I send a collaboration request?
             </h3>
-            <p className="text-gray-600">
+            <p>
               Once you send a request, the researcher will be notified and can
               either approve or deny your request. If approved, you will be able
               to start collaborating and sharing relevant materials securely.
             </p>
           </div>
-
-          <div className="faq-card bg-white p-8 rounded-2xl shadow-md hover:shadow-lg transition-shadow animate-fade-in delay-500">
-            <h3 className="text-xl font-semibold mb-4 text-gray-700">
+          <div className="faq-card p-8 rounded-2xl shadow-md hover:shadow-lg transition-shadow animate-fade-in delay-500">
+            <h3 className="text-xl font-semibold mb-4">
               Do I need to pay to use the platform?
             </h3>
-            <p className="text-gray-600">
+            <p>
               No, the platform is completely free for all registered users. We
               provide access to all research tools and collaboration features at
               no cost to help foster academic collaboration.

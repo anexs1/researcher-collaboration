@@ -1,14 +1,15 @@
-const express = require("express");
-const cors = require("cors");
-const authRoutes = require("./routes/authRoutes.js");
-const projectRoutes = require("./routes/projectRoutes.js");
-const publicationRoutes = require("./routes/publicationRoutes.js");
+import express from "express";
+import cors from "cors";
+import authRoutes from "./routes/authRoutes.js";
+import projectRoutes from "./routes/projectRoutes.js";
+import publicationRoutes from "./routes/publicationRoutes.js";
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
+app.use("/api/SignupPage", authRoutes);
 app.use("/api/publications", publicationRoutes);
 app.use("/api/myprojects", projectRoutes);
 

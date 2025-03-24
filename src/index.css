@@ -113,3 +113,81 @@
 .animate-slide-in-bottom {
   animation: slideInBottom 0.7s ease-out;
 }
+/* Add this to your CSS file (e.g., index.css) */
+
+@keyframes slide-in-left {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-left {
+  animation: slide-in-left 0.5s ease-out forwards;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out forwards;
+}
+
+/* Delayed fade-in for cards */
+.animate-fade-in.delay-100 {
+  animation-delay: 0.1s;
+}
+
+.animate-fade-in.delay-200 {
+  animation-delay: 0.2s;
+}
+
+.animate-fade-in.delay-300 {
+  animation-delay: 0.3s;
+}
+
+.animate-fade-in.delay-400 {
+  animation-delay: 0.4s;
+}
+
+.animate-fade-in.delay-500 {
+  animation-delay: 0.5s;
+}
+
+/* New styles for the FAQ section */
+.faq-card {
+  background: linear-gradient(135deg, #f9f9f9 0%, #e0e0e0 100%);
+  border: 1px solid #ccc;
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.faq-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+h3 {
+  color: #2c3e50; /* Darker text color for headings */
+}
+
+p {
+  color: #34495e; /* Darker text color for paragraphs */
+}
+
+.text-gray-800 {
+  color: #2c3e50; /* Darker color for the main header */
+}
+
+.text-gray-600 {
+  color: #34495e; /* Slightly darker for paragraph text */
+}

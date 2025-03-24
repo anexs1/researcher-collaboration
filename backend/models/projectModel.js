@@ -1,4 +1,4 @@
-const db = require("../config/db");
+import db from "../config/db.js";
 
 class Project {
   constructor(id, title, description, status, collaborators) {
@@ -21,24 +21,30 @@ class Project {
             row.status,
             JSON.parse(row.collaborators)
           )
-      ); // Parse JSON
+      );
     } catch (error) {
       console.error("Error getting all projects:", error);
       throw error;
     }
   }
-
   static async create(title, description, status, collaborators) {
     try {
-      const collaboratorsJson = JSON.stringify(collaborators); // Convert to JSON
-      const sql =
-        "INSERT INTO projects (title, description, status, collaborators) VALUES (?, ?, ?, ?)";
-      const [result] = await db.query(sql, [
+      const collaboratorsJson = JSON.stringify(collaborators);
+
+      const query = `
+      INSERT INTO projects 
+        (title, description, status, collaborators) 
+      VALUES 
+        (?, ?, ?, ?)
+    `;
+
+      const [result] = await db.query(query, [
         title,
         description,
         status,
         collaboratorsJson,
       ]);
+
       const newProjectId = result.insertId;
       return new Project(
         newProjectId,
@@ -49,10 +55,11 @@ class Project {
       );
     } catch (error) {
       console.error("Error creating project:", error);
-      throw error;
+      throw new Error(
+        error.message || "Failed to create project in the database."
+      );
     }
   }
-
   static async getById(id) {
     try {
       const [rows] = await db.query("SELECT * FROM projects WHERE id = ?", [
@@ -68,7 +75,7 @@ class Project {
         row.description,
         row.status,
         JSON.parse(row.collaborators)
-      ); // Parse JSON
+      );
     } catch (error) {
       console.error("Error getting project by ID:", error);
       throw error;
@@ -77,7 +84,7 @@ class Project {
 
   static async update(id, title, description, status, collaborators) {
     try {
-      const collaboratorsJson = JSON.stringify(collaborators); // Convert to JSON
+      const collaboratorsJson = JSON.stringify(collaborators);
       const sql =
         "UPDATE projects SET title = ?, description = ?, status = ?, collaborators = ? WHERE id = ?";
       await db.query(sql, [title, description, status, collaboratorsJson, id]);
@@ -98,4 +105,4 @@ class Project {
   }
 }
 
-module.exports = Project;
+export default Project;

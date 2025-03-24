@@ -9,6 +9,7 @@ import {
 } from "react-icons/fa";
 import axios from "axios"; // Import Axios for API calls
 import "../index.css";
+
 const MyProjects = () => {
   const [projects, setProjects] = useState([]);
   const [activeTab, setActiveTab] = useState("ongoing");
@@ -25,7 +26,7 @@ const MyProjects = () => {
   const [collaboratorInput, setCollaboratorInput] = useState(""); // Input for adding collaborators
 
   // API Endpoint (replace with your actual API endpoint)
-  const API_ENDPOINT = "http://localhost:5000/api/my-projects";
+  const API_ENDPOINT = "http://localhost:5000/api/myprojects"; //Fixed to follow standard
 
   // Function to fetch projects from the API
   const fetchProjects = useCallback(async () => {
@@ -77,15 +78,17 @@ const MyProjects = () => {
   const handleDeleteProject = async (id) => {
     if (window.confirm("Are you sure you want to delete this project?")) {
       try {
+        setLoading(true);
         await axios.delete(`${API_ENDPOINT}/${id}`);
         fetchProjects(); // Refresh project list
       } catch (err) {
         console.error("Error deleting project:", err);
         setError(err.message || "Failed to delete project.");
+      } finally {
+        setLoading(false);
       }
     }
   };
-
   // Function to handle viewing a project
   const handleViewProject = (project) => {
     setSelectedProject(project);
@@ -127,19 +130,21 @@ const MyProjects = () => {
       setLoading(true);
       setError(null);
 
-      if (selectedProject) {
-        // Update existing project
-        await axios.put(`${API_ENDPOINT}/${selectedProject.id}`, formData);
-      } else {
-        // Create a new project
-        await axios.post(API_ENDPOINT, formData);
+      const response = selectedProject
+        ? await axios.put(`${API_ENDPOINT}/${selectedProject.id}`, formData)
+        : await axios.post(API_ENDPOINT, formData);
+
+      if (response.status !== 200 && response.status !== 201) {
+        throw new Error(response.data.message || "Failed to save project.");
       }
 
       setIsModalOpen(false);
       fetchProjects(); // Refresh project list
     } catch (err) {
       console.error("Error saving project:", err);
-      setError(err.message || "Failed to save project.");
+      setError(
+        err.response?.data?.message || err.message || "Failed to save project."
+      );
     } finally {
       setLoading(false);
     }
