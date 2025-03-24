@@ -1,45 +1,119 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import "../index.css";
 
 const Home = () => {
   const navigate = useNavigate();
-  const [newUsers, setNewUsers] = useState([]);
-  const [refreshUsers, setRefreshUsers] = useState(false); // Trigger state
+  const [publications, setPublications] = useState([]); // Changed to publications
+  const [refreshPublications, setRefreshPublications] = useState(false); // Changed to Publication
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterOptions, setFilterOptions] = useState({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const [loadingPublications, setLoadingPublications] = useState(false); // Changed to Publication
+  const [apiError, setApiError] = useState(null);
 
-  // Function to navigate to the login page
+  const observer = useRef();
+
+  const testimonials = [
+    {
+      id: 1,
+      name: "Dr. Amanuel T.",
+      title: "Researcher",
+      image: "/assets/react.svg",
+      quote: "This platform helped me find the perfect research partner!",
+    },
+    {
+      id: 2,
+      name: "Prof. Mulu A.",
+      title: "Professor",
+      image: "/assets/react.svg",
+      quote: "Collaborating has never been easier. Great experience!",
+    },
+    {
+      id: 3,
+      name: "Dr. John S.",
+      title: "Researcher",
+      image: "/assets/react.svg",
+      quote: "The platform is user-friendly and connects people seamlessly!",
+    },
+  ];
+
+  const filteredPublications = publications.filter((publication) => {
+    const searchTermLower = searchTerm.toLowerCase();
+    return (
+      publication.title?.toLowerCase().includes(searchTermLower) &&
+      Object.keys(filterOptions).every(
+        (key) =>
+          filterOptions[key] === "" || publication[key] === filterOptions[key]
+      )
+    );
+  });
+
+  const lastPublicationElementRef = useCallback(
+    (node) => {
+      if (loadingPublications) return;
+      if (observer.current) observer.current.disconnect();
+      observer.current = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && filteredPublications.length > 0) {
+          setCurrentPage((prevPageNumber) => prevPageNumber + 1);
+        }
+      });
+      if (node) observer.current.observe(node);
+    },
+    [loadingPublications, filteredPublications]
+  );
+
   const handleGetStartedClick = () => {
     navigate("/login");
   };
 
-  // Fetch New Users from API
+  const handleContactSubmit = async (e) => {
+    e.preventDefault();
+    alert("Message sent successfully!");
+    e.target.reset();
+  };
+
   useEffect(() => {
-    const fetchNewUsers = async () => {
+    const fetchPublicationsData = async () => {
+      // Renamed fetchNewUsers
+      setLoadingPublications(true); // Renamed to loadingPublications
+      setApiError(null);
       try {
-        const response = await fetch("/api/new-users");
+        const response = await fetch(
+          `/api/publications?page=${currentPage}&limit=5` // Changed API Endpoint
+        );
         if (!response.ok) {
-          throw new Error("Failed to fetch new users");
+          throw new Error(
+            `Failed to fetch publications (HTTP ${response.status})`
+          ); // More useful
         }
         const data = await response.json();
-        setNewUsers(data);
+        if (!Array.isArray(data)) {
+          throw new Error("API returned non-array data");
+        }
+        setPublications((prevPublications) => [...prevPublications, ...data]); // Added S to make it publications
       } catch (error) {
-        console.error("Error fetching new users:", error);
+        console.error("Error fetching publications:", error); // Logged it again in its own
+        setApiError(error.message);
+      } finally {
+        setLoadingPublications(false); // Changed to loadingPublications
       }
     };
-    fetchNewUsers();
-  }, [refreshUsers]); // Add refreshUsers as a dependency
+    fetchPublicationsData();
+  }, [currentPage, refreshPublications]); // Changed to Publications
 
   useEffect(() => {
-    // Listen for a custom event triggered by SignupPage
-    const handleNewUserSignup = () => {
-      setRefreshUsers((prev) => !prev); // Toggle refreshUsers state
+    const handleNewPublicationPost = () => {
+      setRefreshPublications((prev) => !prev); // Toggle refreshPublications state
     };
 
-    window.addEventListener("newusersignup", handleNewUserSignup);
+    window.addEventListener("newpublicationpost", handleNewPublicationPost);
 
-    // Cleanup the event listener
     return () => {
-      window.removeEventListener("newusersignup", handleNewUserSignup);
+      window.removeEventListener(
+        "newpublicationpost",
+        handleNewPublicationPost
+      );
     };
   }, []);
 
@@ -64,6 +138,30 @@ const Home = () => {
         </div>
       </section>
 
+      {/* Search and Filter Section */}
+      <section className="py-8 px-6 bg-gray-100">
+        <div className="container mx-auto flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0 md:space-x-4">
+          <input
+            type="search"
+            placeholder="Search publications..."
+            className="w-full md:w-1/2 p-4 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 animate-slide-in-bottom"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <select
+            className="w-full md:w-1/4 p-4 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 animate-slide-in-bottom delay-100"
+            onChange={
+              (e) => setFilterOptions({ category: e.target.value }) // Adjust to publication property
+            }
+          >
+            <option value="">All Categories</option>
+            <option value="AI">Artificial Intelligence</option>
+            <option value="DS">Data Science</option>
+            {/* Add other categories */}
+          </select>
+        </div>
+      </section>
+
       {/* Features Section */}
       <section className="py-16 px-6">
         <h2 className="text-3xl font-semibold mb-12 text-center text-gray-800 animate-slide-in-left">
@@ -77,7 +175,6 @@ const Home = () => {
             <p className="text-gray-600">
               Search for researchers based on their expertise and interests.
             </p>
-            {/* Add an icon or small graphic here if you have one */}
           </div>
           <div className="feature-card bg-white p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-shadow animate-fade-in delay-100">
             <h3 className="text-xl font-semibold mb-4 text-gray-700">
@@ -106,36 +203,61 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Showcase New Users Section */}
+      {/* Showcase New Publications Section */}
       <section className="py-16 px-6 bg-gradient-to-br from-gray-200 to-blue-200">
         <h2 className="text-3xl font-semibold mb-12 text-center text-gray-800 animate-slide-in-right">
-          Meet Our New Researchers
+          Explore the New Publications
         </h2>
+        {apiError && (
+          <div
+            className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4"
+            role="alert"
+          >
+            <strong className="font-bold">Error!</strong>
+            <span className="block sm:inline">{apiError}</span>
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-8">
-          {newUsers.length > 0 ? (
-            newUsers.map((user) => (
-              <div
-                key={user.id}
-                className="user-card bg-white p-6 rounded-3xl shadow-md hover:shadow-lg transition-shadow text-center animate-zoom-in"
-              >
-                <img
-                  src={user.profileImage || "/assets/default-avatar.png"}
-                  alt={user.username}
-                  className="w-24 h-24 rounded-full object-cover mx-auto mb-4 border-4 border-blue-300"
-                />
-                <h4 className="text-lg font-semibold text-gray-700">
-                  {user.username}
-                </h4>
-                <p className="text-gray-600">
-                  {user.expertise || "Researcher"}
-                </p>
-              </div>
-            ))
+          {filteredPublications.length > 0 ? (
+            filteredPublications.map((publication, index) => {
+              if (filteredPublications.length === index + 1) {
+                return (
+                  <div
+                    key={publication.id}
+                    className="bg-white p-6 rounded-3xl shadow-md hover:shadow-lg transition-shadow text-center animate-zoom-in"
+                    ref={lastPublicationElementRef}
+                  >
+                    {/* Change references to Publication */}
+                    <h4 className="text-lg font-semibold text-gray-700">
+                      {publication.title}
+                    </h4>
+                    <p className="text-gray-600">
+                      {publication.author || "Researcher"}
+                    </p>
+                  </div>
+                );
+              } else {
+                return (
+                  <div
+                    key={publication.id}
+                    className="bg-white p-6 rounded-3xl shadow-md hover:shadow-lg transition-shadow text-center animate-zoom-in"
+                  >
+                    <h4 className="text-lg font-semibold text-gray-700">
+                      {publication.title}
+                    </h4>
+                    <p className="text-gray-600">
+                      {publication.author || "Researcher"}
+                    </p>
+                  </div>
+                );
+              }
+            })
           ) : (
             <p className="text-center text-gray-500">
-              No new researchers to showcase yet. Check back soon!
+              No new publications to showcase yet. Check back soon!
             </p>
           )}
+          {loadingPublications && <p>Loading new publications...</p>}
         </div>
       </section>
 
@@ -217,65 +339,27 @@ const Home = () => {
           What Our Users Say
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {/* Testimonial Item 1 */}
-          <div className="testimonial-card bg-white p-8 rounded-3xl shadow-md hover:shadow-lg transition-transform hover:scale-105 animate-fade-in">
-            <div className="flex items-center mb-4">
-              <img
-                src="../assets/react.svg"
-                alt="Dr. Amanuel T."
-                className="w-16 h-16 rounded-full object-cover mr-4 border-2 border-blue-300"
-              />
-              <div>
-                <h4 className="text-lg font-semibold text-gray-700">
-                  Dr. Amanuel T.
-                </h4>
-                <p className="text-gray-600">Researcher</p>
+          {testimonials.map((testimonial) => (
+            <div
+              key={testimonial.id}
+              className="testimonial-card bg-white p-8 rounded-3xl shadow-md hover:shadow-lg transition-transform hover:scale-105 animate-fade-in"
+            >
+              <div className="flex items-center mb-4">
+                <img
+                  src={testimonial.image}
+                  alt={testimonial.name}
+                  className="w-16 h-16 rounded-full object-cover mr-4 border-2 border-blue-300"
+                />
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-700">
+                    {testimonial.name}
+                  </h4>
+                  <p className="text-gray-600">{testimonial.title}</p>
+                </div>
               </div>
+              <p className="text-gray-600">{testimonial.quote}</p>
             </div>
-            <p className="text-gray-600">
-              "This platform helped me find the perfect research partner!"
-            </p>
-          </div>
-
-          {/* Testimonial Item 2 */}
-          <div className="testimonial-card bg-white p-8 rounded-3xl shadow-md hover:shadow-lg transition-transform hover:scale-105 animate-fade-in delay-100">
-            <div className="flex items-center mb-4">
-              <img
-                src="../assets/react.svg"
-                alt="Prof. Mulu A."
-                className="w-16 h-16 rounded-full object-cover mr-4 border-2 border-blue-300"
-              />
-              <div>
-                <h4 className="text-lg font-semibold text-gray-700">
-                  Prof. Mulu A.
-                </h4>
-                <p className="text-gray-600">Professor</p>
-              </div>
-            </div>
-            <p className="text-gray-600">
-              "Collaborating has never been easier. Great experience!"
-            </p>
-          </div>
-
-          {/* Testimonial Item 3 */}
-          <div className="testimonial-card bg-white p-8 rounded-3xl shadow-md hover:shadow-lg transition-transform hover:scale-105 animate-fade-in delay-200">
-            <div className="flex items-center mb-4">
-              <img
-                src="../assets/react.svg"
-                alt="Dr. John S."
-                className="w-16 h-16 rounded-full object-cover mr-4 border-2 border-blue-300"
-              />
-              <div>
-                <h4 className="text-lg font-semibold text-gray-700">
-                  Dr. John S.
-                </h4>
-                <p className="text-gray-600">Researcher</p>
-              </div>
-            </div>
-            <p className="text-gray-600">
-              "The platform is user-friendly and connects people seamlessly!"
-            </p>
-          </div>
+          ))}
         </div>
       </section>
 
@@ -329,7 +413,6 @@ const Home = () => {
               You can easily update your profile by accessing the "My Profile"
               section from your dashboard. There, you can update your
               qualifications, research interests, and contact details at any
-              time.
             </p>
           </div>
 
@@ -365,28 +448,36 @@ const Home = () => {
         <p className="text-gray-700 leading-relaxed text-center mb-8 animate-fade-in">
           Have any questions? Reach out to us!
         </p>
-        <form className="max-w-md mx-auto">
+        <form
+          className="max-w-md mx-auto"
+          onSubmit={handleContactSubmit}
+          aria-label="Contact Form"
+        >
           <input
             type="text"
             placeholder="Your Name"
             required
             className="w-full p-4 rounded-md border border-gray-300 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 animate-slide-in-bottom"
+            aria-label="Your Name"
           />
           <input
             type="email"
             placeholder="Your Email"
             required
             className="w-full p-4 rounded-md border border-gray-300 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 animate-slide-in-bottom delay-100"
+            aria-label="Your Email"
           />
           <textarea
             placeholder="Your Message"
             rows="4"
             required
             className="w-full p-4 rounded-md border border-gray-300 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 animate-slide-in-bottom delay-200"
+            aria-label="Your Message"
           ></textarea>
           <button
             type="submit"
             className="w-full bg-blue-600 text-white font-bold py-4 rounded-md hover:bg-blue-700 transition-colors animate-pulse"
+            aria-label="Send Message"
           >
             Send Message
           </button>

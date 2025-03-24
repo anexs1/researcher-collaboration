@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
-import "../index.css"; // Make sure this is the correct path to your global CSS file!
+import "../index.css";
+import Publication from "./Publication"; // Import Publication component
 
 export default function Profile() {
   const [user, setUser] = useState(null);
@@ -8,6 +9,7 @@ export default function Profile() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [showPublicationForm, setShowPublicationForm] = useState(false); // New state
 
   const [formData, setFormData] = useState({
     username: "",
@@ -152,9 +154,12 @@ export default function Profile() {
     }));
   };
 
-  // Function to trigger file input programmatically
   const triggerFileInput = () => {
     fileInputRef.current.click();
+  };
+
+  const handleTogglePublicationForm = () => {
+    setShowPublicationForm(!showPublicationForm);
   };
 
   if (isLoading) {
@@ -174,8 +179,6 @@ export default function Profile() {
       <div className="relative py-3 sm:max-w-xl sm:mx-auto">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-300 to-blue-600 shadow-lg transform -skew-y-6 sm:skew-y-0 sm:-rotate-6 sm:rounded-3xl"></div>
         <div className="relative px-4 py-10 bg-white shadow-lg sm:rounded-3xl sm:p-20">
-          {/* Removed Navbar here */}
-
           {/* New Header Section */}
           <div className="flex items-center space-x-4">
             <img
@@ -187,7 +190,6 @@ export default function Profile() {
               alt="Profile"
               className="w-20 h-20 rounded-full object-cover border-2 border-white shadow-md"
             />
-            {/* Use a button to trigger the file input for better accessibility */}
             <button
               onClick={triggerFileInput}
               className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
@@ -365,7 +367,20 @@ export default function Profile() {
                 {formData.researchInterests || "Not provided"}
               </div>
             )}
+            {/* Post Publication Button */}
+            <button
+              onClick={handleTogglePublicationForm}
+              className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline mt-4"
+            >
+              Post Publication
+            </button>
 
+            {/* Render Publication Component if the button is clicked */}
+            {showPublicationForm && (
+              <div className="mt-4">
+                <Publication isLoggedIn={true} /> {/* Pass isLoggedIn prop */}
+              </div>
+            )}
             {/* Edit/Save Buttons */}
             <div className="mt-8 flex justify-end">
               {editing ? (

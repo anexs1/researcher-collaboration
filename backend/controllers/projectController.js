@@ -1,65 +1,63 @@
-// controllers/projectController.js
-import projectModel from "../models/projectModel.js"; // Add .js extension
+const Project = require("../models/projectModel");
 
-const projectController = {
-  getAllProjects: async (req, res) => {
-    try {
-      const projects = await projectModel.getAllProjects();
-      res.json(projects);
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: "Failed to get projects" });
-    }
-  },
-
-  getProjectById: async (req, res) => {
-    const { id } = req.params;
-    try {
-      const project = await projectModel.getProjectById(id);
-      if (project) {
-        res.json(project);
-      } else {
-        res.status(404).json({ error: "Project not found" });
-      }
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: "Failed to get project" });
-    }
-  },
-
-  createProject: async (req, res) => {
-    try {
-      const projectId = await projectModel.createProject(req.body);
-      res
-        .status(201)
-        .json({ id: projectId, message: "Project created successfully" });
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: "Failed to create project" });
-    }
-  },
-
-  updateProject: async (req, res) => {
-    const { id } = req.params;
-    try {
-      await projectModel.updateProject(id, req.body);
-      res.json({ message: "Project updated successfully" });
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: "Failed to update project" });
-    }
-  },
-
-  deleteProject: async (req, res) => {
-    const { id } = req.params;
-    try {
-      await projectModel.deleteProject(id);
-      res.json({ message: "Project deleted successfully" });
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: "Failed to delete project" });
-    }
-  },
+const getProjects = async (req, res) => {
+  try {
+    const projects = await Project.getAll();
+    res.json(projects);
+  } catch (error) {
+    console.error("Error fetching projects:", error);
+    res.status(500).json({ error: "Failed to fetch projects" });
+  }
 };
 
-export default projectController; // Use default export
+const createProject = async (req, res) => {
+  try {
+    const { title, description, status, collaborators } = req.body;
+    const project = await Project.create(
+      title,
+      description,
+      status,
+      collaborators
+    );
+    res.status(201).json({ message: "Project created successfully", project });
+  } catch (error) {
+    console.error("Error creating project:", error);
+    res.status(500).json({ error: "Failed to create project" });
+  }
+};
+
+const updateProject = async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const { title, description, status, collaborators } = req.body;
+    const project = await Project.update(
+      requestId,
+      title,
+      description,
+      status,
+      collaborators
+    );
+    res.json({ message: "Project updated successfully", project });
+  } catch (error) {
+    console.error("Error updating project:", error);
+    res.status(500).json({ error: "Failed to update project" });
+  }
+};
+
+const deleteProject = async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    await Project.delete(requestId);
+    res.json({ message: "Project deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting project:", error);
+    res.status(500).json({ error: "Failed to delete project" });
+  }
+};
+
+module.exports = {
+  getProjects,
+  createProject,
+  updateProject,
+  deleteProject,
+};
