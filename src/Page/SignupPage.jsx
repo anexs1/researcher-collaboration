@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import "../index.css";
 
 const SignupPage = () => {
   const [username, setUsername] = useState("");
@@ -14,58 +15,61 @@ const SignupPage = () => {
   const [profileImage, setProfileImage] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
-
+  const [role, setRole] = useState("user"); // Add role state, default to "user"
   const navigate = useNavigate();
 
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const img = new Image();
-        img.src = event.target.result;
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d");
+  const handleImageChange = useCallback(
+    (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const img = new Image();
+          img.src = event.target.result;
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
 
-          const size = 600; // Passport size: 600x600 pixels
-          canvas.width = size;
-          canvas.height = size;
+            const size = 600; // Passport size: 600x600 pixels
+            canvas.width = size;
+            canvas.height = size;
 
-          // Center and crop image
-          const scale = Math.min(img.width / size, img.height / size);
-          const sx = (img.width - size * scale) / 2;
-          const sy = (img.height - size * scale) / 2;
+            // Center and crop image
+            const scale = Math.min(img.width / size, img.height / size);
+            const sx = (img.width - size * scale) / 2;
+            const sy = (img.height - size * scale) / 2;
 
-          ctx.beginPath();
-          ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
-          ctx.clip();
+            ctx.beginPath();
+            ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+            ctx.clip();
 
-          ctx.drawImage(
-            img,
-            sx,
-            sy,
-            size * scale,
-            size * scale,
-            0,
-            0,
-            size,
-            size
-          );
+            ctx.drawImage(
+              img,
+              sx,
+              sy,
+              size * scale,
+              size * scale,
+              0,
+              0,
+              size,
+              size
+            );
 
-          canvas.toBlob(
-            (blob) => {
-              setProfileImage(blob);
-              setPreviewImage(URL.createObjectURL(blob));
-            },
-            "image/jpeg",
-            0.9
-          );
+            canvas.toBlob(
+              (blob) => {
+                setProfileImage(blob);
+                setPreviewImage(URL.createObjectURL(blob));
+              },
+              "image/jpeg",
+              0.9
+            );
+          };
         };
-      };
-      reader.readAsDataURL(file);
-    }
-  };
+        reader.readAsDataURL(file);
+      }
+    },
+    [setProfileImage, setPreviewImage]
+  );
 
   const handleSignup = async (event) => {
     event.preventDefault();
@@ -92,6 +96,7 @@ const SignupPage = () => {
     formData.append("bio", bio);
     formData.append("location", location);
     formData.append("phone", phone);
+    formData.append("role", role); //  Send the role to the backend
 
     if (profileImage) {
       formData.append("profileImage", profileImage, "profile.jpg"); // Add filename
@@ -104,6 +109,7 @@ const SignupPage = () => {
         {
           headers: {
             "Content-Type": "multipart/form-data",
+            Authorization: `Bearer ${localStorage.getItem("authToken")}`,
           },
         }
       );
@@ -129,6 +135,7 @@ const SignupPage = () => {
       setPhone("");
       setProfileImage(null);
       setPreviewImage(null);
+      setRole("user"); // Reset to default role
     } catch (error) {
       console.error("Signup Error:", error.response?.data || error);
       setErrorMessage(
@@ -223,6 +230,23 @@ const SignupPage = () => {
               className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+          {/* ROLE Field --  ONLY SHOW TO ADMINS*/}
+          {localStorage.getItem("role") === "admin" && (
+            <div>
+              <label htmlFor="role">Role:</label>
+              <select
+                id="role"
+                name="role"
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="user">User</option>
+                <option value="moderator">Moderator</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+          )}
           <div>
             <input
               type="file"

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import "../index.css";
+import { motion } from "framer-motion";
 import { FaStar, FaHeart, FaEye } from "react-icons/fa"; //Import heart and eye icon
 
 const Home = () => {
@@ -121,6 +122,168 @@ const Home = () => {
 
   const toggleAboutSection = () => {
     setShowFullAbout(!showFullAbout);
+  };
+
+  const HowItWorks = () => {
+    const steps = [
+      {
+        title: "1. Create a Profile",
+        description: "Sign up and showcase your research expertise.",
+        delay: 0,
+      },
+      {
+        title: "2. Find Collaboration Projects",
+        description: "Search for collaboration projects and apply easily.",
+        delay: 0.2,
+      },
+      {
+        title: "3. Connect & Collaborate",
+        description:
+          "Chat with researchers and start working on projects together.",
+        delay: 0.4,
+      },
+    ];
+
+    const categories = [
+      "Artificial Intelligence",
+      "Data Science",
+      "Cybersecurity",
+      "Biomedical Research",
+      "Climate Science",
+      "Social Sciences",
+    ];
+
+    return (
+      <div>
+        {/* How It Works Section */}
+        <section className="py-16 px-6">
+          <motion.h2
+            initial={{ opacity: 0, x: -50 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.8 }}
+            className="text-4xl font-bold mb-12 text-center text-gray-800"
+          >
+            How It Works
+          </motion.h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {steps.map((step, index) => (
+              <motion.div
+                key={index}
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: step.delay, duration: 0.5 }}
+                className="bg-white p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-transform hover:scale-105"
+              >
+                <h3 className="text-xl font-semibold mb-4 text-gray-700">
+                  {step.title}
+                </h3>
+                <p className="text-gray-600">{step.description}</p>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        {/* Research Categories Section */}
+        <section className="py-16 px-6 bg-gradient-to-br from-gray-200 to-blue-200">
+          <motion.h2
+            initial={{ opacity: 0, x: 50 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.8 }}
+            className="text-4xl font-bold mb-12 text-center text-gray-800"
+          >
+            Explore Research Categories
+          </motion.h2>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+            {categories.map((category, index) => (
+              <motion.div
+                key={index}
+                whileHover={{ scale: 1.1 }}
+                className="bg-white p-5 rounded-3xl shadow-md hover:shadow-lg text-center cursor-pointer"
+              >
+                {category}
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        {/* About Us Section */}
+        <section className="py-16 px-6">
+          <motion.h2
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+            className="text-4xl font-bold mb-12 text-center text-gray-800"
+          >
+            About Us
+          </motion.h2>
+
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5, duration: 1 }}
+            className="text-gray-700 leading-relaxed text-center"
+          >
+            The Researcher Collaboration Portal is designed to help academics
+            and professionals connect effortlessly. Our platform enables
+            seamless networking and collaboration for research projects.
+          </motion.p>
+        </section>
+
+        {/* Contact Section */}
+        <section className="py-16 px-6 bg-gradient-to-br from-gray-200 to-blue-200">
+          <h2 className="text-3xl font-semibold mb-12 text-center text-gray-800 animate-slide-in-right">
+            Contact Us
+          </h2>
+          <p className="text-gray-700 leading-relaxed text-center mb-8 animate-fade-in">
+            Have any questions? Reach out to us!
+          </p>
+          <form
+            className="max-w-md mx-auto"
+            onSubmit={handleContactSubmit}
+            aria-label="Contact Form"
+          >
+            <input
+              type="text"
+              placeholder="Your Name"
+              required
+              className="w-full p-4 rounded-md border border-gray-300 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 animate-slide-in-bottom"
+              aria-label="Your Name"
+            />
+            <input
+              type="email"
+              placeholder="Your Email"
+              required
+              className="w-full p-4 rounded-md border border-gray-300 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 animate-slide-in-bottom delay-100"
+              aria-label="Your Email"
+            />
+            <textarea
+              placeholder="Your Message"
+              rows="4"
+              required
+              className="w-full p-4 rounded-md border border-gray-300 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 animate-slide-in-bottom delay-200"
+              aria-label="Your Message"
+            ></textarea>
+            <button
+              type="submit"
+              className="w-full bg-blue-600 text-white font-bold py-4 rounded-md hover:bg-blue-700 transition-colors animate-pulse"
+              aria-label="Send Message"
+            >
+              Send Message
+            </button>
+          </form>
+        </section>
+
+        {/* Footer */}
+        <footer className="bg-gray-800 text-white py-8 px-6 text-center">
+          <p>
+            © 2025 Researcher Collaboration Portal. All Rights Reserved. Worked
+            by G4 IT
+          </p>
+        </footer>
+      </div>
+    );
   };
 
   return (
@@ -285,228 +448,7 @@ const Home = () => {
           {loadingPublications && <p>Loading new publications...</p>}
         </div>
       </section>
-
-      {/* How It Works Section */}
-      <section className="py-16 px-6">
-        <h2 className="text-3xl font-semibold mb-12 text-center text-gray-800 animate-slide-in-left">
-          How It Works
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="step-card bg-white p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-shadow animate-rotate">
-            <h3 className="text-xl font-semibold mb-4 text-gray-700">
-              1. Create a Profile
-            </h3>
-            <p className="text-gray-600">
-              Sign up and showcase your research expertise.
-            </p>
-          </div>
-          <div className="step-card bg-white p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-shadow animate-rotate delay-100">
-            <h3 className="text-xl font-semibold mb-4 text-gray-700">
-              2. Find Collaboration Projects
-            </h3>
-            <p className="text-gray-600">
-              Search for collaboration projects and apply easily.
-            </p>
-          </div>
-          <div className="step-card bg-white p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-shadow animate-rotate delay-200">
-            <h3 className="text-xl font-semibold mb-4 text-gray-700">
-              3. Connect & Collaborate
-            </h3>
-            <p className="text-gray-600">
-              Chat with researchers and start working on projects together.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Research Categories Section */}
-      <section className="py-16 px-6 bg-gradient-to-br from-gray-200 to-blue-200">
-        <h2 className="text-3xl font-semibold mb-12 text-center text-gray-800 animate-slide-in-right">
-          Explore Research Categories
-        </h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
-          <div className="category-item bg-white p-5 rounded-3xl shadow-md hover:shadow-lg transition-transform hover:scale-105 text-center">
-            Artificial Intelligence
-          </div>
-          <div className="category-item bg-white p-5 rounded-3xl shadow-md hover:shadow-lg transition-transform hover:scale-105 text-center">
-            Data Science
-          </div>
-          <div className="category-item bg-white p-5 rounded-3xl shadow-md hover:shadow-lg transition-transform hover:scale-105 text-center">
-            Cybersecurity
-          </div>
-          <div className="category-item bg-white p-5 rounded-3xl shadow-md hover:shadow-lg transition-transform hover:scale-105 text-center">
-            Biomedical Research
-          </div>
-          <div className="category-item bg-white p-5 rounded-3xl shadow-md hover:shadow-lg transition-transform hover:scale-105 text-center">
-            Climate Science
-          </div>
-          <div className="category-item bg-white p-5 rounded-3xl shadow-md hover:shadow-lg transition-transform hover:scale-105 text-center">
-            Social Sciences
-          </div>
-        </div>
-      </section>
-
-      {/* About Section */}
-      <section className="py-16 px-6">
-        <h2 className="text-3xl font-semibold mb-12 text-center text-gray-800 animate-slide-in-left">
-          About Us
-        </h2>
-        <p className="text-gray-700 leading-relaxed text-center animate-fade-in">
-          The Researcher Collaboration Portal is designed to help academics and
-          professionals connect effortlessly. Our platform enables seamless
-          networking and collaboration for research projects.
-        </p>
-      </section>
-      {/* Testimonials Section */}
-      <section className="py-16 px-6 bg-gradient-to-br from-gray-200 to-blue-200">
-        <h2 className="text-3xl font-semibold mb-12 text-center text-gray-800 animate-slide-in-right">
-          What Our Users Say
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {testimonials.map((testimonial) => (
-            <div
-              key={testimonial.id}
-              className="testimonial-card bg-white p-8 rounded-3xl shadow-md hover:shadow-lg transition-transform hover:scale-105 animate-fade-in"
-            >
-              <div className="flex items-center mb-4">
-                <img
-                  src={testimonial.image}
-                  alt={testimonial.name}
-                  className="w-16 h-16 rounded-full object-cover mr-4 border-2 border-blue-300"
-                />
-                <div>
-                  <h4 className="text-lg font-semibold text-gray-700">
-                    {testimonial.name}
-                  </h4>
-                  <p className="text-gray-600">{testimonial.title}</p>
-                </div>
-              </div>
-              <p className="text-gray-600">{testimonial.quote}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-      {/* FAQ Section */}
-      <section className="py-16 px-6 bg-gray-100">
-        <h2 className="text-3xl font-semibold mb-12 text-center text-gray-800 animate-slide-in-left">
-          Frequently Asked Questions
-        </h2>
-        <div className="space-y-6">
-          <div className="faq-card p-8 rounded-2xl shadow-md hover:shadow-lg transition-shadow animate-fade-in">
-            <h3 className="text-xl font-semibold mb-4">
-              How can I find a research partner?
-            </h3>
-            <p>
-              You can browse collaboration opportunities or search for
-              researchers by expertise, field, or location. The platform also
-              allows you to filter researchers by their qualifications and
-              previous projects to ensure the best fit.
-            </p>
-          </div>
-          <div className="faq-card p-8 rounded-2xl shadow-md hover:shadow-lg transition-shadow animate-fade-in delay-100">
-            <h3 className="text-xl font-semibold mb-4">Is my data secure?</h3>
-            <p>
-              Yes! We ensure end-to-end encryption for all communications. We
-              follow industry best practices to secure your personal and project
-              data, using secure protocols and regular security audits to
-              protect your information.
-            </p>
-          </div>
-          <div className="faq-card p-8 rounded-2xl shadow-md hover:shadow-lg transition-shadow animate-fade-in delay-200">
-            <h3 className="text-xl font-semibold mb-4">
-              Can I send direct messages to researchers?
-            </h3>
-            <p>
-              Absolutely! Our platform provides real-time messaging
-              functionality, allowing you to connect with researchers directly.
-              You can send inquiries or project proposals through private chats.
-            </p>
-          </div>
-          <div className="faq-card p-8 rounded-2xl shadow-md hover:shadow-lg transition-shadow animate-fade-in delay-300">
-            <h3 className="text-xl font-semibold mb-4">
-              How can I update my profile?
-            </h3>
-            <p>
-              You can easily update your profile by accessing the "My Profile"
-              section from your dashboard. There, you can update your
-              qualifications, research interests, and contact details at any
-              time.
-            </p>
-          </div>
-          <div className="faq-card p-8 rounded-2xl shadow-md hover:shadow-lg transition-shadow animate-fade-in delay-400">
-            <h3 className="text-xl font-semibold mb-4">
-              What happens after I send a collaboration request?
-            </h3>
-            <p>
-              Once you send a request, the researcher will be notified and can
-              either approve or deny your request. If approved, you will be able
-              to start collaborating and sharing relevant materials securely.
-            </p>
-          </div>
-          <div className="faq-card p-8 rounded-2xl shadow-md hover:shadow-lg transition-shadow animate-fade-in delay-500">
-            <h3 className="text-xl font-semibold mb-4">
-              Do I need to pay to use the platform?
-            </h3>
-            <p>
-              No, the platform is completely free for all registered users. We
-              provide access to all research tools and collaboration features at
-              no cost to help foster academic collaboration.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Contact Section */}
-      <section className="py-16 px-6 bg-gradient-to-br from-gray-200 to-blue-200">
-        <h2 className="text-3xl font-semibold mb-12 text-center text-gray-800 animate-slide-in-right">
-          Contact Us
-        </h2>
-        <p className="text-gray-700 leading-relaxed text-center mb-8 animate-fade-in">
-          Have any questions? Reach out to us!
-        </p>
-        <form
-          className="max-w-md mx-auto"
-          onSubmit={handleContactSubmit}
-          aria-label="Contact Form"
-        >
-          <input
-            type="text"
-            placeholder="Your Name"
-            required
-            className="w-full p-4 rounded-md border border-gray-300 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 animate-slide-in-bottom"
-            aria-label="Your Name"
-          />
-          <input
-            type="email"
-            placeholder="Your Email"
-            required
-            className="w-full p-4 rounded-md border border-gray-300 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 animate-slide-in-bottom delay-100"
-            aria-label="Your Email"
-          />
-          <textarea
-            placeholder="Your Message"
-            rows="4"
-            required
-            className="w-full p-4 rounded-md border border-gray-300 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 animate-slide-in-bottom delay-200"
-            aria-label="Your Message"
-          ></textarea>
-          <button
-            type="submit"
-            className="w-full bg-blue-600 text-white font-bold py-4 rounded-md hover:bg-blue-700 transition-colors animate-pulse"
-            aria-label="Send Message"
-          >
-            Send Message
-          </button>
-        </form>
-      </section>
-
-      {/* Footer */}
-      <footer className="bg-gray-800 text-white py-8 px-6 text-center">
-        <p>
-          © 2025 Researcher Collaboration Portal. All Rights Reserved. Worked by
-          G4 IT
-        </p>
-      </footer>
+      <HowItWorks />
     </div>
   );
 };

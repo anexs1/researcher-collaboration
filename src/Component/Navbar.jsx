@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import Notifications from "./Notifications";
 import ProfileMenu from "./ProfileMenu";
+
 import "../index.css";
 
 const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {

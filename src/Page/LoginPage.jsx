@@ -15,8 +15,16 @@ export default function LoginPage({ setIsLoggedIn, setIsAdmin }) {
       .then((response) => {
         setIsLoggedIn(true);
         localStorage.setItem("authToken", response.data.token);
-        setIsAdmin(username === "admin");
-        navigate("/"); // Changed from navigate("/profile") to navigate("/")
+        localStorage.setItem("role", response.data.role);
+
+        // Check the user's role and navigate accordingly
+        if (response.data.role === "admin") {
+          setIsAdmin(true);
+          navigate("/admin"); // Redirect to admin page
+        } else {
+          setIsAdmin(false);
+          navigate("/"); // Redirect to the regular user page
+        }
       })
       .catch(() => setErrorMessage("Invalid credentials"));
   };
@@ -48,6 +56,7 @@ export default function LoginPage({ setIsLoggedIn, setIsAdmin }) {
             className="w-full p-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
           />
         </div>
+
         <button
           onClick={handleLogin}
           className="w-full py-3 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
