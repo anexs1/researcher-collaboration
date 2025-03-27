@@ -1,3 +1,4 @@
+// MyProjects.js (or wherever you render the projects)
 import React, { useState, useEffect, useCallback } from "react";
 import {
   FaEdit,
@@ -10,7 +11,8 @@ import {
 import axios from "axios"; // Import Axios for API calls
 import "../index.css";
 
-const MyProjects = () => {
+const MyProjects = ({ isLoggedIn }) => {
+  //  Receive isLoggedIn as a prop
   const [projects, setProjects] = useState([]);
   const [activeTab, setActiveTab] = useState("ongoing");
   const [loading, setLoading] = useState(true); // Loading state
@@ -200,13 +202,15 @@ const MyProjects = () => {
         </button>
       </div>
 
-      {/* Add Project Button */}
-      <button
-        className="add-project-btn bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded mb-4"
-        onClick={handleAddProject}
-      >
-        Add New Project
-      </button>
+      {/* Conditionally Render the "Add New Project" Button */}
+      {isLoggedIn && (
+        <button
+          className="add-project-btn bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded mb-4"
+          onClick={handleAddProject}
+        >
+          Add New Project
+        </button>
+      )}
 
       {/* Project List */}
       {loading ? (
@@ -249,18 +253,23 @@ const MyProjects = () => {
                     <FaUserPlus /> Invite
                   </button>
                   */}
-                  <button
-                    className="btn edit bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-3 rounded"
-                    onClick={() => handleEditProject(project)}
-                  >
-                    <FaEdit className="mr-1" /> Edit
-                  </button>
-                  <button
-                    className="btn delete bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-3 rounded"
-                    onClick={() => handleDeleteProject(project.id)}
-                  >
-                    <FaTrash className="mr-1" /> Delete
-                  </button>
+                  {/* Conditionally Render Edit and Delete Buttons */}
+                  {isLoggedIn && (
+                    <>
+                      <button
+                        className="btn edit bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-3 rounded"
+                        onClick={() => handleEditProject(project)}
+                      >
+                        <FaEdit className="mr-1" /> Edit
+                      </button>
+                      <button
+                        className="btn delete bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-3 rounded"
+                        onClick={() => handleDeleteProject(project.id)}
+                      >
+                        <FaTrash className="mr-1" /> Delete
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

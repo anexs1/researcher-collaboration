@@ -75,6 +75,8 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/explore" element={<Explore />} />
         <Route path="/publications" element={<Publication />} />
+        <Route path="/my-projects" element={<MyProjects />} />
+        <Route path="/messages" element={<Messages />} />
 
         {/* Authentication Routes */}
         <Route path="/admin/login" element={<LoginPage admin={true} />} />
