@@ -1,24 +1,22 @@
+// src/Component/Navbar.jsx
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import Notifications from "./Notifications";
 import ProfileMenu from "./ProfileMenu";
-
-import "../index.css";
+import "../index.css"; // Or your specific Navbar CSS
 
 const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false); // State for Chat Popup
 
   const closeMenu = () => setMenuOpen(false);
 
   return (
     <header className="relative bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg py-5 px-6 flex items-center justify-between transition-all duration-500 ease-in-out">
-      {/* Animated Background Blob */}
+      {/* ... (Animated Background Blob - keep as is) ... */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className="absolute bg-blue-300 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob"></div>
-        <div className="absolute bg-green-300 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob animation-delay-2000"></div>
-        <div className="absolute bg-yellow-300 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob animation-delay-4000"></div>
+        {" "}
+        ...{" "}
       </div>
 
       <Link
@@ -28,146 +26,108 @@ const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
         Researcher Collaboration Portal
       </Link>
 
-      <nav
-        className={`nav-links flex items-center space-x-8 ${
-          menuOpen
-            ? "block opacity-100 translate-y-0"
-            : "hidden opacity-0 -translate-y-4"
-        } md:flex md:space-x-8 md:block relative z-10 transition-opacity duration-500 ease-in-out md:opacity-100 md:translate-y-0`}
+      {/* --- Hamburger Icon (For Mobile - keep as is) --- */}
+      <button
+        className="md:hidden text-white focus:outline-none relative z-10"
+        onClick={() => setMenuOpen(!menuOpen)}
       >
-        <ul className="flex flex-col md:flex-row md:space-x-8 items-center">
+        {/* ... (SVG Icon - keep as is) ... */}
+        <svg
+          className="w-7 h-7 fill-current"
+          viewBox="0 0 20 20"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          {" "}
+          ...{" "}
+        </svg>
+      </button>
+
+      {/* --- Navigation Links --- */}
+      {/* Apply mobile visibility logic here */}
+      <nav
+        className={`absolute md:relative top-full left-0 right-0 bg-gradient-to-r from-purple-500 to-pink-500 md:bg-none md:top-auto md:left-auto md:right-auto p-4 md:p-0 transition-all duration-300 ease-in-out ${
+          menuOpen
+            ? "opacity-100 translate-y-0"
+            : "opacity-0 -translate-y-4 pointer-events-none"
+        } md:opacity-100 md:translate-y-0 md:pointer-events-auto flex-grow md:flex-grow-0 md:block z-10 md:z-auto`}
+      >
+        <ul className="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-4 lg:space-x-6">
+          {" "}
+          {/* Adjusted spacing */}
+          {/* --- Common Links --- */}
           <li>
-            <Link
-              to="/"
-              onClick={closeMenu}
-              className="relative group overflow-hidden py-2 px-3 rounded-lg hover:bg-white hover:text-purple-600 transition-colors duration-300"
-            >
-              <span className="relative z-10">🏠 Homes</span>
-              <span className="absolute bottom-0 left-0 w-full h-0.5 bg-purple-500 transform origin-left scale-x-0 transition-transform duration-300 group-hover:scale-x-100"></span>
+            <Link to="/" onClick={closeMenu} className="navbar-link-style">
+              🏠 Home
             </Link>
           </li>
           <li>
             <Link
               to="/explore"
               onClick={closeMenu}
-              className="relative group overflow-hidden py-2 px-3 rounded-lg hover:bg-white hover:text-purple-600 transition-colors duration-300"
+              className="navbar-link-style"
             >
-              <span className="relative z-10">🔬 Explore</span>
-              <span className="absolute bottom-0 left-0 w-full h-0.5 bg-purple-500 transform origin-left scale-x-0 transition-transform duration-300 group-hover:scale-x-100"></span>
+              🔬 Explore
             </Link>
           </li>
-          <li>
-            <Link
-              to="/my-projects"
-              onClick={closeMenu}
-              className="relative group overflow-hidden py-2 px-3 rounded-lg hover:bg-white hover:text-purple-600 transition-colors duration-300"
-            >
-              <span className="relative z-10">📁 My Projects</span>
-              <span className="absolute bottom-0 left-0 w-full h-0.5 bg-purple-500 transform origin-left scale-x-0 transition-transform duration-300 group-hover:scale-x-100"></span>
-            </Link>
-          </li>
-          <li>
-            <Link
-              to="/publications"
-              onClick={closeMenu}
-              className="relative group overflow-hidden py-2 px-3 rounded-lg hover:bg-white hover:text-purple-600 transition-colors duration-300"
-            >
-              <span className="relative z-10">📰 Publications</span>
-              <span className="absolute bottom-0 left-0 w-full h-0.5 bg-purple-500 transform origin-left scale-x-0 transition-transform duration-300 group-hover:scale-x-100"></span>
-            </Link>
-          </li>
-          <li>
-            <Link
-              to="/messages"
-              onClick={closeMenu}
-              className="relative group overflow-hidden py-2 px-3 rounded-lg hover:bg-white hover:text-purple-600 transition-colors duration-300"
-            >
-              <span className="relative z-10">💬 Messages</span>
-              <span className="absolute bottom-0 left-0 w-full h-0.5 bg-purple-500 transform origin-left scale-x-0 transition-transform duration-300 group-hover:scale-x-100"></span>
-            </Link>
-          </li>
-
-          {/* Notifications Component */}
+          {/* --- Logged In User Links --- */}
           {isLoggedIn && (
+            <>
+              <li>
+                <Link
+                  to="/my-projects"
+                  onClick={closeMenu}
+                  className="navbar-link-style"
+                >
+                  📁 My Projects
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/publications"
+                  onClick={closeMenu}
+                  className="navbar-link-style"
+                >
+                  📰 Publications
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/messages"
+                  onClick={closeMenu}
+                  className="navbar-link-style"
+                >
+                  💬 Messages
+                </Link>
+              </li>
+              <li>
+                <Notifications />
+              </li>
+            </>
+          )}
+          {/* --- ADMIN SECTION --- */}
+          {/* 1. Link to Admin Login Page (Visible only when LOGGED OUT) */}
+          {!isLoggedIn && (
             <li>
-              <Notifications />
+              <Link
+                to="/admin-login" // Points to the new route
+                onClick={closeMenu}
+                className="navbar-link-style font-semibold text-yellow-200 hover:text-white" // Example distinct style
+              >
+                👑 Admin
+              </Link>
             </li>
           )}
-
-          {/* Admin Panel - Dropdown for Admins */}
-          {isAdmin && (
-            <li
-              className="relative group"
-              onMouseEnter={() => setAdminDropdownOpen(true)}
-              onMouseLeave={() => setAdminDropdownOpen(false)}
-            >
-              <button className="relative z-10 bg-purple-400 hover:bg-purple-300 text-white font-semibold py-2 px-4 rounded-full transition-colors duration-300">
-                ⚙️ Admin
-              </button>
-              {adminDropdownOpen && (
-                <ul className="dropdown-menu absolute right-0 mt-2 py-2 w-48 bg-white rounded-lg shadow-xl z-20 transform scale-0 group-hover:scale-100 transition-transform duration-300 origin-top-right">
-                  <li>
-                    <Link
-                      to="/admin"
-                      onClick={closeMenu}
-                      className="block px-4 py-2 text-gray-800 hover:bg-gray-100 transition-colors duration-300"
-                    >
-                      Dashboard
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      to="/admin/users"
-                      onClick={closeMenu}
-                      className="block px-4 py-2 text-gray-800 hover:bg-gray-100 transition-colors duration-300"
-                    >
-                      Manage Users
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      to="/admin/reports"
-                      onClick={closeMenu}
-                      className="block px-4 py-2 text-gray-800 hover:bg-gray-100 transition-colors duration-300"
-                    >
-                      View Reports
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      to="/admin/settings"
-                      onClick={closeMenu}
-                      className="block px-4 py-2 text-gray-800 hover:bg-gray-100 transition-colors duration-300"
-                    >
-                      Settings
-                    </Link>
-                  </li>
-                </ul>
-              )}
-            </li>
-          )}
-
-          {/* Profile Menu Component */}
           <li>
-            <ProfileMenu isLoggedIn={isLoggedIn} onLogout={onLogout} />
+            <ProfileMenu
+              isLoggedIn={isLoggedIn}
+              onLogout={() => {
+                closeMenu();
+                onLogout();
+              }}
+            />
           </li>
         </ul>
       </nav>
-
-      {/* Hamburger Icon (For Mobile) */}
-      <button
-        className="md:hidden text-white focus:outline-none relative z-10"
-        onClick={() => setMenuOpen(!menuOpen)}
-      >
-        <svg
-          className="w-7 h-7 fill-current"
-          viewBox="0 0 20 20"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <title>Menu</title>
-          <path d="M0 3h20v2H0V3zm0 6h20v2H0V9zm0 6h20v2H0v-6z" />
-        </svg>
-      </button>
     </header>
   );
 };

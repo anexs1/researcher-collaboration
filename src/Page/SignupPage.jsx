@@ -1,277 +1,150 @@
-import React, { useState, useCallback } from "react";
-import axios from "axios";
-import { useNavigate } from "react-router-dom";
-import "../index.css";
+import { Link, useNavigate } from "react-router-dom";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faUserGraduate,
+  faBuilding,
+  faStethoscope,
+  faUser,
+} from "@fortawesome/free-solid-svg-icons";
 
-const SignupPage = () => {
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [expertise, setExpertise] = useState("");
-  const [bio, setBio] = useState("");
-  const [location, setLocation] = useState("");
-  const [phone, setPhone] = useState("");
-  const [profileImage, setProfileImage] = useState(null);
-  const [previewImage, setPreviewImage] = useState(null);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [role, setRole] = useState("user"); // Add role state, default to "user"
+const SignUp = () => {
   const navigate = useNavigate();
 
-  const handleImageChange = useCallback(
-    (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const img = new Image();
-          img.src = event.target.result;
-          img.onload = () => {
-            const canvas = document.createElement("canvas");
-            const ctx = canvas.getContext("2d");
-
-            const size = 600; // Passport size: 600x600 pixels
-            canvas.width = size;
-            canvas.height = size;
-
-            // Center and crop image
-            const scale = Math.min(img.width / size, img.height / size);
-            const sx = (img.width - size * scale) / 2;
-            const sy = (img.height - size * scale) / 2;
-
-            ctx.beginPath();
-            ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
-            ctx.clip();
-
-            ctx.drawImage(
-              img,
-              sx,
-              sy,
-              size * scale,
-              size * scale,
-              0,
-              0,
-              size,
-              size
-            );
-
-            canvas.toBlob(
-              (blob) => {
-                setProfileImage(blob);
-                setPreviewImage(URL.createObjectURL(blob));
-              },
-              "image/jpeg",
-              0.9
-            );
-          };
-        };
-        reader.readAsDataURL(file);
-      }
-    },
-    [setProfileImage, setPreviewImage]
-  );
-
-  const handleSignup = async (event) => {
-    event.preventDefault();
-
-    // Validate inputs
-    if (!username || !email || !password || !confirmPassword) {
-      setErrorMessage("All fields are required.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setErrorMessage("Passwords do not match.");
-      return;
-    }
-
-    setErrorMessage("");
-
-    const formData = new FormData();
-    formData.append("username", username);
-    formData.append("email", email);
-    formData.append("password", password);
-    formData.append("confirmPassword", confirmPassword);
-    formData.append("expertise", expertise);
-    formData.append("bio", bio);
-    formData.append("location", location);
-    formData.append("phone", phone);
-    formData.append("role", role); //  Send the role to the backend
-
-    if (profileImage) {
-      formData.append("profileImage", profileImage, "profile.jpg"); // Add filename
-    }
-
-    try {
-      const response = await axios.post(
-        "http://localhost:5000/api/auth/signup",
-        formData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-            Authorization: `Bearer ${localStorage.getItem("authToken")}`,
-          },
-        }
-      );
-
-      console.log("User signed up successfully", response.data);
-
-      // Trigger custom event to refresh new users on Home page
-      window.dispatchEvent(
-        new CustomEvent("newusersignup", {
-          detail: { username: username, email: email }, // Optional: Pass user data
-        })
-      );
-
-      // Navigate to the login page
-      navigate("/login");
-
-      // Reset form fields (but keep username and email for better UX)
-      setPassword("");
-      setConfirmPassword("");
-      setExpertise("");
-      setBio("");
-      setLocation("");
-      setPhone("");
-      setProfileImage(null);
-      setPreviewImage(null);
-      setRole("user"); // Reset to default role
-    } catch (error) {
-      console.error("Signup Error:", error.response?.data || error);
-      setErrorMessage(
-        error.response?.data?.message || "An error occurred during signup"
-      );
-    }
+  const handleSignUpClick = (userType) => {
+    navigate(`/signup/${userType}`);
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-md">
-        <h2 className="text-2xl font-semibold text-gray-700 mb-4">
-          User Signup
-        </h2>
-        {errorMessage && (
-          <p className="text-red-500 text-sm mb-4">{errorMessage}</p>
-        )}
-        <form onSubmit={handleSignup} className="space-y-4">
-          <div>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Username"
-              required
-              className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Email"
-              required
-              className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password"
-              required
-              className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Confirm Password"
-              required
-              className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <input
-              type="text"
-              value={expertise}
-              onChange={(e) => setExpertise(e.target.value)}
-              placeholder="Expertise"
-              className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <input
-              type="text"
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              placeholder="Bio"
-              className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <input
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="Location"
-              className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <input
-              type="text"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="Phone"
-              className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          {/* ROLE Field --  ONLY SHOW TO ADMINS*/}
-          {localStorage.getItem("role") === "admin" && (
-            <div>
-              <label htmlFor="role">Role:</label>
-              <select
-                id="role"
-                name="role"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="user">User</option>
-                <option value="moderator">Moderator</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
-          )}
-          <div>
-            <input
-              type="file"
-              onChange={handleImageChange}
-              accept="image/*"
-              className="p-2"
-            />
-            {previewImage && (
-              <img
-                src={previewImage}
-                alt="Profile Preview"
-                className="rounded-full w-24 h-24 mt-4"
-              />
-            )}
-          </div>
-          <button
-            type="submit"
-            className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-gray-100 to-gray-200 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-3xl w-full space-y-8">
+        {/* Back to Home Button */}
+        <div className="text-left w-full">
+          <Link
+            to="/"
+            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
-            Signup
-          </button>
-        </form>
+            <svg
+              className="-ml-1 mr-2 h-5 w-5"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                fillRule="evenodd"
+                d="M7.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l2.293 2.293a1 1 0 010 1.414z"
+                clipRule="evenodd"
+              />
+            </svg>
+            Back to Home
+          </Link>
+        </div>
+
+        <div>
+          <h1 className="text-5xl font-extrabold text-gray-900 text-center leading-tight">
+            Join Research Pioneers
+          </h1>
+          <p className="mt-3 text-center text-xl text-gray-600">
+            Connect with over the World researchers, including Nobel Laureates.
+            Collaborate, discover, and elevate your research impact.
+          </p>
+        </div>
+
+        <div>
+          <h2 className="mt-8 text-center text-3xl font-semibold text-gray-700">
+            Explore Your Path
+          </h2>
+          <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-8">
+            <button
+              onClick={() => handleSignUpClick("academic")}
+              className="group relative block overflow-hidden bg-white border border-gray-200 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 transform hover:scale-105 focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2"
+            >
+              <span className="sr-only">Academic or Student</span>
+              <span className="absolute inset-0" aria-hidden="true" />
+              <div className="p-6 flex flex-col items-center justify-center">
+                <div className="h-16 w-16 flex items-center justify-center rounded-full bg-blue-100 group-hover:bg-blue-200 transition-colors duration-300 mb-4">
+                  <FontAwesomeIcon
+                    icon={faUserGraduate}
+                    size="lg"
+                    className="text-blue-500"
+                  />
+                </div>
+                <span className="block text-xl font-medium text-gray-900 text-center group-hover:text-blue-700 transition-colors duration-300">
+                  Academic or Student
+                </span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => handleSignUpClick("corporate")}
+              className="group relative block overflow-hidden bg-white border border-gray-200 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 transform hover:scale-105 focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2"
+            >
+              <span className="sr-only">Corporate, Government, or NGO</span>
+              <span className="absolute inset-0" aria-hidden="true" />
+              <div className="p-6 flex flex-col items-center justify-center">
+                <div className="h-16 w-16 flex items-center justify-center rounded-full bg-green-100 group-hover:bg-green-200 transition-colors duration-300 mb-4">
+                  <FontAwesomeIcon
+                    icon={faBuilding}
+                    size="lg"
+                    className="text-green-500"
+                  />
+                </div>
+                <span className="block text-xl font-medium text-gray-900 text-center group-hover:text-green-700 transition-colors duration-300">
+                  Corporate, Government, or NGO
+                </span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => handleSignUpClick("medical")}
+              className="group relative block overflow-hidden bg-white border border-gray-200 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 transform hover:scale-105 focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2"
+            >
+              <span className="sr-only">Medical</span>
+              <span className="absolute inset-0" aria-hidden="true" />
+              <div className="p-6 flex flex-col items-center justify-center">
+                <div className="h-16 w-16 flex items-center justify-center rounded-full bg-red-100 group-hover:bg-red-200 transition-colors duration-300 mb-4">
+                  <FontAwesomeIcon
+                    icon={faStethoscope}
+                    size="lg"
+                    className="text-red-500"
+                  />
+                </div>
+                <span className="block text-xl font-medium text-gray-900 text-center group-hover:text-red-700 transition-colors duration-300">
+                  Medical
+                </span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => handleSignUpClick("not-researcher")}
+              className="group relative block overflow-hidden bg-white border border-gray-200 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 transform hover:scale-105 focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2"
+            >
+              <span className="sr-only">Not a Researcher</span>
+              <span className="absolute inset-0" aria-hidden="true" />
+              <div className="p-6 flex flex-col items-center justify-center">
+                <div className="h-16 w-16 flex items-center justify-center rounded-full bg-yellow-100 group-hover:bg-yellow-200 transition-colors duration-300 mb-4">
+                  <FontAwesomeIcon
+                    icon={faUser}
+                    size="lg"
+                    className="text-yellow-500"
+                  />
+                </div>
+                <span className="block text-xl font-medium text-gray-900 text-center group-hover:text-yellow-700 transition-colors duration-300">
+                  Not a Researcher
+                </span>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <p className="text-center">
+          <Link to="/login" className="text-blue-600 hover:underline text-lg">
+            Already have an account? Log in
+          </Link>
+        </p>
       </div>
     </div>
   );
 };
 
-export default SignupPage;
+export default SignUp;

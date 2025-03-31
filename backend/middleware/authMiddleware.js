@@ -1,40 +1,31 @@
-// middleware/authMiddleware.js
 import jwt from "jsonwebtoken";
+import User from "../models/User.js";
 
-// Generic authentication middleware (verifies token and attaches user to req)
-export const authenticateToken = (req, res, next) => {
-  const authHeader = req.header("Authorization");
-  const token = authHeader && authHeader.split(" ")[1];
+export const protect = async (req, res, next) => {
+  let token;
 
-  if (!token) {
-    return res
-      .status(401)
-      .json({ message: "Access denied. No token provided." });
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith("Bearer")
+  ) {
+    try {
+      token = req.headers.authorization.split(" ")[1];
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const user = await User.findByPk(decoded.id);
+
+      if (!user) {
+        return res.status(404).json({ message: "No user found with this id" });
+      }
+
+      req.user = user;
+      next();
+    } catch (error) {
+      console.error(error);
+      return res.status(401).json({ message: "Not authorized, token failed" });
+    }
   }
 
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) {
-      console.error("JWT verification error:", err);
-      return res.status(403).json({ message: "Invalid token." });
-    }
-    req.user = user; // Attach decoded user information to the request
-    next();
-  });
-};
-
-// Role-based authorization middleware (dynamically checks for required roles)
-export const authorizeRoles = (...roles) => {
-  // ...roles is a rest parameter (array)
-  return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({ message: "Authentication required." }); // Not authenticated
-    }
-
-    if (!roles.includes(req.user.role)) {
-      // Check if the user's role is in the allowed roles
-      return res.status(403).json({ message: "Insufficient permissions." }); // Forbidden
-    }
-
-    next(); // User has the required role, proceed
-  };
+  if (!token) {
+    return res.status(401).json({ message: "Not authorized, no token" });
+  }
 };

@@ -1,18 +1,21 @@
-// src/Page/Profile.jsx
 import React, { useEffect, useState, useRef } from "react";
 import "../index.css";
 import Sidebar from "../Component/Sidebar";
-import { Outlet } from "react-router-dom";
+import { Outlet, useNavigate } from "react-router-dom";
+import { FaBell, FaEnvelope, FaFileUpload } from "react-icons/fa";
 
 export default function Profile() {
   const [user, setUser] = useState(null);
   const [editing, setEditing] = useState(false);
   const [newProfileImage, setNewProfileImage] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [notificationCount] = useState(3);
+  const [messageCount] = useState(2);
+  const navigate = useNavigate();
+
+  // Initialize formData with default values
   const [formData, setFormData] = useState({
-    username: "",
+    username: "ROHIT KOHLI", // Default value
     email: "",
     aboutMe: "",
     skills: "",
@@ -23,151 +26,72 @@ export default function Profile() {
       linkedin: "",
       twitter: "",
     },
-    collaborationStatus: "",
-    recentActivities: "",
     contactInfo: {
       email: "",
       phone: "",
     },
-    website: "",
-    experience: "",
-    education: "",
-    location: "",
-    profileImage: "",
-    password: "",
+    profileImage: "https://via.placeholder.com/150", // Default image
+    // ... other fields
   });
 
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    setIsLoading(true);
+    console.log("Fetching user data..."); // Debug log
     try {
       const storedUser = localStorage.getItem("user");
+      console.log("Stored user data:", storedUser); // Debug log
+
       if (storedUser) {
         const parsedUser = JSON.parse(storedUser);
-        setUser(parsedUser);
+        console.log("Parsed user data:", parsedUser); // Debug log
 
-        setFormData((prevFormData) => ({
-          ...prevFormData,
+        setUser(parsedUser);
+        setFormData((prev) => ({
+          ...prev,
           ...parsedUser,
           socialLinks: {
-            ...prevFormData.socialLinks,
-            ...parsedUser.socialLinks,
+            ...prev.socialLinks,
+            ...(parsedUser.socialLinks || {}),
           },
           contactInfo: {
-            ...prevFormData.contactInfo,
-            ...parsedUser.contactInfo,
+            ...prev.contactInfo,
+            ...(parsedUser.contactInfo || {}),
           },
+          profileImage: parsedUser.profileImage || prev.profileImage,
+          username: parsedUser.username || prev.username,
         }));
       }
     } catch (err) {
-      setError(err);
-      console.error("Error loading data from localStorage:", err);
-    } finally {
-      setIsLoading(false);
+      console.error("Error loading user data:", err);
     }
   }, []);
 
-  const handleEditToggle = () => {
-    setEditing(!editing);
+  // Debug current formData
+  useEffect(() => {
+    console.log("Current formData:", formData);
+  }, [formData]);
+
+  const triggerFileInput = () => {
+    fileInputRef.current?.click();
   };
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const handleSocialChange = (e) => {
-    setFormData({
-      ...formData,
-      socialLinks: { ...formData.socialLinks, [e.target.name]: e.target.value },
-    });
-  };
-
-  const handleContactChange = (e) => {
-    setFormData({
-      ...formData,
-      contactInfo: { ...formData.contactInfo, [e.target.name]: e.target.value },
-    });
-  };
-
-  const handleSave = () => {
-    try {
-      const userProfile = { ...formData };
-      delete userProfile.password;
-      localStorage.setItem("user", JSON.stringify(userProfile));
-      setUser(userProfile);
-      setEditing(false);
-      setShowConfirmation(true);
-      setTimeout(() => setShowConfirmation(false), 3000);
-    } catch (err) {
-      setError(err);
-      console.error("Error saving data to localStorage:", err);
-    }
-  };
-
-  const handleImageChange = async (e) => {
+  const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = async () => {
-        const img = new Image();
-        img.src = reader.result;
-
-        img.onload = async () => {
-          const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d");
-
-          const size = 300;
-          let width = img.width;
-          let height = img.height;
-
-          if (width > height) {
-            if (width > size) {
-              height *= size / width;
-              width = size;
-            }
-          } else {
-            if (height > size) {
-              width *= size / height;
-              height = size;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          ctx.drawImage(img, 0, 0, width, height);
-
-          const optimizedDataURL = canvas.toDataURL("image/jpeg", 0.7);
-          setNewProfileImage(optimizedDataURL);
-          setFormData({ ...formData, profileImage: optimizedDataURL });
-        };
+      reader.onload = (event) => {
+        setNewProfileImage(event.target.result);
+        setFormData((prev) => ({
+          ...prev,
+          profileImage: event.target.result,
+        }));
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const handleClearField = (fieldName) => {
-    setFormData((prevFormData) => ({
-      ...prevFormData,
-      [fieldName]: "",
-    }));
-  };
-
-  const triggerFileInput = () => {
-    fileInputRef.current.click();
-  };
-
-  if (isLoading) {
-    return <div className="loading">Loading profile...</div>;
-  }
-
-  if (error) {
-    return (
-      <div className="error">
-        Error loading profile data. Please try again later.
-      </div>
-    );
-  }
+  // ... keep other handler functions ...
 
   return (
     <div className="min-h-screen bg-gray-100 py-6 flex flex-col justify-center sm:py-12">
@@ -176,72 +100,89 @@ export default function Profile() {
         <div className="relative px-4 py-10 bg-white shadow-lg sm:rounded-3xl sm:p-20 flex">
           <Sidebar isLoggedIn={true} />
           <div className="w-full ml-8">
-            <div className="profile-header">
-              {" "}
-              {/* Apply the styling wrapper to the div */}
-              <img
-                src={
-                  newProfileImage ||
-                  formData?.profileImage ||
-                  "https://via.placeholder.com/150"
-                }
-                alt="Profile"
-                className="profile-image"
-              />
+            {/* Action Buttons */}
+            <div className="flex justify-end space-x-4 mb-6">
               <button
-                onClick={triggerFileInput}
-                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+                onClick={() => navigate("/publications/new")}
+                className="flex items-center bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded-lg"
               >
-                Change Photo
+                <FaFileUpload className="mr-2" />
+                Post Publication
               </button>
-              <div className="profile-info">
-                <h2 className="profile-username">
-                  {formData.username || "ROHIT KOHLI"}
-                </h2>
-                <h3 className="profile-title">Web Developer</h3>
+              <button
+                onClick={() => navigate("/messages")}
+                className="flex items-center bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg relative"
+              >
+                <FaEnvelope className="mr-2" />
+                Messages
+                {messageCount > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                    {messageCount}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => navigate("/notifications")}
+                className="flex items-center bg-purple-500 hover:bg-purple-600 text-white font-medium py-2 px-4 rounded-lg relative"
+              >
+                <FaBell className="mr-2" />
+                Notifications
+                {notificationCount > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                    {notificationCount}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* Profile Header */}
+            <div className="flex items-center mb-8">
+              <div className="relative mr-6">
+                <img
+                  src={newProfileImage || formData.profileImage}
+                  alt="Profile"
+                  className="w-24 h-24 rounded-full object-cover border-4 border-white shadow"
+                />
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleImageChange}
+                  className="hidden"
+                  accept="image/*"
+                />
+                <button
+                  onClick={triggerFileInput}
+                  className="absolute -bottom-2 -right-2 bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600"
+                >
+                  ✏️
+                </button>
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-800">
+                  {formData.username}
+                </h1>
+                <p className="text-gray-600">Researcher </p>
               </div>
             </div>
 
-            <div className="profile-content">
-              {" "}
-              {/* Apply the styling wrapper to the div */}
-              <Outlet
-                context={{
-                  formData,
-                  setFormData,
-                  editing,
-                  handleChange,
-                  handleSocialChange,
-                  handleContactChange,
-                  handleClearField,
-                }}
-              />
+            {/* Profile Content */}
+            <div className="bg-gray-50 p-6 rounded-lg">
+              <Outlet context={{ formData, setFormData, editing }} />
             </div>
 
-            <div className="mt-8 flex justify-end">
-              {editing ? (
-                <button
-                  onClick={handleSave}
-                  className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-                >
-                  Save
-                </button>
-              ) : (
-                <button
-                  onClick={handleEditToggle}
-                  className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-                >
-                  Edit
-                </button>
-              )}
+            {/* Edit/Save Button */}
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setEditing(!editing)}
+                className={`px-4 py-2 rounded-md text-white ${
+                  editing
+                    ? "bg-green-500 hover:bg-green-600"
+                    : "bg-blue-500 hover:bg-blue-600"
+                }`}
+              >
+                {editing ? "Save Profile" : "Edit Profile"}
+              </button>
             </div>
-
-            {/* Confirmation Message */}
-            {showConfirmation && (
-              <div className="mt-4 bg-green-200 border border-green-400 text-green-700 px-4 py-3 rounded relative">
-                Profile Saved!
-              </div>
-            )}
           </div>
         </div>
       </div>

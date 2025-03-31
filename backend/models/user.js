@@ -1,56 +1,63 @@
-// models/user.js
 import { DataTypes } from "sequelize";
-import sequelize from "../config/db.js"; // Import sequelize instance
+import sequelize from "../config/db.js";
+import bcrypt from "bcryptjs";
 
 const User = sequelize.define(
   "User",
   {
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
     username: {
       type: DataTypes.STRING,
       allowNull: false,
-      unique: true, // Make username unique
+      unique: true,
+      validate: {
+        notEmpty: true,
+        len: [3, 30],
+      },
     },
     email: {
       type: DataTypes.STRING,
       allowNull: false,
       unique: true,
       validate: {
-        isEmail: true, // Ensure email is valid
+        isEmail: true,
+        notEmpty: true,
       },
     },
     password: {
       type: DataTypes.STRING,
       allowNull: false,
+      validate: {
+        notEmpty: true,
+        len: [6, 100],
+      },
     },
-    expertise: {
-      type: DataTypes.STRING,
-      allowNull: true,
+    role: {
+      type: DataTypes.ENUM("user", "admin", "moderator", "academic"),
+      defaultValue: "user",
     },
-    bio: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
-    location: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-    phone: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-    profileImage: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
+    // Add other fields as needed
   },
   {
-    timestamps: false, // Disable timestamps (createdAt and updatedAt)
+    timestamps: true, // Adds createdAt and updatedAt
+    hooks: {
+      beforeSave: async (user) => {
+        if (user.changed("password")) {
+          const salt = await bcrypt.genSalt(10);
+          user.password = await bcrypt.hash(user.password, salt);
+        }
+      },
+    },
   }
 );
 
-// Define a method to find user by email
-User.findUserByEmail = async function (email) {
-  return await this.findOne({ where: { email } });
+// Password comparison method
+User.prototype.comparePassword = async function (candidatePassword) {
+  return await bcrypt.compare(candidatePassword, this.password);
 };
 
 export default User;
