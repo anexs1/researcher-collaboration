@@ -1,48 +1,111 @@
-// src/Component/Admin/AdminSidebar.jsx
-import React from "react";
-import { NavLink } from "react-router-dom"; // Use NavLink for active styling
-import { FaTachometerAlt, FaUsers, FaCog, FaChartBar } from "react-icons/fa";
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import axios from "axios";
+import { FaUsers, FaProjectDiagram, FaNewspaper } from "react-icons/fa";
 
-const AdminSidebar = () => {
-  const linkClass =
-    "flex items-center px-4 py-2 mt-2 text-gray-600 transition-colors duration-200 transform rounded-md hover:bg-gray-200 hover:text-gray-700";
-  const activeLinkClass =
-    "flex items-center px-4 py-2 mt-2 text-gray-700 bg-gray-200 rounded-md"; // Style for active link
+import StatCard from "../../Component/Admin/StatCard";
+import LoadingSkeleton from "../../Component/Common/LoadingSkeleton";
+import ErrorMessage from "../../Component/Common/ErrorMessage";
+
+const AdminDashboardPage = () => {
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchAdminStats = async () => {
+      setLoading(true);
+      setError(null);
+
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        setError("You are not authenticated. Please log in.");
+        setLoading(false);
+        // Optional: Redirect to login
+        setTimeout(() => navigate("/login"), 2000);
+        return;
+      }
+
+      try {
+        const { data } = await axios.get("/api/admin/stats", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        setStats(data?.data || {}); // Fallback to empty object
+      } catch (err) {
+        console.error("Error fetching stats:", err);
+        setError(
+          err.response?.data?.message ||
+            err.message ||
+            "Failed to fetch dashboard data."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAdminStats();
+  }, [navigate]);
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-4">
+        <LoadingSkeleton lines={3} />
+      </div>
+    );
+  }
 
   return (
-    <aside className="w-64 bg-white border-r h-full hidden md:block">
-      {" "}
-      {/* Adjust width/visibility */}
-      <nav className="px-2 py-4">
-        <NavLink
-          to="/admin"
-          end // Match only exact path for dashboard
-          className={({ isActive }) => (isActive ? activeLinkClass : linkClass)}
-        >
-          <FaTachometerAlt className="w-5 h-5 mr-3" /> Dashboard
-        </NavLink>
-        <NavLink
-          to="/admin/users"
-          className={({ isActive }) => (isActive ? activeLinkClass : linkClass)}
-        >
-          <FaUsers className="w-5 h-5 mr-3" /> Users
-        </NavLink>
-        {/* Add links to other sections */}
-        <NavLink
-          to="/admin/reports"
-          className={({ isActive }) => (isActive ? activeLinkClass : linkClass)}
-        >
-          <FaChartBar className="w-5 h-5 mr-3" /> Reports
-        </NavLink>
-        <NavLink
-          to="/admin/settings"
-          className={({ isActive }) => (isActive ? activeLinkClass : linkClass)}
-        >
-          <FaCog className="w-5 h-5 mr-3" /> Settings
-        </NavLink>
-      </nav>
-    </aside>
+    <div className="p-4 md:p-6 space-y-6 bg-gray-100 min-h-screen">
+      {error && <ErrorMessage message={error} />}
+
+      {stats && Object.keys(stats).length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+          <StatCard
+            title="Total Users"
+            value={stats.userCount ?? "N/A"}
+            icon={<FaUsers className="text-blue-500" />}
+            linkTo="/admin/users"
+            linkText="Manage Users"
+          />
+          <StatCard
+            title="Total Projects"
+            value={stats.projectCount ?? "N/A"}
+            icon={<FaProjectDiagram className="text-green-500" />}
+          />
+          <StatCard
+            title="Total Publications"
+            value={stats.publicationCount ?? "N/A"}
+            icon={<FaNewspaper className="text-purple-500" />}
+          />
+        </div>
+      ) : (
+        !error && (
+          <p className="text-center text-gray-500 text-sm">
+            No statistics available at the moment.
+          </p>
+        )
+      )}
+
+      <div className="mt-8 p-4 bg-white rounded-lg shadow">
+        <h2 className="text-xl font-semibold mb-4 text-gray-700">
+          Quick Links
+        </h2>
+        <div className="flex flex-wrap gap-4">
+          <Link
+            to="/admin/users"
+            className="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded inline-flex items-center transition"
+          >
+            <FaUsers className="mr-2" />
+            Manage Users
+          </Link>
+          {/* Add more Quick Links below */}
+        </div>
+      </div>
+    </div>
   );
 };
 
-export default AdminSidebar;
+export default AdminDashboardPage;

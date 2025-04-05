@@ -1,35 +1,33 @@
-import React, { useState, useEffect, useCallback } from "react";
-const backendURL = "http://localhost:5000";
-import "../index.css";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+const backendURL = "http://localhost:5000"; // Make sure this is correct
+import "../index.css"; // Ensure your CSS file is correctly linked and styled
 
-// Assume currentUser prop is passed, e.g., { id: 1, name: 'John Doe', ... } or null/undefined if not logged in
-export default function Publication({ currentUser }) {
-  const [announcements, setAnnouncements] = useState([]);
+// Assume currentUser prop is passed: { id: 1, name: 'John Doe', email: '...', ... } or null/undefined
+export default function MyPublications({ currentUser }) {
+  // State for the user's publications
+  const [myPublications, setMyPublications] = useState([]);
+  // State for the form (create/edit)
   const [formData, setFormData] = useState({
     title: "",
     abstract: "",
-    author: "", // Consider pre-filling this from currentUser if applicable
+    author: "", // Pre-fill later if needed
     document_link: "",
   });
-  const [editingIndex, setEditingIndex] = useState(null);
-  const [collaborationRequest, setCollaborationRequest] = useState({
-    researcherName: "", // Consider pre-filling from currentUser
-    researcherEmail: "", // Consider pre-filling from currentUser
-    announcementId: null,
-    researcherMessage: "", // Added field for optional message
-  });
-  const [showCollaborationModal, setShowCollaborationModal] = useState(false);
+  const [editingId, setEditingId] = useState(null); // Use ID for editing state
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState(null);
+  const [formErrors, setFormErrors] = useState({});
+  // State for search and sort specific to user's publications
   const [searchQuery, setSearchQuery] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [formErrors, setFormErrors] = useState({});
+  const [sortBy, setSortBy] = useState("date"); // 'date', 'title', 'author'
   const [showAllAbstracts, setShowAllAbstracts] = useState(false);
-  const [sortBy, setSortBy] = useState("date");
 
-  // Function to format dates
+  // --- Utility Functions ---
+
   const formatDate = (dateString) => {
-    if (!dateString) return "";
+    // (Keep your existing formatDate function)
+    if (!dateString) return "N/A";
     try {
       const date = new Date(dateString);
       const options = { year: "numeric", month: "long", day: "numeric" };
@@ -40,429 +38,368 @@ export default function Publication({ currentUser }) {
     }
   };
 
-  // Function to fetch all publications
-  const fetchAllPublications = useCallback(async () => {
+  // --- API Interaction ---
+
+  // Fetch ONLY the logged-in user's publications
+  const fetchMyPublications = useCallback(async () => {
+    if (!currentUser) {
+      setLoading(false);
+      setMyPublications([]); // Ensure list is empty if no user
+      return; // Don't fetch if not logged in
+    }
     setLoading(true);
     setApiError(null);
     try {
-      const response = await fetch(`${backendURL}/api/publications`);
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        throw new Error("Authentication token not found. Please log in.");
+      }
+      // *** IMPORTANT: Adjust this URL to your backend endpoint for fetching user's posts ***
+      // This endpoint MUST be protected and use the token to identify the user.
+      const response = await fetch(`${backendURL}/api/publications/my`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("Unauthorized. Please log in again.");
+      }
       if (!response.ok) {
         throw new Error(
-          `Failed to fetch announcements (HTTP ${response.status})`
+          `Failed to fetch your publications (HTTP ${response.status})`
         );
       }
       const data = await response.json();
       // Sort initial data by date descending
       data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      setAnnouncements(data);
+      setMyPublications(Array.isArray(data) ? data : []); // Ensure data is an array
     } catch (error) {
-      console.error("Error fetching publications:", error);
+      console.error("Error fetching user publications:", error);
       setApiError(
-        "Failed to load announcements. Please check your network and try again."
+        `Failed to load your publications: ${error.message}. Please try refreshing or logging in again.`
       );
+      setMyPublications([]); // Clear publications on error
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentUser]); // Re-fetch if currentUser changes
 
+  // Effect to fetch publications on mount or when currentUser changes
   useEffect(() => {
-    fetchAllPublications();
-  }, [fetchAllPublications]);
+    fetchMyPublications();
+  }, [fetchMyPublications]);
 
-  // Handle change for main form inputs
+  // Pre-fill author field when currentUser is available and not editing
+  useEffect(() => {
+    if (currentUser && !editingId) {
+      setFormData((prev) => ({
+        ...prev,
+        author: prev.author || currentUser.name || "", // Use current user's name if author is empty
+      }));
+    }
+  }, [currentUser, editingId]);
+
+  // --- Form Handling ---
+
   const handleChange = useCallback((e) => {
     const { name, value } = e.target;
-    console.log(`handleChange -> Field: ${name}, Value: ${value}`);
     setFormData((prevFormData) => ({ ...prevFormData, [name]: value }));
+    // Clear validation error for the field being changed
     setFormErrors((prevErrors) => ({ ...prevErrors, [name]: undefined }));
   }, []);
 
-  // Handle change for collaboration modal inputs
-  const handleCollaborationRequestChange = useCallback((e) => {
-    const { name, value } = e.target;
-    setCollaborationRequest((prev) => ({ ...prev, [name]: value }));
-  }, []);
-
-  // Validate main form
   const validateForm = useCallback(() => {
     let errors = {};
-    console.log("validateForm -> Checking formData:", formData);
     if (!formData.title?.trim()) errors.title = "Title is required";
     if (!formData.abstract?.trim()) errors.abstract = "Abstract is required";
-    if (!formData.author?.trim()) errors.author = "Author is required";
+    if (!formData.author?.trim()) errors.author = "Author name is required";
     if (!formData.document_link?.trim()) {
       errors.document_link = "Document link is required";
     } else {
       try {
-        new URL(formData.document_link);
+        new URL(formData.document_link); // Basic URL validation
       } catch (_) {
         errors.document_link = "Please enter a valid URL (e.g., https://...)";
       }
     }
     setFormErrors(errors);
-    const isValid = Object.keys(errors).length === 0;
-    console.log("validateForm -> Errors:", errors, "Is Valid:", isValid);
-    return isValid;
+    return Object.keys(errors).length === 0;
   }, [formData]);
 
-  // Handle submit (Create)
+  const resetForm = useCallback(() => {
+    setFormData({
+      title: "",
+      abstract: "",
+      author: currentUser?.name || "", // Reset author to current user's name
+      document_link: "",
+    });
+    setFormErrors({});
+    setEditingId(null);
+  }, [currentUser]);
+
+  // Handle Create Publication
   const handleSubmit = useCallback(
     async (e) => {
       e.preventDefault();
-      if (!currentUser) {
-        setApiError("You must be logged in to post an announcement.");
+      if (!currentUser || !validateForm()) {
+        console.log("Submit validation failed or no user.");
         return;
       }
       setApiError(null);
-      if (!validateForm()) {
-        console.log("Form validation failed.");
-        return;
-      }
-      console.log("Form validation passed. Submitting:", formData);
       try {
-        // Include Authorization header if your backend requires it
         const token = localStorage.getItem("authToken");
-        const headers = { "Content-Type": "application/json" };
-        if (token) {
-          headers["Authorization"] = `Bearer ${token}`;
-        }
+        if (!token) throw new Error("Authentication required.");
 
         const response = await fetch(`${backendURL}/api/publications`, {
           method: "POST",
-          headers: headers,
-          body: JSON.stringify(formData),
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(formData), // Backend assigns userId based on token
         });
+
         if (!response.ok) {
-          let errorMsg = `Failed to create announcement (HTTP ${response.status})`;
+          let errorMsg = `Failed to create publication (HTTP ${response.status})`;
           try {
             const errorData = await response.json();
             errorMsg = errorData.message || errorMsg;
           } catch (_) {}
           throw new Error(errorMsg);
         }
-        const newAnnouncement = await response.json();
-        // Ensure new announcement has necessary fields (like createdAt, userId if returned)
-        // Add to the beginning of the list and re-sort based on current sort state
-        setAnnouncements((prev) => [newAnnouncement, ...prev]);
-        alert("Announcement created successfully!");
-        setFormData({ title: "", abstract: "", author: "", document_link: "" });
-        setFormErrors({});
-      } catch (error) {
-        console.error("Error during submission:", error);
-        setApiError(`An error occurred: ${error.message}. Please try again.`);
-      }
-    },
-    [formData, validateForm, currentUser]
-  );
 
-  // Handle update
-  const handleUpdate = useCallback(
-    async (e) => {
-      e.preventDefault();
-      if (!currentUser || !editingIndex) {
-        setApiError(
-          "Cannot update: Not logged in or no item selected for editing."
-        );
-        return;
-      }
-      setApiError(null);
-      if (!validateForm()) {
-        console.log("Update form validation failed.");
-        return;
-      }
-      console.log("Update validation passed. Submitting:", formData);
-      try {
-        const token = localStorage.getItem("authToken");
-        const headers = { "Content-Type": "application/json" };
-        if (token) {
-          headers["Authorization"] = `Bearer ${token}`;
-        }
-
-        const response = await fetch(
-          `${backendURL}/api/publications/${editingIndex}`,
-          {
-            method: "PUT",
-            headers: headers,
-            body: JSON.stringify(formData),
-          }
-        );
-        if (response.status === 403) {
-          throw new Error(
-            `Forbidden: You do not have permission to edit this announcement (HTTP 403)`
-          );
-        }
-        if (!response.ok) {
-          let errorMsg = `Failed to update announcement (HTTP ${response.status})`;
-          try {
-            const errorData = await response.json();
-            errorMsg = errorData.message || errorMsg;
-          } catch (_) {}
-          throw new Error(errorMsg);
-        }
-        const updatedAnnouncementData = await response.json();
-        setAnnouncements((prev) =>
-          prev.map(
-            (announcement) =>
-              announcement.id === editingIndex
-                ? { ...announcement, ...updatedAnnouncementData }
-                : announcement // Merge update, keep existing userId/createdAt if not returned
+        const newPublication = await response.json();
+        // Add to the beginning and resort
+        setMyPublications((prev) =>
+          [newPublication, ...prev].sort(
+            (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
           )
         );
-        setEditingIndex(null);
-        alert("Announcement updated successfully!");
-        setFormData({ title: "", abstract: "", author: "", document_link: "" });
-        setFormErrors({});
+        resetForm();
+        alert("Publication posted successfully!");
       } catch (error) {
-        console.error("Error updating announcement:", error);
+        console.error("Error creating publication:", error);
         setApiError(`An error occurred: ${error.message}. Please try again.`);
       }
     },
-    [editingIndex, formData, validateForm, currentUser]
+    [currentUser, formData, validateForm, resetForm]
   );
 
-  // Handle edit
+  // Handle Start Editing
   const handleEdit = useCallback(
     (id) => {
-      const announcement = announcements.find((a) => a.id === id);
-      if (
-        announcement &&
-        currentUser &&
-        announcement.userId === currentUser.id
-      ) {
-        setEditingIndex(id);
+      const publicationToEdit = myPublications.find((p) => p.id === id);
+      // No need to check userId here if fetchMyPublications worked correctly,
+      // but it's good practice. The backend *must* enforce this.
+      if (publicationToEdit && publicationToEdit.userId === currentUser?.id) {
+        setEditingId(id);
         setFormData({
-          // Populate form with existing data
-          title: announcement.title,
-          abstract: announcement.abstract,
-          author: announcement.author,
-          document_link: announcement.document_link,
+          title: publicationToEdit.title,
+          abstract: publicationToEdit.abstract,
+          author: publicationToEdit.author,
+          document_link: publicationToEdit.document_link,
         });
         setFormErrors({});
-        // Scroll form into view for better UX
+        // Scroll form into view
         document
           .querySelector(".publication-form-container")
           ?.scrollIntoView({ behavior: "smooth", block: "start" });
       } else {
         console.error(
-          `Cannot edit announcement ${id}: Not found or not authorized.`
+          `Cannot edit publication ${id}: Not found or not authorized.`
         );
-        setApiError("You do not have permission to edit this announcement.");
+        setApiError("You cannot edit this publication.");
       }
     },
-    [announcements, currentUser]
-  );
+    [myPublications, currentUser?.id]
+  ); // Include currentUser.id dependency
 
-  // Handle delete
-  const handleDelete = useCallback(
-    async (id) => {
-      const announcementToDelete = announcements.find((a) => a.id === id);
-      if (
-        !currentUser ||
-        !announcementToDelete ||
-        announcementToDelete.userId !== currentUser.id
-      ) {
-        alert("You do not have permission to delete this announcement.");
-        return;
-      }
-      if (
-        window.confirm("Are you sure you want to delete this announcement?")
-      ) {
-        setApiError(null);
-        try {
-          const token = localStorage.getItem("authToken");
-          const headers = {}; // No content type needed for DELETE usually
-          if (token) {
-            headers["Authorization"] = `Bearer ${token}`;
-          }
-
-          const response = await fetch(`${backendURL}/api/publications/${id}`, {
-            method: "DELETE",
-            headers: headers,
-          });
-          if (response.status === 403) {
-            throw new Error(
-              `Forbidden: You do not have permission to delete this announcement (HTTP 403)`
-            );
-          }
-          if (!response.ok) {
-            throw new Error(
-              `Failed to delete announcement (HTTP ${response.status})`
-            );
-          }
-
-          setAnnouncements((prev) =>
-            prev.filter((announcement) => announcement.id !== id)
-          );
-          alert("Announcement deleted successfully!");
-          if (editingIndex === id) {
-            // Reset form if deleting the item being edited
-            setEditingIndex(null);
-            setFormData({
-              title: "",
-              abstract: "",
-              author: "",
-              document_link: "",
-            });
-            setFormErrors({});
-          }
-        } catch (error) {
-          console.error("Error deleting announcement:", error);
-          setApiError(`An error occurred: ${error.message}. Please try again.`);
-        }
-      }
-    },
-    [announcements, currentUser, editingIndex]
-  );
-
-  // Handle open collaboration modal
-  const handleCollaborationRequestOpen = useCallback(
-    (announcementId) => {
-      // Pre-fill name/email from logged-in user if available
-      setCollaborationRequest({
-        researcherName: currentUser?.name || "",
-        researcherEmail: currentUser?.email || "",
-        researcherMessage: "", // Clear message field
-        announcementId: announcementId,
-      });
-      setShowCollaborationModal(true);
-    },
-    [currentUser] // Depend on currentUser
-  );
-
-  // Handle close collaboration modal
-  const handleCollaborationRequestClose = useCallback(() => {
-    setShowCollaborationModal(false);
-    // No need to reset state here, handleCollaborationRequestOpen does it
-  }, []);
-
-  // Handle submit collaboration request
-  const handleCollaborationRequestSubmit = useCallback(
+  // Handle Update Publication
+  const handleUpdate = useCallback(
     async (e) => {
       e.preventDefault();
-      setApiError(null); // Clear previous errors
-      // Basic validation for collab form
-      if (
-        !collaborationRequest.researcherName?.trim() ||
-        !collaborationRequest.researcherEmail?.trim()
-      ) {
-        // You might want a more specific error state for the modal
-        alert("Please enter your name and email.");
+      if (!currentUser || !editingId || !validateForm()) {
+        console.log("Update validation failed or missing user/editingId.");
         return;
       }
+      setApiError(null);
       try {
-        // Add token if collab requests need authentication
         const token = localStorage.getItem("authToken");
-        const headers = { "Content-Type": "application/json" };
-        if (token) {
-          headers["Authorization"] = `Bearer ${token}`;
-        }
+        if (!token) throw new Error("Authentication required.");
 
         const response = await fetch(
-          `${backendURL}/api/collaboration-requests`,
+          `${backendURL}/api/publications/${editingId}`,
           {
-            method: "POST",
-            headers: headers,
-            body: JSON.stringify(collaborationRequest), // Send name, email, message, annId
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(formData), // Send updated data
           }
         );
+
+        if (response.status === 403)
+          throw new Error(
+            "Forbidden: You do not have permission to edit this publication."
+          );
         if (!response.ok) {
-          let errorMsg = `Failed to submit collaboration request (HTTP ${response.status})`;
+          let errorMsg = `Failed to update publication (HTTP ${response.status})`;
           try {
             const errorData = await response.json();
             errorMsg = errorData.message || errorMsg;
           } catch (_) {}
           throw new Error(errorMsg);
         }
-        alert("Collaboration request submitted successfully!");
-        handleCollaborationRequestClose(); // Close modal on success
-      } catch (error) {
-        console.error("Error submitting collaboration request:", error);
-        // Show error within the modal? Or use the main apiError state?
-        setApiError(
-          `Failed to submit request: ${error.message}. Please try again.`
+
+        const updatedPublication = await response.json();
+        setMyPublications(
+          (prev) =>
+            prev.map((p) =>
+              p.id === editingId ? { ...p, ...updatedPublication } : p
+            ) // Ensure update includes new/correct data
         );
-        // alert(`Failed to submit request: ${error.message}. Please try again.`); // Simple alert fallback
+        resetForm(); // Clears form and editingId
+        alert("Publication updated successfully!");
+      } catch (error) {
+        console.error("Error updating publication:", error);
+        setApiError(`An error occurred: ${error.message}. Please try again.`);
       }
     },
-    [collaborationRequest, handleCollaborationRequestClose] // Dependencies
+    [currentUser, editingId, formData, validateForm, resetForm]
   );
 
-  // Handle search trigger
+  // Handle Delete Publication
+  const handleDelete = useCallback(
+    async (id) => {
+      const publicationToDelete = myPublications.find((p) => p.id === id);
+      // Again, frontend check is good, but backend MUST enforce ownership via token.
+      if (
+        !currentUser ||
+        !publicationToDelete ||
+        publicationToDelete.userId !== currentUser.id
+      ) {
+        alert("You do not have permission to delete this publication.");
+        return;
+      }
+
+      if (window.confirm("Are you sure you want to delete this publication?")) {
+        setApiError(null);
+        try {
+          const token = localStorage.getItem("authToken");
+          if (!token) throw new Error("Authentication required.");
+
+          const response = await fetch(`${backendURL}/api/publications/${id}`, {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          if (response.status === 403)
+            throw new Error(
+              "Forbidden: You do not have permission to delete this publication."
+            );
+          if (!response.ok) {
+            throw new Error(
+              `Failed to delete publication (HTTP ${response.status})`
+            );
+          }
+
+          setMyPublications((prev) => prev.filter((p) => p.id !== id));
+          alert("Publication deleted successfully!");
+          if (editingId === id) {
+            resetForm(); // Reset form if deleting the item being edited
+          }
+        } catch (error) {
+          console.error("Error deleting publication:", error);
+          setApiError(`An error occurred: ${error.message}. Please try again.`);
+        }
+      }
+    },
+    [currentUser, myPublications, editingId, resetForm]
+  ); // Dependencies
+
+  // Handle Cancel Edit
+  const handleCancelEdit = useCallback(() => {
+    resetForm();
+  }, [resetForm]);
+
+  // --- Search and Sort ---
+
   const handleSearch = useCallback(() => {
     setSearchTerm(searchQuery);
   }, [searchQuery]);
 
-  // Handle sort selection
-  // This state change will trigger the useMemo recalculation
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery("");
+    setSearchTerm("");
+  }, []);
+
   const handleSortChange = useCallback((e) => {
     setSortBy(e.target.value);
   }, []);
+
+  // Filtered and Sorted Publications (Memoized)
+  const processedPublications = useMemo(() => {
+    let filtered = [...myPublications];
+
+    // Filter
+    if (searchTerm) {
+      const lowerCaseSearchTerm = searchTerm.toLowerCase();
+      filtered = filtered.filter(
+        (p) =>
+          p.title.toLowerCase().includes(lowerCaseSearchTerm) ||
+          p.author.toLowerCase().includes(lowerCaseSearchTerm) ||
+          p.abstract.toLowerCase().includes(lowerCaseSearchTerm)
+      );
+    }
+
+    // Sort
+    switch (sortBy) {
+      case "title":
+        filtered.sort((a, b) => a.title.localeCompare(b.title));
+        break;
+      case "author":
+        filtered.sort((a, b) => a.author.localeCompare(b.author));
+        break;
+      case "date":
+      default:
+        filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        break;
+    }
+    return filtered;
+  }, [myPublications, searchTerm, sortBy]);
 
   // Toggle abstract display mode
   const handleToggleAbstracts = useCallback(() => {
     setShowAllAbstracts(!showAllAbstracts);
   }, [showAllAbstracts]);
 
-  // Clear search term
-  const handleClearSearch = useCallback(() => {
-    setSearchQuery("");
-    setSearchTerm("");
-  }, []);
+  // --- Render Logic ---
 
-  // Filter announcements based on search term
-  const filteredAnnouncements = React.useMemo(() => {
-    const lowerCaseSearchTerm = searchTerm.toLowerCase();
-    if (!lowerCaseSearchTerm) {
-      return announcements; // No search term, return all
-    }
-    return announcements.filter(
-      (announcement) =>
-        announcement.title.toLowerCase().includes(lowerCaseSearchTerm) ||
-        announcement.author.toLowerCase().includes(lowerCaseSearchTerm) ||
-        announcement.abstract.toLowerCase().includes(lowerCaseSearchTerm)
+  // If no user is logged in, show a message
+  if (!currentUser) {
+    return (
+      <div className="publication-container">
+        <h1 className="publication-title">My Publications</h1>
+        <p className="publication-login-message">
+          Please log in to view and manage your publications.
+        </p>
+      </div>
     );
-  }, [announcements, searchTerm]);
+  }
 
-  // Sort the filtered announcements
-  const sortedAnnouncements = React.useMemo(() => {
-    let sorted = [...filteredAnnouncements]; // Create a new array to sort
-    switch (sortBy) {
-      case "title":
-        sorted.sort((a, b) => a.title.localeCompare(b.title));
-        break;
-      case "author":
-        sorted.sort((a, b) => a.author.localeCompare(b.author));
-        break;
-      case "date": // Default case
-      default:
-        sorted.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        break;
-    }
-    return sorted;
-  }, [filteredAnnouncements, sortBy]);
-
-  // Determine if the form should be shown
-  const showForm = !!currentUser;
-
-  // --- Cancel Edit Function ---
-  const handleCancelEdit = useCallback(() => {
-    setEditingIndex(null);
-    setFormData({ title: "", abstract: "", author: "", document_link: "" });
-    setFormErrors({});
-  }, []);
-
-  // ========================
-  // === RENDER COMPONENT ===
-  // ========================
+  // Main component render when user is logged in
   return (
     <div className="publication-container">
-      <h1 className="publication-title">Collaboration Announcements</h1>
+      {/* Use a more specific title */}
+      <h1 className="publication-title">My Publications</h1>
 
-      {/* --- API Error Display --- */}
       {apiError && (
         <div className="publication-error" role="alert">
-          <strong>Error!</strong>
-          <span className="block sm:inline"> {apiError}</span>
+          <strong>Error!</strong> {apiError}
           <button
             onClick={() => setApiError(null)}
             className="modal-close-button"
@@ -473,148 +410,138 @@ export default function Publication({ currentUser }) {
         </div>
       )}
 
-      {/* ====== Announcement Form ====== */}
-      {showForm ? (
-        <div className="publication-form-container">
-          <h3 className="publication-form-title">
-            {editingIndex !== null
-              ? "Edit Announcement"
-              : "Create New Announcement"}
-          </h3>
-          <form
-            onSubmit={editingIndex !== null ? handleUpdate : handleSubmit}
-            className="publication-form"
-            noValidate
-          >
-            {/* Title */}
-            <div className="form-group">
-              <label htmlFor="title">Title</label>
-              <input
-                type="text"
-                id="title"
-                name="title"
-                value={formData.title}
-                onChange={handleChange}
-                className={`form-control ${
-                  formErrors.title ? "is-invalid" : ""
-                }`}
-                placeholder="Enter announcement title"
-                aria-invalid={!!formErrors.title}
-                aria-describedby={formErrors.title ? "title-error" : undefined}
-              />
-              {formErrors.title && (
-                <p id="title-error" className="form-error">
-                  {formErrors.title}
-                </p>
-              )}
-            </div>
-            {/* Abstract */}
-            <div className="form-group">
-              <label htmlFor="abstract">Abstract</label>
-              <textarea
-                id="abstract"
-                name="abstract"
-                rows={3}
-                value={formData.abstract}
-                onChange={handleChange}
-                className={`form-control ${
-                  formErrors.abstract ? "is-invalid" : ""
-                }`}
-                placeholder="Enter abstract"
-                aria-invalid={!!formErrors.abstract}
-                aria-describedby={
-                  formErrors.abstract ? "abstract-error" : undefined
-                }
-              />
-              {formErrors.abstract && (
-                <p id="abstract-error" className="form-error">
-                  {formErrors.abstract}
-                </p>
-              )}
-            </div>
-            {/* Author */}
-            <div className="form-group">
-              <label htmlFor="author">Author</label>
-              <input
-                type="text"
-                id="author"
-                name="author"
-                value={formData.author}
-                onChange={handleChange}
-                className={`form-control ${
-                  formErrors.author ? "is-invalid" : ""
-                }`}
-                placeholder="Enter author name (e.g., your name or group)"
-                aria-invalid={!!formErrors.author}
-                aria-describedby={
-                  formErrors.author ? "author-error" : undefined
-                }
-              />
-              {formErrors.author && (
-                <p id="author-error" className="form-error">
-                  {formErrors.author}
-                </p>
-              )}
-            </div>
-            {/* Document Link */}
-            <div className="form-group">
-              <label htmlFor="document_link">Document Link (URL)</label>
-              <input
-                type="url"
-                id="document_link"
-                name="document_link"
-                value={formData.document_link}
-                onChange={handleChange}
-                className={`form-control ${
-                  formErrors.document_link ? "is-invalid" : ""
-                }`}
-                placeholder="e.g., https://example.com/document.pdf"
-                aria-invalid={!!formErrors.document_link}
-                aria-describedby={
-                  formErrors.document_link ? "link-error" : undefined
-                }
-              />
-              {formErrors.document_link && (
-                <p id="link-error" className="form-error">
-                  {formErrors.document_link}
-                </p>
-              )}
-            </div>
-            {/* Actions */}
-            <div className="form-actions">
-              {editingIndex !== null && (
-                <button
-                  type="button"
-                  onClick={handleCancelEdit}
-                  className="btn btn-secondary"
-                >
-                  {" "}
-                  Cancel{" "}
-                </button>
-              )}
-              <button type="submit" className="btn btn-primary">
+      {/* ====== Publication Form (Create/Edit) ====== */}
+      <div className="publication-form-container">
+        <h3 className="publication-form-title">
+          {editingId ? "Edit Publication" : "Post New Publication"}
+        </h3>
+        <form
+          onSubmit={editingId ? handleUpdate : handleSubmit}
+          className="publication-form"
+          noValidate
+        >
+          {/* Title */}
+          <div className="form-group">
+            <label htmlFor="title">Title</label>
+            <input /* ... input props ... */
+              type="text"
+              id="title"
+              name="title"
+              value={formData.title}
+              onChange={handleChange}
+              className={`form-control ${formErrors.title ? "is-invalid" : ""}`}
+              placeholder="Publication title"
+              required
+              aria-invalid={!!formErrors.title}
+              aria-describedby={formErrors.title ? "title-error" : undefined}
+            />
+            {formErrors.title && (
+              <p id="title-error" className="form-error">
+                {formErrors.title}
+              </p>
+            )}
+          </div>
+          {/* Abstract */}
+          <div className="form-group">
+            <label htmlFor="abstract">Abstract</label>
+            <textarea /* ... textarea props ... */
+              id="abstract"
+              name="abstract"
+              rows={4}
+              value={formData.abstract}
+              onChange={handleChange}
+              className={`form-control ${
+                formErrors.abstract ? "is-invalid" : ""
+              }`}
+              placeholder="Brief summary or abstract"
+              required
+              aria-invalid={!!formErrors.abstract}
+              aria-describedby={
+                formErrors.abstract ? "abstract-error" : undefined
+              }
+            />
+            {formErrors.abstract && (
+              <p id="abstract-error" className="form-error">
+                {formErrors.abstract}
+              </p>
+            )}
+          </div>
+          {/* Author */}
+          <div className="form-group">
+            <label htmlFor="author">Author(s)</label>
+            <input /* ... input props ... */
+              type="text"
+              id="author"
+              name="author"
+              value={formData.author}
+              onChange={handleChange}
+              className={`form-control ${
+                formErrors.author ? "is-invalid" : ""
+              }`}
+              placeholder="Your name or research group"
+              required
+              aria-invalid={!!formErrors.author}
+              aria-describedby={formErrors.author ? "author-error" : undefined}
+            />
+            {formErrors.author && (
+              <p id="author-error" className="form-error">
+                {formErrors.author}
+              </p>
+            )}
+          </div>
+          {/* Document Link */}
+          <div className="form-group">
+            <label htmlFor="document_link">Document Link (URL)</label>
+            <input /* ... input props ... */
+              type="url"
+              id="document_link"
+              name="document_link"
+              value={formData.document_link}
+              onChange={handleChange}
+              className={`form-control ${
+                formErrors.document_link ? "is-invalid" : ""
+              }`}
+              placeholder="https://example.com/paper.pdf"
+              required
+              aria-invalid={!!formErrors.document_link}
+              aria-describedby={
+                formErrors.document_link ? "link-error" : undefined
+              }
+            />
+            {formErrors.document_link && (
+              <p id="link-error" className="form-error">
+                {formErrors.document_link}
+              </p>
+            )}
+          </div>
+          {/* Actions */}
+          <div className="form-actions">
+            {editingId && (
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="btn btn-secondary"
+              >
                 {" "}
-                {editingIndex !== null
-                  ? "Update Announcement"
-                  : "Post Announcement"}{" "}
+                Cancel{" "}
               </button>
-            </div>
-          </form>
-        </div>
-      ) : (
-        <p className="publication-login-message">
-          {" "}
-          Please log in to create or manage announcements.{" "}
-        </p>
-      )}
+            )}
+            <button type="submit" className="btn btn-primary">
+              {" "}
+              {editingId ? "Update Publication" : "Post Publication"}{" "}
+            </button>
+          </div>
+        </form>
+      </div>
 
-      {/* ====== Search, Sort, Toggle Area ====== */}
+      {/* ====== Search, Sort, Toggle Controls for User's Publications ====== */}
       <div className="publication-controls">
         <div className="publication-search-sort">
+          {/* Search */}
           <div className="publication-search">
             <input
               type="text"
-              placeholder="Search..."
+              placeholder="Search your publications..."
               className="search-input"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -637,6 +564,7 @@ export default function Publication({ currentUser }) {
               </button>
             )}
           </div>
+          {/* Sort */}
           <div className="publication-sort">
             <label htmlFor="sort">Sort By:</label>
             <select
@@ -651,55 +579,56 @@ export default function Publication({ currentUser }) {
             </select>
           </div>
         </div>
-        <button
-          onClick={handleToggleAbstracts}
-          className="toggle-abstracts-button"
-        >
-          {showAllAbstracts ? "Collapse Abstracts" : "Expand All Abstracts"}
-        </button>
+        {/* Toggle Abstracts (only relevant if abstracts can be long) */}
+        {myPublications.some((p) => p.abstract.length > 150) && ( // Only show if potentially useful
+          <button
+            onClick={handleToggleAbstracts}
+            className="toggle-abstracts-button"
+          >
+            {showAllAbstracts ? "Collapse Abstracts" : "Expand All Abstracts"}
+          </button>
+        )}
       </div>
 
-      {/* ====== Display Publication List ====== */}
+      {/* ====== Display User's Publication List ====== */}
       <div className="publication-list">
-        <h2 className="publication-list-title">
-          {" "}
-          Active Collaboration Announcements{" "}
-        </h2>
+        <h2 className="publication-list-title">Your Posted Publications</h2>
         {loading ? (
-          <div className="loading-message">Loading...</div>
-        ) : !Array.isArray(announcements) ? (
-          <div className="error-message">Error loading announcements.</div>
-        ) : sortedAnnouncements.length === 0 ? (
+          <div className="loading-message">Loading your publications...</div>
+        ) : !Array.isArray(myPublications) ? ( // Check if it's an array before using .length
+          <div className="error-message">
+            Could not load publications data correctly.
+          </div>
+        ) : processedPublications.length === 0 ? (
           <div className="empty-message">
-            {" "}
             {searchTerm
-              ? `No results for "${searchTerm}".`
-              : "No publications yet."}{" "}
+              ? `No results found for "${searchTerm}" in your publications.`
+              : "You haven't posted any publications yet."}
           </div>
         ) : (
           <div className="grid-container">
-            {sortedAnnouncements.map((announcement) => (
-              // --- Publication Item ---
-              <div key={announcement.id} className="publication-item">
-                <h3 className="item-title">{announcement.title}</h3>
+            {" "}
+            {/* Or list-container */}
+            {processedPublications.map((publication) => (
+              <div key={publication.id} className="publication-item">
+                <h3 className="item-title">{publication.title}</h3>
                 <div className="item-details">
                   <p>
-                    <strong>Author:</strong> {announcement.author}
+                    <strong>Author(s):</strong> {publication.author}
                   </p>
                   <p className="item-date">
-                    <strong>Posted:</strong>{" "}
-                    {formatDate(announcement.createdAt)}
+                    <strong>Posted:</strong> {formatDate(publication.createdAt)}
                   </p>
                   <p>
                     <strong>Abstract:</strong>{" "}
-                    {showAllAbstracts || announcement.abstract.length <= 150
-                      ? announcement.abstract
-                      : `${announcement.abstract.substring(0, 150)}...`}
+                    {showAllAbstracts || publication.abstract.length <= 150
+                      ? publication.abstract
+                      : `${publication.abstract.substring(0, 150)}...`}
                   </p>
                   <p>
                     <strong>Document:</strong>{" "}
                     <a
-                      href={announcement.document_link}
+                      href={publication.document_link}
                       className="document-link"
                       target="_blank"
                       rel="noopener noreferrer"
@@ -710,125 +639,31 @@ export default function Publication({ currentUser }) {
                   </p>
                 </div>
                 <div className="item-actions">
-                  {/* Collab Button: Show unless user is owner? Or always show? */}
+                  {/* Edit/Delete buttons are always relevant here */}
                   <button
-                    onClick={() =>
-                      handleCollaborationRequestOpen(announcement.id)
-                    }
-                    className="request-button"
+                    onClick={() => handleEdit(publication.id)}
+                    className="edit-button"
+                    disabled={editingId === publication.id}
                   >
                     {" "}
-                    Request Collaboration{" "}
+                    Edit{" "}
                   </button>
-                  {/* Edit/Delete Buttons: Show only if user is owner */}
-                  {currentUser && announcement.userId === currentUser.id && (
-                    <>
-                      <button
-                        onClick={() => handleEdit(announcement.id)}
-                        className="edit-button"
-                        disabled={editingIndex === announcement.id}
-                      >
-                        {" "}
-                        Edit{" "}
-                      </button>
-                      <button
-                        onClick={() => handleDelete(announcement.id)}
-                        className="delete-button"
-                        disabled={editingIndex !== null}
-                      >
-                        {" "}
-                        Delete{" "}
-                      </button>
-                    </>
-                  )}
+                  <button
+                    onClick={() => handleDelete(publication.id)}
+                    className="delete-button"
+                    disabled={editingId !== null}
+                  >
+                    {" "}
+                    Delete{" "}
+                  </button>
                 </div>
               </div>
-              // --- End Publication Item ---
             ))}
           </div>
         )}
       </div>
 
-      {/* ====== Collaboration Modal ====== */}
-      {showCollaborationModal && (
-        <div
-          className="modal"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="collab-modal-title"
-        >
-          <div className="modal-content">
-            <h3 id="collab-modal-title" className="modal-title">
-              {" "}
-              Request Collaboration{" "}
-            </h3>
-            <button
-              onClick={handleCollaborationRequestClose}
-              className="modal-close-button"
-              aria-label="Close"
-            >
-              ×
-            </button>
-            <div className="modal-body">
-              <form onSubmit={handleCollaborationRequestSubmit}>
-                {/* Optional: Display title of item being requested */}
-                <div className="form-group">
-                  <label htmlFor="researcherName">Your Name</label>
-                  <input
-                    type="text"
-                    id="researcherName"
-                    name="researcherName"
-                    value={collaborationRequest.researcherName}
-                    onChange={handleCollaborationRequestChange}
-                    required
-                    className="form-control"
-                    placeholder="Enter your name"
-                  />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="researcherEmail">Your Email</label>
-                  <input
-                    type="email"
-                    id="researcherEmail"
-                    name="researcherEmail"
-                    value={collaborationRequest.researcherEmail}
-                    onChange={handleCollaborationRequestChange}
-                    required
-                    className="form-control"
-                    placeholder="Enter your email"
-                  />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="researcherMessage">Message (Optional)</label>
-                  <textarea
-                    id="researcherMessage"
-                    name="researcherMessage"
-                    rows="3"
-                    value={collaborationRequest.researcherMessage}
-                    onChange={handleCollaborationRequestChange}
-                    className="form-control"
-                    placeholder="Briefly explain your interest..."
-                  />
-                </div>
-                <div className="form-actions">
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={handleCollaborationRequestClose}
-                  >
-                    {" "}
-                    Cancel{" "}
-                  </button>
-                  <button type="submit" className="btn btn-primary">
-                    {" "}
-                    Submit Request{" "}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-    </div> // End publication-container
+      {/* Collaboration Modal Removed */}
+    </div>
   );
-} // End Publication component function
+}

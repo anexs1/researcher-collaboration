@@ -7,6 +7,7 @@ import { FaStar, FaHeart, FaEye } from "react-icons/fa"; //Import heart and eye 
 const Home = () => {
   const navigate = useNavigate();
   const [publications, setPublications] = useState([]);
+  
   const [refreshPublications, setRefreshPublications] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterOptions, setFilterOptions] = useState({});

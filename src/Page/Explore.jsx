@@ -13,14 +13,9 @@ import {
   FaInbox,
 } from "react-icons/fa";
 import axios from "axios"; // Using axios for consistency
-// Assuming these helpers are available from the previous example or separate files
 import ConfirmationModal from "../Component/ConfirmationModal";
-
 import "../index.css"; // Assuming Tailwind is set up
 
-// --- Helper Components (or import) ---
-
-// Publication Card Component
 const PublicationCard = ({
   publication,
   onSendRequest,
@@ -32,14 +27,11 @@ const PublicationCard = ({
     publication.abstract && publication.abstract.length > 150
       ? publication.abstract.substring(0, 150) + "..."
       : publication.abstract;
-
-  // Disable request button if user is the author or a request is pending/approved
   const isAuthor = currentUser?.id === publication.authorId; // Assuming authorId exists
   const disableRequestButton = isRequestPending || isAuthor || actionLoading;
   let requestButtonText = "Request Collaboration";
   if (isAuthor) requestButtonText = "Your Publication";
   else if (isRequestPending) requestButtonText = "Request Sent";
-
   return (
     <div className="bg-white rounded-lg shadow-md p-5 flex flex-col justify-between transition-shadow duration-300 hover:shadow-lg h-full">
       <div>

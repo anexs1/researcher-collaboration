@@ -141,5 +141,4 @@ const UserEditModal = ({ isOpen, user, onSave, onClose }) => {
   );
 };
 // Add helper class if not global:
-// .form-input { @apply block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:bg-gray-100; }
 export default UserEditModal;

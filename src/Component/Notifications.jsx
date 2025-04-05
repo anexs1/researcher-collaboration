@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import "../index.css"; // Import your CSS file
 
 const Notifications = ({ userId }) => {
   const [notifications, setNotifications] = useState([]);
@@ -51,6 +52,12 @@ const Notifications = ({ userId }) => {
       </button>
 
       {error && <div className="error-message">{error}</div>}
+      {showNotifications && (
+        <div
+          className="notifications-overlay"
+          onClick={() => setShowNotifications(false)}
+        />
+      )}
 
       {showNotifications && (
         <ul className="notifications-list">

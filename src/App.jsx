@@ -5,19 +5,19 @@ import {
   Route,
   Navigate,
   Outlet,
+  useLocation,
 } from "react-router-dom";
 import axios from "axios";
 import "./index.css";
 
-// --- Component Imports (assuming paths are correct) ---
 import Home from "./Page/Home";
 import Explore from "./Page/Explore";
 import SignupPage from "./Page/SignupPage";
 import LoginPage from "./Page/LoginPage";
-import Profile from "./Page/Profile"; // Will likely need currentUser prop too
-import Publication from "./Page/Publication"; // Needs currentUser prop
-import MyProjects from "./Page/MyProjects"; // Will likely need currentUser prop too
-import Messages from "./Page/Messages"; // Will likely need currentUser prop too
+import Profile from "./Page/Profile";
+import Publication from "./Page/Publication";
+import MyProjects from "./Page/MyProjects";
+import Messages from "./Page/Messages";
 import AcademicSignupForm from "./Component/AcademicSignupForm";
 import CorporateSignupForm from "./Component/CorporateSignupForm";
 import MedicalSignupForm from "./Component/MedicalSignupForm";
@@ -33,9 +33,7 @@ import AdminUsersPage from "./Page/Admin/AdminUsersPage";
 import AdminSettingsPage from "./Page/Admin/AdminSettingsPage";
 import AdminReportsPage from "./Page/Admin/AdminReportsPage";
 
-// --- AdminLayout (Keep as is) ---
 const AdminLayout = ({ isAdmin }) => {
-  // ... (AdminLayout code remains the same)
   if (isAdmin === null) {
     return (
       <div className="flex justify-center items-center h-screen text-xl font-semibold">
@@ -46,30 +44,25 @@ const AdminLayout = ({ isAdmin }) => {
   return isAdmin ? <Outlet /> : <Navigate to="/" replace />;
 };
 
+// --- App Entry Point ---
 function App() {
   const [isAdmin, setIsAdmin] = useState(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(null); // Tracks login status (null=pending, false=out, true=in)
-  const [currentUser, setCurrentUser] = useState(null); // *** NEW: Stores the logged-in user object ***
+  const [isLoggedIn, setIsLoggedIn] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
 
-  // --- handleLogout ---
   const handleLogout = useCallback(() => {
-    console.log("Executing handleLogout");
     localStorage.removeItem("authToken");
     setIsLoggedIn(false);
     setIsAdmin(false);
-    setCurrentUser(null); // *** NEW: Clear user data on logout ***
-    // Note: Navigation happens implicitly via route protection usually,
-    // or you can add navigate('/login') if needed here.
+    setCurrentUser(null);
   }, []);
 
-  // --- Validate Token useEffect ---
   useEffect(() => {
     const token = localStorage.getItem("authToken");
-    console.log("Checking token on load:", token ? "Found" : "Not Found");
     if (!token) {
       setIsLoggedIn(false);
       setIsAdmin(false);
-      setCurrentUser(null); // Ensure user is cleared if no token
+      setCurrentUser(null);
       return;
     }
 
@@ -80,29 +73,21 @@ function App() {
         { headers: { Authorization: `Bearer ${token}` } }
       )
       .then((response) => {
-        console.log("Validation API Response:", response.data);
         if (response.data.success && response.data.user) {
           setIsLoggedIn(true);
           const isAdminUser = response.data.user.role === "admin";
           setIsAdmin(isAdminUser);
-          setCurrentUser(response.data.user); // *** NEW: Store the user object ***
-          console.log(
-            "Validation success: User data set, isAdmin set to",
-            isAdminUser
-          );
+          setCurrentUser(response.data.user);
         } else {
-          console.log("Validation failed or user data missing, logging out.");
-          handleLogout(); // Clears token, sets states to false/null
+          handleLogout();
         }
       })
-      .catch((error) => {
-        console.error("Validation API Error:", error);
-        handleLogout(); // Clears token, sets states to false/null
+      .catch(() => {
+        handleLogout();
       });
-  }, [handleLogout]); // handleLogout is stable due to useCallback
+  }, [handleLogout]);
 
   if (isLoggedIn === null) {
-    console.log("App Render: Showing global loader (validation pending)");
     return (
       <div className="flex justify-center items-center h-screen text-xl font-semibold">
         Loading Application...
@@ -110,31 +95,55 @@ function App() {
     );
   }
 
-  console.log(
-    `App Render: isLoggedIn=${isLoggedIn}, isAdmin=${isAdmin}, currentUser=${
-      currentUser ? currentUser.id : null // Log user ID or null
-    }`
-  );
-
   return (
     <Router>
-      {/* Pass necessary props to Navbar */}
-      <Navbar
+      <AppRoutes
         isLoggedIn={isLoggedIn}
         isAdmin={isAdmin}
-        currentUser={currentUser} // *** NEW: Pass currentUser (optional for Navbar, but good practice) ***
-        onLogout={handleLogout}
+        currentUser={currentUser}
+        handleLogout={handleLogout}
+        setIsLoggedIn={setIsLoggedIn}
+        setIsAdmin={setIsAdmin}
+        setCurrentUser={setCurrentUser}
       />
+    </Router>
+  );
+}
+
+// --- Internal App Routes (safe useLocation here) ---
+const AppRoutes = ({
+  isLoggedIn,
+  isAdmin,
+  currentUser,
+  handleLogout,
+  setIsLoggedIn,
+  setIsAdmin,
+  setCurrentUser,
+}) => {
+  const location = useLocation();
+  const isAdminRoute = location.pathname.startsWith("/admin");
+
+  return (
+    <>
+      {!isAdminRoute && (
+        <Navbar
+          isLoggedIn={isLoggedIn}
+          isAdmin={isAdmin}
+          currentUser={currentUser}
+          onLogout={handleLogout}
+        />
+      )}
       <main className="pt-16 md:pt-20">
         <Routes>
-          {/* --- Public Routes --- */}
+          {/* --- Public --- */}
           <Route path="/" element={<Home />} />
           <Route path="/explore" element={<Explore />} />
 
+          {/* --- Auth --- */}
           <Route
             path="/signup"
             element={
-              currentUser ? ( // Use currentUser for redirection check
+              currentUser ? (
                 <Navigate to="/profile/account" replace />
               ) : (
                 <SignupPage />
@@ -144,7 +153,7 @@ function App() {
           <Route
             path="/login"
             element={
-              currentUser ? ( // Use currentUser for redirection check
+              currentUser ? (
                 isAdmin ? (
                   <Navigate to="/admin" replace />
                 ) : (
@@ -152,10 +161,9 @@ function App() {
                 )
               ) : (
                 <LoginPage
-                  // Pass setters needed by LoginPage
                   setIsLoggedIn={setIsLoggedIn}
                   setIsAdmin={setIsAdmin}
-                  setCurrentUser={setCurrentUser} // *** NEW: Pass setCurrentUser ***
+                  setCurrentUser={setCurrentUser}
                   isForAdmin={false}
                 />
               )
@@ -164,7 +172,7 @@ function App() {
           <Route
             path="/admin-login"
             element={
-              currentUser ? ( // Use currentUser for redirection check
+              currentUser ? (
                 isAdmin ? (
                   <Navigate to="/admin" replace />
                 ) : (
@@ -172,17 +180,15 @@ function App() {
                 )
               ) : (
                 <LoginPage
-                  // Pass setters needed by LoginPage
                   setIsLoggedIn={setIsLoggedIn}
                   setIsAdmin={setIsAdmin}
-                  setCurrentUser={setCurrentUser} // *** NEW: Pass setCurrentUser ***
+                  setCurrentUser={setCurrentUser}
                   isForAdmin={true}
                 />
               )
             }
           />
 
-          {/* --- Signup Form Specific Routes --- */}
           <Route path="/signup/academic" element={<AcademicSignupForm />} />
           <Route path="/signup/corporate" element={<CorporateSignupForm />} />
           <Route path="/signup/medical" element={<MedicalSignupForm />} />
@@ -191,20 +197,17 @@ function App() {
             element={<NotResearcherSignupForm />}
           />
 
-          {/* --- Protected User Routes (Requires Login) --- */}
-          {/* Use currentUser for protection and pass it as prop */}
+          {/* --- Protected User Routes --- */}
           <Route
             path="/profile"
             element={
               currentUser ? (
-                <Profile currentUser={currentUser} /> // *** Pass currentUser ***
+                <Profile currentUser={currentUser} />
               ) : (
                 <Navigate to="/login" replace />
               )
             }
           >
-            {/* Nested Profile Routes */}
-            {/* These children will likely get currentUser via Outlet context or props from Profile */}
             <Route index element={<Navigate to="account" replace />} />
             <Route path="account" element={<ProfileAccount />} />
             <Route path="about" element={<ProfileAbout />} />
@@ -217,7 +220,7 @@ function App() {
             path="/publications"
             element={
               currentUser ? (
-                <Publication currentUser={currentUser} /> // *** Pass currentUser ***
+                <Publication currentUser={currentUser} />
               ) : (
                 <Navigate to="/login" replace />
               )
@@ -227,7 +230,7 @@ function App() {
             path="/my-projects"
             element={
               currentUser ? (
-                <MyProjects currentUser={currentUser} /> // *** Pass currentUser ***
+                <MyProjects currentUser={currentUser} />
               ) : (
                 <Navigate to="/login" replace />
               )
@@ -237,29 +240,37 @@ function App() {
             path="/messages"
             element={
               currentUser ? (
-                <Messages currentUser={currentUser} /> // *** Pass currentUser ***
+                <Messages currentUser={currentUser} />
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            }
+          />
+          <Route
+            path="/Explore"
+            element={
+              currentUser ? (
+                <Explore currentUser={currentUser} />
               ) : (
                 <Navigate to="/login" replace />
               )
             }
           />
 
-          {/* --- Protected Admin Routes (Requires Admin Role) --- */}
-          {/* AdminLayout handles the isAdmin check */}
+          {/* --- Protected Admin Routes --- */}
           <Route path="/admin" element={<AdminLayout isAdmin={isAdmin} />}>
             <Route index element={<AdminDashboardPage />} />
             <Route path="users" element={<AdminUsersPage />} />
             <Route path="settings" element={<AdminSettingsPage />} />
             <Route path="reports" element={<AdminReportsPage />} />
-            {/* Add other admin routes here */}
           </Route>
 
-          {/* --- Catch-all Route --- */}
+          {/* --- Catch-all --- */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
-    </Router>
+    </>
   );
-}
+};
 
 export default App;

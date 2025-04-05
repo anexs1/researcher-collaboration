@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { FaUsers, FaProjectDiagram, FaNewspaper } from "react-icons/fa";
-import StatCard from "../../Component/Admin/StatCard"; // Reusable Card
+import StatCard from "../../Component/Admin/StatCard";
 import LoadingSpinner from "../../Component/Common/LoadingSpinner";
 import ErrorMessage from "../../Component/Common/ErrorMessage";
 
@@ -10,22 +10,38 @@ const AdminDashboardPage = () => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchAdminStats = async () => {
       setLoading(true);
       setError(null);
+
       const token = localStorage.getItem("authToken");
+
       if (!token) {
         setError("Authentication token not found.");
         setLoading(false);
+        navigate("/login");
         return;
       }
+
       try {
         const response = await axios.get("/api/admin/stats", {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setStats(response.data.data); // Adjust based on your API response structure
+
+        const userRole = response.data?.user?.role || "user"; // Adjust based on your API response
+
+        // 🚫 Block non-admins
+        if (userRole !== "admin") {
+          setError("Access denied. Admins only.");
+          setLoading(false);
+          setTimeout(() => navigate("/"), 2000); // Optional redirect to home
+          return;
+        }
+
+        setStats(response.data.data); // Set dashboard stats
       } catch (err) {
         console.error("Error fetching admin stats:", err);
         setError(
@@ -37,8 +53,9 @@ const AdminDashboardPage = () => {
         setLoading(false);
       }
     };
+
     fetchAdminStats();
-  }, []);
+  }, [navigate]);
 
   if (loading)
     return (

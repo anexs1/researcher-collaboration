@@ -104,19 +104,6 @@ const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
               </li>
             </>
           )}
-          {/* --- ADMIN SECTION --- */}
-          {/* 1. Link to Admin Login Page (Visible only when LOGGED OUT) */}
-          {!isLoggedIn && (
-            <li>
-              <Link
-                to="/admin-login" // Points to the new route
-                onClick={closeMenu}
-                className="navbar-link-style font-semibold text-yellow-200 hover:text-white" // Example distinct style
-              >
-                👑 Admin
-              </Link>
-            </li>
-          )}
           <li>
             <ProfileMenu
               isLoggedIn={isLoggedIn}
