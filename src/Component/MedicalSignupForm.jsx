@@ -80,14 +80,18 @@ const MedicalSignupForm = () => {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-md">
-        <h2 className="text-2xl font-semibold text-gray-700 mb-4">
+    <div className="flex items-center justify-center min-h-screen bg-gray-50 px-4">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
+        <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">
           Medical Signup
         </h2>
+
         {errorMessage && (
-          <p className="text-red-500 text-sm mb-4">{errorMessage}</p>
+          <div className="mb-4 text-sm text-red-600 bg-red-100 p-2 rounded-md">
+            {errorMessage}
+          </div>
         )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <InputField
             type="text"
@@ -147,28 +151,25 @@ const MedicalSignupForm = () => {
           <button
             type="submit"
             disabled={isLoading}
-            className={`w-full py-2 px-4 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              isLoading ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700"
+            className={`w-full py-3 font-medium rounded-lg text-white transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              isLoading
+                ? "bg-blue-400 cursor-not-allowed"
+                : "bg-blue-600 hover:bg-blue-700"
             }`}
           >
             {isLoading ? "Registering..." : "Sign Up as Medical"}
           </button>
         </form>
-        <div className="mt-4 text-center">
-          <p className="text-sm text-gray-600">
-            Already have an account?{" "}
-            <a
-              href="/login"
-              className="text-blue-600 hover:underline"
-              onClick={(e) => {
-                e.preventDefault();
-                navigate("/login");
-              }}
-            >
-              Log in
-            </a>
-          </p>
-        </div>
+
+        <p className="mt-6 text-sm text-center text-gray-600">
+          Already have an account?{" "}
+          <button
+            onClick={() => navigate("/login")}
+            className="text-blue-600 hover:underline focus:outline-none"
+          >
+            Log in
+          </button>
+        </p>
       </div>
     </div>
   );

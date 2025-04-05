@@ -2,11 +2,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom"; // Import Link
 import { FaHome, FaUser, FaCogs, FaSignOutAlt } from "react-icons/fa";
-import AdminDashboardPage from "../Page/Admin/AdminDashboardPage";
-import AdminUsersPage from "../Page/Admin/AdminUsersPage";
-import AdminSettingsPage from "../Page/Admin/AdminSettingsPage";
-import AdminReportsPage from "../Page/Admin/AdminReportsPage";
-
 // Sidebar component that displays navigation links to different sections of the profile page
 
 function Sidebar({ isLoggedIn }) {

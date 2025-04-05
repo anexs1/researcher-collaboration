@@ -143,11 +143,6 @@ const ProjectCard = ({ project, onAction, isLoggedIn }) => {
   );
 };
 
-// Project Form Modal (Simplified - kept inside main component for state management ease in this example)
-// A separate component would be cleaner for larger applications.
-
-// --- Main MyProjects Component ---
-
 const MyProjects = ({ isLoggedIn }) => {
   const [projects, setProjects] = useState([]);
   const [activeTab, setActiveTab] = useState("ongoing");
@@ -810,7 +805,6 @@ const MyProjects = ({ isLoggedIn }) => {
                 </div>
               </form>
             )}{" "}
-            {/* End Add/Edit Form */}
           </div>
         </div>
       )}

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import "./Notifications.css";
 
 const Notifications = ({ userId }) => {
   const [notifications, setNotifications] = useState([]);
@@ -35,10 +34,9 @@ const Notifications = ({ userId }) => {
     } catch (error) {
       console.error("Error fetching notifications:", error);
       setError(`Failed to load notifications.  ${error.message}`);
-      setNotifications([]); // Clear existing notifications on error
+      setNotifications([]);
     }
   };
-
   return (
     <div className="notifications">
       <button

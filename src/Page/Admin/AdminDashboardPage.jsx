@@ -1,18 +1,10 @@
-// src/Page/Admin/AdminDashboardPage.jsx
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
-import {
-  FaUsers,
-  FaProjectDiagram,
-  FaNewspaper,
-  FaExclamationCircle,
-  FaSpinner,
-} from "react-icons/fa";
+import { FaUsers, FaProjectDiagram, FaNewspaper } from "react-icons/fa";
 import StatCard from "../../Component/Admin/StatCard"; // Reusable Card
 import LoadingSpinner from "../../Component/Common/LoadingSpinner";
 import ErrorMessage from "../../Component/Common/ErrorMessage";
-import AdminPageHeader from "../../Component/Admin/AdminPageHeader";
 
 const AdminDashboardPage = () => {
   const [stats, setStats] = useState(null);
@@ -30,7 +22,6 @@ const AdminDashboardPage = () => {
         return;
       }
       try {
-        // *** Replace with your ACTUAL API endpoint ***
         const response = await axios.get("/api/admin/stats", {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -57,9 +48,7 @@ const AdminDashboardPage = () => {
     );
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      <AdminPageHeader title="Admin Dashboard" />
-
+    <div className="p-4 md:p-6 space-y-6 bg-gray-100 min-h-screen">
       {error && <ErrorMessage message={error} />}
 
       {stats ? (
@@ -75,23 +64,17 @@ const AdminDashboardPage = () => {
             title="Total Projects"
             value={stats.projectCount ?? "N/A"}
             icon={<FaProjectDiagram className="text-green-500" />}
-            // linkTo="/admin/projects" // Add if implementing
-            // linkText="Manage Projects"
           />
           <StatCard
             title="Total Publications"
             value={stats.publicationCount ?? "N/A"}
             icon={<FaNewspaper className="text-purple-500" />}
-            // linkTo="/admin/publications" // Add if implementing
-            // linkText="Manage Publications"
           />
-          {/* Add more StatCards as needed */}
         </div>
       ) : (
-        !error && <p>No statistics available.</p> // Show only if no error and no stats
+        !error && <p>No statistics available.</p>
       )}
 
-      {/* Add other dashboard sections like Recent Activity, Quick Actions etc. */}
       <div className="mt-8 p-4 bg-white rounded-lg shadow">
         <h2 className="text-xl font-semibold mb-4 text-gray-700">
           Quick Links
@@ -103,7 +86,6 @@ const AdminDashboardPage = () => {
           >
             <FaUsers className="mr-2" /> Manage Users
           </Link>
-          {/* Add links to other admin pages */}
         </div>
       </div>
     </div>

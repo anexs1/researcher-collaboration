@@ -14,7 +14,6 @@ import {
 } from "react-icons/fa";
 import axios from "axios"; // Using axios for consistency
 // Assuming these helpers are available from the previous example or separate files
-import Notification from "../Component/Notification";
 import ConfirmationModal from "../Component/ConfirmationModal";
 
 import "../index.css"; // Assuming Tailwind is set up
@@ -253,8 +252,6 @@ const Explore = ({ currentUser }) => {
       const errorMessage =
         err.response?.data?.message || err.message || "Failed to load data.";
       showNotification(errorMessage); // Show error notification
-      // Keep potentially partially loaded data or clear it:
-      // setPublications([]); setRequests([]);
     } finally {
       setLoading((prev) => ({ ...prev, publications: false, requests: false }));
     }
@@ -272,7 +269,6 @@ const Explore = ({ currentUser }) => {
     fetchData();
   }, [fetchData, currentUser]); // Refetch if user changes
 
-  // --- Filtered & Sorted Data (Memoized) ---
   const filteredAndSortedPublications = useMemo(() => {
     return publications
       .filter((pub) => {
@@ -314,8 +310,8 @@ const Explore = ({ currentUser }) => {
         }
       });
       // Sort requests maybe by date? (Optional)
-      // received.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      // sent.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      received.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      sent.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       return {
         receivedRequests: received,
         sentRequests: sent,

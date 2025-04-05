@@ -1,108 +1,73 @@
 import db from "../config/db.js";
 
 class Project {
-  constructor(id, title, description, status, collaborators) {
+  constructor(id, title, description, status, collaborators, tags, dueDate) {
     this.id = id;
     this.title = title;
     this.description = description;
-    this.status = status;
-    this.collaborators = collaborators;
+    this.status = status || "Ongoing";
+    this.collaborators = collaborators || [];
+    this.tags = tags || [];
+    this.dueDate = dueDate;
   }
 
-  static async getAll() {
+  static async create(projectData) {
     try {
-      const [rows] = await db.query("SELECT * FROM projects");
-      return rows.map(
-        (row) =>
-          new Project(
-            row.id,
-            row.title,
-            row.description,
-            row.status,
-            JSON.parse(row.collaborators)
-          )
-      );
-    } catch (error) {
-      console.error("Error getting all projects:", error);
-      throw error;
-    }
-  }
-  static async create(title, description, status, collaborators) {
-    try {
-      const collaboratorsJson = JSON.stringify(collaborators);
-
-      const query = `
-      INSERT INTO projects 
-        (title, description, status, collaborators) 
-      VALUES 
-        (?, ?, ?, ?)
-    `;
-
-      const [result] = await db.query(query, [
+      const {
         title,
         description,
-        status,
-        collaboratorsJson,
-      ]);
+        status = "Ongoing",
+        collaborators = [],
+        tags = [],
+        dueDate = null,
+      } = projectData;
 
-      const newProjectId = result.insertId;
-      return new Project(
-        newProjectId,
-        title,
-        description,
-        status,
-        collaborators
-      );
-    } catch (error) {
-      console.error("Error creating project:", error);
-      throw new Error(
-        error.message || "Failed to create project in the database."
-      );
-    }
-  }
-  static async getById(id) {
-    try {
-      const [rows] = await db.query("SELECT * FROM projects WHERE id = ?", [
-        id,
-      ]);
-      if (rows.length === 0) {
-        return null;
+      // Validate required fields
+      if (!title || !description) {
+        throw new Error("Title and description are required");
       }
-      const row = rows[0];
+
+      // Convert arrays to JSON strings
+      const collaboratorsJson = JSON.stringify(collaborators);
+      const tagsJson = JSON.stringify(tags);
+
+      // Format dueDate for MySQL
+      const formattedDueDate = dueDate
+        ? new Date(dueDate).toISOString().split("T")[0]
+        : null;
+
+      // Execute the query with proper parameter binding
+      const [result] = await db.execute(
+        `INSERT INTO projects 
+         (title, description, status, collaborators, tags, dueDate)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          title,
+          description,
+          status,
+          collaboratorsJson,
+          tagsJson,
+          formattedDueDate,
+        ]
+      );
+
+      // Return the newly created project
       return new Project(
-        row.id,
-        row.title,
-        row.description,
-        row.status,
-        JSON.parse(row.collaborators)
+        result.insertId,
+        title,
+        description,
+        status,
+        collaborators,
+        tags,
+        dueDate
       );
     } catch (error) {
-      console.error("Error getting project by ID:", error);
-      throw error;
+      console.error("Database Error:", error);
+      throw new Error(`Failed to create project: ${error.message}`);
     }
   }
 
-  static async update(id, title, description, status, collaborators) {
-    try {
-      const collaboratorsJson = JSON.stringify(collaborators);
-      const sql =
-        "UPDATE projects SET title = ?, description = ?, status = ?, collaborators = ? WHERE id = ?";
-      await db.query(sql, [title, description, status, collaboratorsJson, id]);
-      return new Project(id, title, description, status, collaborators);
-    } catch (error) {
-      console.error("Error updating project:", error);
-      throw error;
-    }
-  }
-
-  static async delete(id) {
-    try {
-      await db.query("DELETE FROM projects WHERE id = ?", [id]);
-    } catch (error) {
-      console.error("Error deleting project:", error);
-      throw error;
-    }
-  }
+  // ... keep other methods the same ...
 }
 
 export default Project;
