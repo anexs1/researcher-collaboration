@@ -1,109 +1,78 @@
-// src/Component/Common/ConfirmationModal.jsx
-import React, { useEffect, useRef } from "react";
-import { FaTimes, FaExclamationTriangle } from "react-icons/fa"; // Example using icons
+import React from "react";
 
 const ConfirmationModal = ({
   isOpen,
-  title = "Confirm Action", // Default title
+  title,
   message,
   onConfirm,
   onCancel,
   confirmText = "Confirm",
   cancelText = "Cancel",
-  confirmButtonClass = "bg-red-600 hover:bg-red-700", // Default dangerous action style
-  cancelButtonClass = "bg-gray-300 hover:bg-gray-400 text-gray-800",
-  icon = <FaExclamationTriangle className="text-yellow-500 mr-2 h-5 w-5" />, // Default icon
+  isConfirming = false,
+  confirmButtonStyle = "bg-red-600 hover:bg-red-700 focus:ring-red-500", // Default dangerous style
+  cancelButtonStyle = "bg-white hover:bg-gray-50 focus:ring-indigo-500 border border-gray-300 text-gray-700",
 }) => {
-  const modalRef = useRef(null);
-
-  // Close modal on Escape key press
-  useEffect(() => {
-    const handleEsc = (event) => {
-      if (event.key === "Escape") {
-        onCancel();
-      }
-    };
-    if (isOpen) {
-      document.addEventListener("keydown", handleEsc);
-      // Optional: Focus management - focus the cancel button or the modal itself
-      setTimeout(() => modalRef.current?.focus(), 50); // Small delay might help
-    }
-    return () => {
-      document.removeEventListener("keydown", handleEsc);
-    };
-  }, [isOpen, onCancel]);
-
-  // Close modal on backdrop click
-  const handleBackdropClick = (event) => {
-    // Check if the click is directly on the backdrop (the outer div)
-    if (event.target === event.currentTarget) {
-      onCancel();
-    }
-  };
-
   if (!isOpen) return null;
 
   return (
-    // Backdrop
     <div
-      className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 transition-opacity duration-300"
-      onClick={handleBackdropClick}
+      className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4"
+      aria-labelledby="modal-title"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="confirmation-modal-title"
     >
-      {/* Modal Content Box */}
       <div
-        ref={modalRef}
-        className="modal-content bg-white rounded-lg p-6 w-full max-w-sm shadow-xl transform transition-all duration-300 scale-95 opacity-0 animate-fade-in-scale"
-        tabIndex="-1" // Make modal focusable
-        onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside modal content
-      >
-        {/* Header */}
-        <div className="flex justify-between items-center mb-4">
-          <h3
-            id="confirmation-modal-title"
-            className="text-lg font-semibold text-gray-800 flex items-center"
-          >
-            {icon}
-            {title}
-          </h3>
-          <button
-            onClick={onCancel}
-            className="text-gray-400 hover:text-gray-700 text-2xl transition-colors"
-            aria-label="Close confirmation modal"
-          >
-            <FaTimes />
-          </button>
+        className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+        aria-hidden="true"
+      ></div>
+
+      <div className="relative inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+        <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+          <div className="sm:flex sm:items-start">
+            <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+              <svg
+                className="h-6 w-6 text-red-600"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                aria-hidden="true"
+              >
+                {/* Add your icon path here */}
+              </svg>
+            </div>
+            <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+              <h3
+                className="text-lg leading-6 font-medium text-gray-900"
+                id="modal-title"
+              >
+                {title}
+              </h3>
+              <div className="mt-2">
+                <p className="text-sm text-gray-500">{message}</p>
+              </div>
+            </div>
+          </div>
         </div>
-
-        {/* Message Body */}
-        <p className="mb-6 text-gray-700">{message}</p>
-
-        {/* Action Buttons */}
-        <div className="flex justify-end space-x-3">
+        <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
           <button
+            type="button"
+            disabled={isConfirming}
+            className={`inline-flex justify-center w-full rounded-md border border-transparent shadow-sm px-4 py-2 text-base font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50 ${confirmButtonStyle}`}
+            onClick={onConfirm}
+          >
+            {isConfirming ? "Processing..." : confirmText}
+          </button>
+          <button
+            type="button"
+            disabled={isConfirming} // Disable cancel while confirming too
+            className={`inline-flex justify-center w-full rounded-md shadow-sm px-4 py-2 text-base font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 sm:mt-0 sm:w-auto sm:text-sm disabled:opacity-50 ${cancelButtonStyle}`}
             onClick={onCancel}
-            className={`btn font-bold py-2 px-4 rounded transition-colors duration-200 ease-in-out ${cancelButtonClass}`}
           >
             {cancelText}
           </button>
-          <button
-            onClick={onConfirm}
-            className={`btn text-white font-bold py-2 px-4 rounded transition-colors duration-200 ease-in-out ${confirmButtonClass}`}
-          >
-            {confirmText}
-          </button>
         </div>
       </div>
-      {/* Add animation keyframes in your global CSS (e.g., index.css) if needed: */}
-      {/*
-             @keyframes fadeInScale {
-               from { opacity: 0; transform: scale(0.95); }
-               to { opacity: 1; transform: scale(1); }
-             }
-             .animate-fade-in-scale { animation: fadeInScale 0.3s ease-out forwards; }
-            */}
     </div>
   );
 };

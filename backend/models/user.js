@@ -1,5 +1,6 @@
+// src/models/user.js
 import { DataTypes } from "sequelize";
-import sequelize from "../config/db.js";
+import sequelize from "../config/db.js"; // Assuming correct path
 import bcrypt from "bcryptjs";
 
 const User = sequelize.define(
@@ -37,14 +38,36 @@ const User = sequelize.define(
       },
     },
     role: {
-      type: DataTypes.ENUM("user", "admin", "medical", "academic"),
-      defaultValue: "user ",
+      // Ensure all roles from your signup forms are included
+      type: DataTypes.ENUM(
+        "user",
+        "admin",
+        "medical",
+        "academic",
+        "non-researcher"
+      ),
+      defaultValue: "user",
     },
-    // Add other fields as needed
+    // --- ADDED STATUS FIELD ---
+    status: {
+      type: DataTypes.ENUM("pending", "approved", "rejected", "suspended"),
+      allowNull: false,
+      defaultValue: "pending", // New users start as pending
+    },
+    // --- Optional but recommended: Add fields from specific signup forms ---
+    university: { type: DataTypes.STRING, allowNull: true },
+    department: { type: DataTypes.STRING, allowNull: true },
+    companyName: { type: DataTypes.STRING, allowNull: true },
+    jobTitle: { type: DataTypes.STRING, allowNull: true },
+    medicalSpecialty: { type: DataTypes.STRING, allowNull: true },
+    hospitalName: { type: DataTypes.STRING, allowNull: true },
+    // researchInterests: { type: DataTypes.TEXT, allowNull: true },
+    // publicationLinks: { type: DataTypes.TEXT, allowNull: true },
   },
   {
     timestamps: true, // Adds createdAt and updatedAt
     hooks: {
+      // Password hashing hook (remains the same)
       beforeSave: async (user) => {
         if (user.changed("password")) {
           const salt = await bcrypt.genSalt(10);
@@ -52,9 +75,15 @@ const User = sequelize.define(
         }
       },
     },
+    indexes: [
+      // Optional: Add indexes for performance
+      { fields: ["status"] },
+      { fields: ["role"] },
+    ],
   }
 );
 
+// Password comparison method (remains the same)
 User.prototype.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };

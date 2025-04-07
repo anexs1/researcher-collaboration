@@ -486,7 +486,7 @@ export default function MyPublications({ currentUser }) {
                 formErrors.document_link ? "is-invalid" : ""
               }`}
               placeholder="https://example.com/paper.pdf"
-              required
+              required  
               aria-invalid={!!formErrors.document_link}
               aria-describedby={
                 formErrors.document_link ? "link-error" : undefined

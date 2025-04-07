@@ -1,208 +1,346 @@
-// src/Page/Admin/AdminUsersPage.jsx
-import React, { useState, useEffect, useCallback } from "react";
-import axios from "axios";
-import AdminPageHeader from "../../Component/Admin/AdminPageHeader";
-import AdminDataTable from "../../Component/Admin/AdminDataTable";
-import SearchBar from "../../Component/Common/SearchBar";
-import LoadingSpinner from "../../Component/Common/LoadingSpinner";
-import ErrorMessage from "../../Component/Common/ErrorMessage";
-import ConfirmationModal from "../../Component/Common/ConfirmationModal"; // Re-use existing one
-import UserEditModal from "../../Component/Admin/UserEditModal"; // Specific edit modal
-import { FaUserEdit, FaTrashAlt, FaPlus } from "react-icons/fa";
+import React, { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import LoadingSpinner from "../../Component/Common/LoadingSpinner"; // Verify path
+import ErrorMessage from "../../Component/Common/ErrorMessage"; // Verify path
+import ConfirmationModal from "../../Component/Common/ConfirmationModal"; // Assuming you have this
+import UserDetailsModal from "../../Component/Admin/UserDetailsModal"; // <-- NEW: Assuming path for details modal
+import {
+  EyeIcon,
+  PencilSquareIcon,
+  TrashIcon,
+  ArrowPathIcon,
+} from "@heroicons/react/24/outline"; // Import icons
 
 const AdminUsersPage = () => {
   const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [editingUser, setEditingUser] = useState(null); // User object for modal
-  const [deletingUser, setDeletingUser] = useState(null); // User object for confirmation
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
 
-  // Fetch Users Function (using useCallback for stability)
-  const fetchUsers = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  // --- State for Details Modal ---
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null); // User object for the details modal
+  // --- End State for Details Modal ---
+
+  const navigate = useNavigate();
+
+  // --- Fetch Users Function (no changes needed) ---
+  const fetchUsers = useCallback(async (showLoading = true) => {
+    if (showLoading) setIsLoading(true);
+    setError("");
+    if (showLoading) setUsers([]);
+
     const token = localStorage.getItem("authToken");
     if (!token) {
-      setError("Token not found.");
-      setLoading(false);
+      setError("Authentication required. Please log in as admin.");
+      setIsLoading(false);
       return;
     }
 
     try {
-      // *** Replace with your ACTUAL API endpoint - Add search query param ***
-      const response = await axios.get(
-        `/api/admin/users?search=${searchTerm}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      setUsers(response.data.data || []); // Adjust based on API response
-    } catch (err) {
-      console.error("Error fetching users:", err);
-      setError(
-        err.response?.data?.message || err.message || "Failed to load users."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [searchTerm]); // Re-fetch when searchTerm changes
+      const correctUrl = "http://localhost:5000/api/auth/admin/users";
+      const response = await fetch(correctUrl, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
 
-  // Initial fetch
+      if (response.status === 401 || response.status === 403) {
+        throw new Error(
+          "Unauthorized or Forbidden: Check admin permissions or re-login."
+        );
+      }
+      if (response.status === 404) {
+        throw new Error(
+          `Not Found: The API endpoint (${correctUrl}) was not found.`
+        );
+      }
+      if (!response.ok) {
+        let errorData = {
+          message: `Server responded with status: ${response.status}`,
+        };
+        try {
+          errorData = await response.json();
+        } catch (e) {
+          /* ignore */
+        }
+        throw new Error(
+          errorData.message || `HTTP error! Status: ${response.status}`
+        );
+      }
+
+      const data = await response.json();
+      console.log("API Response Data:", data);
+
+      if (data && data.success && Array.isArray(data.data)) {
+        // *** Ensure the fetched data includes necessary details for the modal ***
+        // If not, you might need to fetch full details when opening the modal
+        setUsers(data.data);
+      } else {
+        setUsers([]);
+        setError("Received unexpected data structure from server.");
+      }
+    } catch (err) {
+      console.error("Fetch users error:", err);
+      setError(
+        err.message || "An unexpected error occurred while fetching users."
+      );
+      setUsers([]);
+    } finally {
+      if (showLoading) setIsLoading(false);
+    }
+  }, []);
+
+  // --- Initial Fetch ---
   useEffect(() => {
-    fetchUsers();
+    fetchUsers(true);
   }, [fetchUsers]);
 
-  // --- Handlers ---
-  const handleSearch = (term) => {
-    setSearchTerm(term);
-    // Fetch is triggered by useEffect dependency on searchTerm
+  // --- Action Handlers ---
+
+  // --- MODIFIED: View User Details Handler ---
+  const handleViewUserDetails = (user) => {
+    setSelectedUser(user); // Set the user data for the modal
+    setShowDetailsModal(true); // Open the modal
+    console.log("View details for user:", user.id);
   };
 
-  const handleOpenEditModal = (user) => {
-    setEditingUser(user);
-    setIsEditModalOpen(true);
+  const handleCloseDetailsModal = () => {
+    setShowDetailsModal(false);
+    setSelectedUser(null); // Clear selected user when closing
+  };
+  // --- End MODIFIED ---
+
+  const handleEditUser = (userId) => {
+    navigate(`/admin/users/${userId}/edit`);
+    console.log("Edit user:", userId);
   };
 
-  const handleCloseEditModal = () => {
-    setEditingUser(null);
-    setIsEditModalOpen(false);
+  const handleDeleteClick = (user) => {
+    setUserToDelete(user);
+    setShowDeleteConfirm(true);
+    console.log("Initiate delete for user:", user.id);
   };
 
-  const handleSaveUser = async (updatedUserData) => {
-    console.log("Saving user:", updatedUserData);
+  const cancelDelete = () => {
+    setShowDeleteConfirm(false);
+    setUserToDelete(null);
+  };
+
+  const confirmDeleteUser = async () => {
+    // ... (delete logic remains the same) ...
+    if (!userToDelete) return;
+    setIsDeleting(true);
+    setError("");
+    const userId = userToDelete.id;
     const token = localStorage.getItem("authToken");
     try {
-      await axios.put(
-        `/api/admin/users/${updatedUserData.id}`,
-        updatedUserData,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      handleCloseEditModal();
-      fetchUsers(); // Refresh list
-      // Add success notification
-    } catch (err) {
-      console.error("Error updating user:", err);
-      // Add error notification
-      setError(err.response?.data?.message || "Failed to update user.");
-    }
-  };
-
-  const handleOpenDeleteConfirm = (user) => {
-    setDeletingUser(user);
-    setIsConfirmModalOpen(true);
-  };
-
-  const handleCloseDeleteConfirm = () => {
-    setDeletingUser(null);
-    setIsConfirmModalOpen(false);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!deletingUser) return;
-    console.log("Deleting user:", deletingUser.id);
-    const token = localStorage.getItem("authToken");
-    try {
-      // *** Replace with your ACTUAL API endpoint ***
-      await axios.delete(`/api/admin/users/${deletingUser.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const deleteUrl = `http://localhost:5000/api/auth/admin/users/${userId}`;
+      const response = await fetch(deleteUrl, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
       });
-      handleCloseDeleteConfirm();
-      fetchUsers(); // Refresh list
-      // Add success notification
+      if (response.status === 401 || response.status === 403)
+        throw new Error("Unauthorized or Forbidden: Cannot delete user.");
+      if (response.status === 404)
+        throw new Error("User not found on server for deletion.");
+      if (!response.ok) {
+        let errorData = {
+          message: `Deletion failed with status: ${response.status}`,
+        };
+        try {
+          errorData = await response.json();
+        } catch (e) {
+          /* ignore */
+        }
+        throw new Error(errorData.message || `Deletion failed`);
+      }
+      console.log("User deleted successfully:", userId);
+      setUsers((currentUsers) => currentUsers.filter((u) => u.id !== userId));
+      setShowDeleteConfirm(false);
+      setUserToDelete(null);
     } catch (err) {
-      console.error("Error deleting user:", err);
-      handleCloseDeleteConfirm(); // Close modal even on error
-      // Add error notification
-      setError(err.response?.data?.message || "Failed to delete user.");
+      console.error("Delete user error:", err);
+      setError(
+        `Failed to delete user ${userToDelete.username}: ${err.message}`
+      );
+      setShowDeleteConfirm(false);
+      setUserToDelete(null);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
-  // --- Table Column Definition ---
-  const columns = React.useMemo(
-    () => [
-      { Header: "ID", accessor: "id" },
-      { Header: "Username", accessor: "username" },
-      { Header: "Email", accessor: "email" },
-      { Header: "Role", accessor: "role" },
-      {
-        Header: "Joined",
-        accessor: (row) => new Date(row.createdAt).toLocaleDateString(),
-      },
-      {
-        Header: "Actions",
-        accessor: "actions",
-        Cell: ({ row }) => (
-          <div className="flex space-x-2">
-            <button
-              onClick={() => handleOpenEditModal(row.original)}
-              className="text-blue-600 hover:text-blue-800 p-1"
-              title="Edit User"
-            >
-              <FaUserEdit />
-            </button>
-            <button
-              onClick={() => handleOpenDeleteConfirm(row.original)}
-              className="text-red-600 hover:text-red-800 p-1"
-              title="Delete User"
-            >
-              <FaTrashAlt />
-            </button>
-          </div>
-        ),
-      },
-    ],
-    []
-  ); // Empty dependency array - columns don't change
+  const handleRefresh = () => {
+    fetchUsers(true);
+  };
 
-  // --- Render ---
+  // --- Render Logic ---
   return (
-    <div className="p-4 md:p-6 space-y-4">
-      <AdminPageHeader title="Manage Users" /* Optional: Add button maybe */>
-        <button className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded inline-flex items-center">
-          <FaPlus className="mr-2" /> Add User
+    <div className="p-4 md:p-6 lg:p-8 bg-gray-50 min-h-screen">
+      {/* Header and Refresh Button */}
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">
+          Registered Users
+        </h1>
+        <button
+          onClick={handleRefresh}
+          disabled={isLoading}
+          className={`p-2 rounded-full text-gray-500 hover:bg-gray-200 hover:text-gray-700 transition duration-150 ease-in-out ${
+            isLoading ? "cursor-not-allowed opacity-50" : ""
+          }`}
+          title="Refresh User List"
+        >
+          <ArrowPathIcon
+            className={`h-6 w-6 ${isLoading ? "animate-spin" : ""}`}
+          />
         </button>
-      </AdminPageHeader>
+      </div>
 
-      <SearchBar
-        placeholder="Search users by name, email..."
-        onSearch={handleSearch}
-      />
-
-      {error && <ErrorMessage message={error} onClose={() => setError(null)} />}
-
-      {loading ? (
-        <div className="flex justify-center items-center h-64">
+      {isLoading && (
+        <div className="flex justify-center items-center py-10">
           <LoadingSpinner />
         </div>
-      ) : (
-        <AdminDataTable columns={columns} data={users} />
+      )}
+      {!isLoading && error && (
+        <div className="mt-4">
+          <ErrorMessage message={error} />
+        </div>
+      )}
+      {!isLoading && !error && users.length === 0 && (
+        <div className="bg-white rounded-xl shadow p-6 text-center text-gray-500">
+          No registered users found.
+        </div>
       )}
 
-      {/* Edit Modal */}
-      {isEditModalOpen && editingUser && (
-        <UserEditModal
-          isOpen={isEditModalOpen}
-          user={editingUser}
-          onSave={handleSaveUser}
-          onClose={handleCloseEditModal}
+      {!isLoading && !error && users.length > 0 && (
+        <div className="bg-white rounded-xl shadow-md overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-100">
+              <tr>
+                {/* Headers */}
+                <th
+                  scope="col"
+                  className="px-4 py-3 text-left text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider"
+                >
+                  Username
+                </th>
+                <th
+                  scope="col"
+                  className="px-4 py-3 text-left text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider"
+                >
+                  Email
+                </th>
+                <th
+                  scope="col"
+                  className="px-4 py-3 text-left text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider"
+                >
+                  Role
+                </th>
+                <th
+                  scope="col"
+                  className="px-4 py-3 text-left text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider"
+                >
+                  Joined
+                </th>
+                <th
+                  scope="col"
+                  className="px-4 py-3 text-center text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider"
+                >
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 bg-white">
+              {/* Rows */}
+              {users.map((user) => (
+                <tr
+                  key={user.id}
+                  className="hover:bg-gray-50 transition-colors duration-150"
+                >
+                  {/* Data Cells */}
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-800 font-medium">
+                    {user.username}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                    {user.email}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 capitalize">
+                    {user.role}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                    {user.createdAt
+                      ? new Date(user.createdAt).toLocaleDateString()
+                      : "-"}
+                  </td>
+                  {/* Actions Cell */}
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
+                    <div className="flex items-center justify-center space-x-2">
+                      {/* View Details Button - MODIFIED */}
+                      <button
+                        onClick={() => handleViewUserDetails(user)} // Pass the whole user object
+                        className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded-full transition duration-150 ease-in-out"
+                        title="View Details"
+                      >
+                        <EyeIcon className="h-5 w-5" />
+                      </button>
+                      {/* Edit User Button */}
+                      <button
+                        onClick={() => handleEditUser(user.id)}
+                        className="p-1 text-green-600 hover:text-green-800 hover:bg-green-100 rounded-full transition duration-150 ease-in-out"
+                        title="Edit User"
+                      >
+                        <PencilSquareIcon className="h-5 w-5" />
+                      </button>
+                      {/* Delete User Button */}
+                      <button
+                        onClick={() => handleDeleteClick(user)}
+                        disabled={isDeleting && userToDelete?.id === user.id}
+                        className={`p-1 text-red-600 hover:text-red-800 hover:bg-red-100 rounded-full transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed`}
+                        title="Delete User"
+                      >
+                        <TrashIcon className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal (remains the same) */}
+      {showDeleteConfirm && userToDelete && (
+        <ConfirmationModal
+          isOpen={showDeleteConfirm}
+          title="Confirm Deletion"
+          message={`Are you sure you want to delete the user "${userToDelete.username}"? This action cannot be undone.`}
+          onConfirm={confirmDeleteUser}
+          onCancel={cancelDelete}
+          confirmText="Delete"
+          cancelText="Cancel"
+          isConfirming={isDeleting}
+          confirmButtonStyle="bg-red-600 hover:bg-red-700 focus:ring-red-500"
         />
       )}
 
-      {/* Delete Confirmation Modal */}
-      <ConfirmationModal
-        isOpen={isConfirmModalOpen}
-        title="Confirm Deletion"
-        message={`Are you sure you want to delete user "${deletingUser?.username}" (${deletingUser?.email})? This action cannot be undone.`}
-        onConfirm={handleConfirmDelete}
-        onCancel={handleCloseDeleteConfirm}
-        confirmText="Delete User"
-        confirmButtonClass="bg-red-600 hover:bg-red-700" // Destructive action style
-      />
+      {/* --- NEW: User Details Modal --- */}
+      {showDetailsModal && selectedUser && (
+        <UserDetailsModal
+          isOpen={showDetailsModal}
+          user={selectedUser}
+          onClose={handleCloseDetailsModal}
+        />
+      )}
+      {/* --- End NEW --- */}
     </div>
   );
 };
