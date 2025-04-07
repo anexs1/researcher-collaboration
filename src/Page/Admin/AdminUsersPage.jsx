@@ -1,97 +1,100 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import axios from "axios"; // Using Axios
 import LoadingSpinner from "../../Component/Common/LoadingSpinner"; // Verify path
 import ErrorMessage from "../../Component/Common/ErrorMessage"; // Verify path
-import ConfirmationModal from "../../Component/Common/ConfirmationModal"; // Assuming you have this
-import UserDetailsModal from "../../Component/Admin/UserDetailsModal"; // <-- NEW: Assuming path for details modal
+import ConfirmationModal from "../../Component/Common/ConfirmationModal"; // Verify path
+import UserDetailsModal from "../../Component/Admin/UserDetailsModal"; // Verify path
+import Notification from "../../Component/Common/Notification"; // Import Notification
 import {
   EyeIcon,
   PencilSquareIcon,
   TrashIcon,
   ArrowPathIcon,
-} from "@heroicons/react/24/outline"; // Import icons
+} from "@heroicons/react/24/outline";
+
+// Consistent API Base URL
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 const AdminUsersPage = () => {
   const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [userToDelete, setUserToDelete] = useState(null);
+  const [actionLoading, setActionLoading] = useState({ delete: false }); // Loading state specific to actions
 
-  // --- State for Details Modal ---
+  // --- Delete State ---
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null); // Stores {id, username}
+
+  // --- Details Modal State ---
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [selectedUser, setSelectedUser] = useState(null); // User object for the details modal
-  // --- End State for Details Modal ---
+  const [selectedUser, setSelectedUser] = useState(null); // Full user object for the details modal
+
+  // --- Notification State ---
+  const [notification, setNotification] = useState({
+    message: "",
+    type: "",
+    show: false,
+  });
 
   const navigate = useNavigate();
 
-  // --- Fetch Users Function (no changes needed) ---
-  const fetchUsers = useCallback(async (showLoading = true) => {
-    if (showLoading) setIsLoading(true);
-    setError("");
-    if (showLoading) setUsers([]);
+  // --- Notification Handler ---
+  const showNotification = (message, type = "success") => {
+    setNotification({ message, type, show: true });
+    setTimeout(
+      () => setNotification((prev) => ({ ...prev, show: false })),
+      4000 // Increased duration slightly
+    );
+  };
+
+  // --- Fetch Users Function ---
+  const fetchUsers = useCallback(async (showLoadingIndicator = true) => {
+    if (showLoadingIndicator) setIsLoading(true);
+    setError(""); // Clear errors on fetch
 
     const token = localStorage.getItem("authToken");
     if (!token) {
-      setError("Authentication required. Please log in as admin.");
+      setError("Authentication required. Please log in.");
       setIsLoading(false);
       return;
     }
 
     try {
-      const correctUrl = "http://localhost:5000/api/auth/admin/users";
-      const response = await fetch(correctUrl, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+      const url = `${API_BASE_URL}/api/auth/admin/users`;
+      const response = await axios.get(url, {
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (response.status === 401 || response.status === 403) {
-        throw new Error(
-          "Unauthorized or Forbidden: Check admin permissions or re-login."
-        );
-      }
-      if (response.status === 404) {
-        throw new Error(
-          `Not Found: The API endpoint (${correctUrl}) was not found.`
-        );
-      }
-      if (!response.ok) {
-        let errorData = {
-          message: `Server responded with status: ${response.status}`,
-        };
-        try {
-          errorData = await response.json();
-        } catch (e) {
-          /* ignore */
-        }
-        throw new Error(
-          errorData.message || `HTTP error! Status: ${response.status}`
-        );
-      }
-
-      const data = await response.json();
-      console.log("API Response Data:", data);
-
-      if (data && data.success && Array.isArray(data.data)) {
-        // *** Ensure the fetched data includes necessary details for the modal ***
-        // If not, you might need to fetch full details when opening the modal
-        setUsers(data.data);
+      if (response.data?.success && Array.isArray(response.data.data)) {
+        setUsers(response.data.data);
       } else {
+        console.warn("Unexpected data structure for users:", response.data);
         setUsers([]);
-        setError("Received unexpected data structure from server.");
+        setError(
+          response.data?.message || "Received unexpected data structure."
+        );
       }
     } catch (err) {
       console.error("Fetch users error:", err);
-      setError(
-        err.message || "An unexpected error occurred while fetching users."
-      );
+      let detailedError = "Failed to fetch users.";
+      if (err.response) {
+        detailedError = `Error ${err.response.status}: ${
+          err.response.data?.message || "Server error"
+        }`;
+        if (err.response.status === 401 || err.response.status === 403) {
+          detailedError += " Check admin permissions or re-login.";
+        }
+      } else if (err.request) {
+        detailedError = "Network Error: Could not reach the server.";
+      } else {
+        detailedError = `Client Error: ${err.message}`;
+      }
+      setError(detailedError);
       setUsers([]);
     } finally {
-      if (showLoading) setIsLoading(false);
+      if (showLoadingIndicator) setIsLoading(false);
     }
   }, []);
 
@@ -102,100 +105,156 @@ const AdminUsersPage = () => {
 
   // --- Action Handlers ---
 
-  // --- MODIFIED: View User Details Handler ---
+  // Open Details Modal
   const handleViewUserDetails = (user) => {
-    setSelectedUser(user); // Set the user data for the modal
-    setShowDetailsModal(true); // Open the modal
-    console.log("View details for user:", user.id);
+    setSelectedUser(user);
+    setShowDetailsModal(true);
   };
 
+  // Close Details Modal
   const handleCloseDetailsModal = () => {
     setShowDetailsModal(false);
-    setSelectedUser(null); // Clear selected user when closing
+    setSelectedUser(null);
   };
-  // --- End MODIFIED ---
 
+  // Navigate to Edit Page
   const handleEditUser = (userId) => {
-    navigate(`/admin/users/${userId}/edit`);
-    console.log("Edit user:", userId);
+    navigate(`/admin/users/${userId}/edit`); // Ensure this route exists in App.js
   };
 
-  const handleDeleteClick = (user) => {
-    setUserToDelete(user);
+  // Prepare for Deletion (Called from Table OR Details Modal via adapter)
+  const initiateDeleteConfirmation = (user) => {
+    if (!user || !user.id || !user.username) {
+      console.error(
+        "Cannot initiate delete: Invalid user data provided.",
+        user
+      );
+      showNotification("Cannot initiate delete: Invalid user data.", "error");
+      return;
+    }
+    setUserToDelete({ id: user.id, username: user.username });
     setShowDeleteConfirm(true);
-    console.log("Initiate delete for user:", user.id);
   };
 
+  // Adapter function passed to UserDetailsModal
+  const handleDeleteRequestFromModal = (userId, username) => {
+    initiateDeleteConfirmation({ id: userId, username });
+  };
+
+  // Cancel Deletion
   const cancelDelete = () => {
     setShowDeleteConfirm(false);
     setUserToDelete(null);
   };
 
+  // --- Confirm and Execute Deletion (Called by Confirmation Modal) ---
+  // --- THIS FUNCTION CONTAINS THE EDITED CATCH BLOCK ---
   const confirmDeleteUser = async () => {
-    // ... (delete logic remains the same) ...
-    if (!userToDelete) return;
-    setIsDeleting(true);
-    setError("");
-    const userId = userToDelete.id;
+    if (!userToDelete || !userToDelete.id) return;
+
+    setActionLoading((prev) => ({ ...prev, delete: true })); // Start loading
+    setError(""); // Clear previous errors
     const token = localStorage.getItem("authToken");
+    if (!token) {
+      showNotification("Authentication required to delete.", "error");
+      setActionLoading((prev) => ({ ...prev, delete: false }));
+      cancelDelete(); // Close confirm modal
+      return;
+    }
+
+    const userId = userToDelete.id;
+    const username = userToDelete.username; // Store username for error message
+    const deleteUrl = `${API_BASE_URL}/api/auth/admin/users/${userId}`;
+    console.log(`Attempting to DELETE: ${deleteUrl}`); // Log the URL being called
+
     try {
-      const deleteUrl = `http://localhost:5000/api/auth/admin/users/${userId}`;
-      const response = await fetch(deleteUrl, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+      const response = await axios.delete(deleteUrl, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-      if (response.status === 401 || response.status === 403)
-        throw new Error("Unauthorized or Forbidden: Cannot delete user.");
-      if (response.status === 404)
-        throw new Error("User not found on server for deletion.");
-      if (!response.ok) {
-        let errorData = {
-          message: `Deletion failed with status: ${response.status}`,
-        };
-        try {
-          errorData = await response.json();
-        } catch (e) {
-          /* ignore */
-        }
-        throw new Error(errorData.message || `Deletion failed`);
-      }
-      console.log("User deleted successfully:", userId);
+
+      // Check for successful response (Axios throws errors for 4xx/5xx)
+      console.log(`User ${userId} deleted successfully:`, response.data);
+
+      // Update UI on success
       setUsers((currentUsers) => currentUsers.filter((u) => u.id !== userId));
-      setShowDeleteConfirm(false);
-      setUserToDelete(null);
+      showNotification(`User "${username}" deleted successfully.`, "success");
+      setShowDetailsModal(false); // Close details modal if it was open
+      setSelectedUser(null); // Clear selected user
+
+      // ======================================================= //
+      // ================ EDITED CATCH BLOCK START ============= //
+      // ======================================================= //
     } catch (err) {
-      console.error("Delete user error:", err);
-      setError(
-        `Failed to delete user ${userToDelete.username}: ${err.message}`
-      );
+      console.error("Delete user error object:", err); // Log the full error object
+
+      let specificErrMsg = `Failed to delete user "${username}".`; // Default fallback
+
+      if (err.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        const status = err.response.status;
+        console.error(`Server Response Status: ${status}`);
+        console.error("Server Response Data:", err.response.data);
+
+        // Try to get message from backend, otherwise use status code
+        const serverMsg =
+          err.response.data?.message || err.response.data?.error; // Check common fields
+        specificErrMsg = serverMsg
+          ? `${serverMsg} (Status: ${status})`
+          : `Server error (Status: ${status})`;
+
+        // Add specific friendly messages for common errors
+        if (status === 403) {
+          specificErrMsg = `Permission Denied: You may not have rights to delete this user. (Status: ${status})`;
+        } else if (status === 404) {
+          specificErrMsg = `User or API endpoint not found. Please refresh. (Status: ${status})`;
+        } else if (status === 401) {
+          specificErrMsg = `Authentication failed. Please log in again. (Status: ${status})`;
+        } else if (status >= 500) {
+          specificErrMsg = `Server error occurred during deletion. Please check server logs. (Status: ${status})`;
+        }
+        // Add more specific checks if needed (e.g., 400 Bad Request)
+      } else if (err.request) {
+        // The request was made but no response was received
+        console.error("No response received:", err.request);
+        specificErrMsg =
+          "Network error: Could not reach the server to delete user.";
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        console.error("Error setting up request:", err.message);
+        specificErrMsg = `Client setup error: ${err.message}`;
+      }
+
+      showNotification(specificErrMsg, "error"); // Show the more specific message
+      // setError(specificErrMsg); // Optional: show general error as well
+      // ======================================================= //
+      // ================= EDITED CATCH BLOCK END ============== //
+      // ======================================================= //
+    } finally {
+      setActionLoading((prev) => ({ ...prev, delete: false })); // Stop loading
+      // Always close confirm modal and clear userToDelete after attempt
       setShowDeleteConfirm(false);
       setUserToDelete(null);
-    } finally {
-      setIsDeleting(false);
     }
   };
 
+  // --- Refresh Handler ---
   const handleRefresh = () => {
-    fetchUsers(true);
+    fetchUsers(true); // Show full loader on manual refresh
   };
 
   // --- Render Logic ---
   return (
-    <div className="p-4 md:p-6 lg:p-8 bg-gray-50 min-h-screen">
-      {/* Header and Refresh Button */}
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">
-          Registered Users
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl sm:text-3xl font-semibold text-gray-800">
+          Registered Users Management
         </h1>
         <button
           onClick={handleRefresh}
-          disabled={isLoading}
-          className={`p-2 rounded-full text-gray-500 hover:bg-gray-200 hover:text-gray-700 transition duration-150 ease-in-out ${
-            isLoading ? "cursor-not-allowed opacity-50" : ""
-          }`}
+          disabled={isLoading || actionLoading.delete}
+          className="p-2 rounded-full text-gray-500 hover:bg-gray-200 hover:text-gray-700 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed"
           title="Refresh User List"
         >
           <ArrowPathIcon
@@ -204,62 +263,63 @@ const AdminUsersPage = () => {
         </button>
       </div>
 
+      {/* Global Notification */}
+      <Notification
+        message={notification.message}
+        type={notification.type}
+        show={notification.show}
+        onClose={() => setNotification((prev) => ({ ...prev, show: false }))}
+      />
+
+      {/* Loading State */}
       {isLoading && (
         <div className="flex justify-center items-center py-10">
-          <LoadingSpinner />
+          <LoadingSpinner size="lg" />
         </div>
       )}
+
+      {/* Error State */}
       {!isLoading && error && (
         <div className="mt-4">
-          <ErrorMessage message={error} />
+          <ErrorMessage message={error} onClose={() => setError("")} />
         </div>
       )}
+
+      {/* No Users State */}
       {!isLoading && !error && users.length === 0 && (
         <div className="bg-white rounded-xl shadow p-6 text-center text-gray-500">
           No registered users found.
         </div>
       )}
 
+      {/* Users Table */}
       {!isLoading && !error && users.length > 0 && (
         <div className="bg-white rounded-xl shadow-md overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-100">
+            <thead className="bg-gray-50">
               <tr>
                 {/* Headers */}
-                <th
-                  scope="col"
-                  className="px-4 py-3 text-left text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider"
-                >
+                <th className="px-4 py-3 text-left text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider">
                   Username
                 </th>
-                <th
-                  scope="col"
-                  className="px-4 py-3 text-left text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider"
-                >
+                <th className="px-4 py-3 text-left text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider">
                   Email
                 </th>
-                <th
-                  scope="col"
-                  className="px-4 py-3 text-left text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider"
-                >
+                <th className="px-4 py-3 text-left text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider">
                   Role
                 </th>
-                <th
-                  scope="col"
-                  className="px-4 py-3 text-left text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider"
-                >
+                <th className="px-4 py-3 text-left text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-4 py-3 text-left text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider">
                   Joined
                 </th>
-                <th
-                  scope="col"
-                  className="px-4 py-3 text-center text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider"
-                >
+                <th className="px-4 py-3 text-center text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
-              {/* Rows */}
               {users.map((user) => (
                 <tr
                   key={user.id}
@@ -275,6 +335,23 @@ const AdminUsersPage = () => {
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 capitalize">
                     {user.role}
                   </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                    <span
+                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        user.status === "approved"
+                          ? "bg-green-100 text-green-800"
+                          : user.status === "pending"
+                          ? "bg-yellow-100 text-yellow-800"
+                          : user.status === "rejected"
+                          ? "bg-red-100 text-red-800"
+                          : user.status === "banned"
+                          ? "bg-red-200 text-red-900"
+                          : "bg-gray-100 text-gray-800" // Default/Unknown
+                      }`}
+                    >
+                      {user.status || "Unknown"}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
                     {user.createdAt
                       ? new Date(user.createdAt).toLocaleDateString()
@@ -283,30 +360,35 @@ const AdminUsersPage = () => {
                   {/* Actions Cell */}
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
                     <div className="flex items-center justify-center space-x-2">
-                      {/* View Details Button - MODIFIED */}
+                      {/* View Details Button */}
                       <button
-                        onClick={() => handleViewUserDetails(user)} // Pass the whole user object
-                        className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded-full transition duration-150 ease-in-out"
+                        onClick={() => handleViewUserDetails(user)}
+                        className="p-1.5 rounded text-blue-600 hover:text-blue-800 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 transition duration-150"
                         title="View Details"
                       >
-                        <EyeIcon className="h-5 w-5" />
+                        {" "}
+                        <EyeIcon className="h-5 w-5" />{" "}
                       </button>
                       {/* Edit User Button */}
                       <button
                         onClick={() => handleEditUser(user.id)}
-                        className="p-1 text-green-600 hover:text-green-800 hover:bg-green-100 rounded-full transition duration-150 ease-in-out"
+                        className="p-1.5 rounded text-green-600 hover:text-green-800 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-green-500 transition duration-150"
                         title="Edit User"
                       >
-                        <PencilSquareIcon className="h-5 w-5" />
+                        {" "}
+                        <PencilSquareIcon className="h-5 w-5" />{" "}
                       </button>
                       {/* Delete User Button */}
                       <button
-                        onClick={() => handleDeleteClick(user)}
-                        disabled={isDeleting && userToDelete?.id === user.id}
-                        className={`p-1 text-red-600 hover:text-red-800 hover:bg-red-100 rounded-full transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed`}
+                        onClick={() => initiateDeleteConfirmation(user)}
+                        disabled={
+                          actionLoading.delete && userToDelete?.id === user.id
+                        }
+                        className="p-1.5 rounded text-red-600 hover:text-red-800 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-red-500 transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Delete User"
                       >
-                        <TrashIcon className="h-5 w-5" />
+                        {" "}
+                        <TrashIcon className="h-5 w-5" />{" "}
                       </button>
                     </div>
                   </td>
@@ -317,30 +399,27 @@ const AdminUsersPage = () => {
         </div>
       )}
 
-      {/* Delete Confirmation Modal (remains the same) */}
-      {showDeleteConfirm && userToDelete && (
-        <ConfirmationModal
-          isOpen={showDeleteConfirm}
-          title="Confirm Deletion"
-          message={`Are you sure you want to delete the user "${userToDelete.username}"? This action cannot be undone.`}
-          onConfirm={confirmDeleteUser}
-          onCancel={cancelDelete}
-          confirmText="Delete"
-          cancelText="Cancel"
-          isConfirming={isDeleting}
-          confirmButtonStyle="bg-red-600 hover:bg-red-700 focus:ring-red-500"
-        />
-      )}
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteConfirm}
+        onClose={cancelDelete}
+        onConfirm={confirmDeleteUser}
+        title="Confirm User Deletion"
+        message={`Are you sure you want to permanently delete the user "${
+          userToDelete?.username || ""
+        }"? This action cannot be undone.`}
+        confirmText={actionLoading.delete ? "Deleting..." : "Delete User"}
+        isConfirming={actionLoading.delete}
+        confirmButtonColor="red"
+      />
 
-      {/* --- NEW: User Details Modal --- */}
-      {showDetailsModal && selectedUser && (
-        <UserDetailsModal
-          isOpen={showDetailsModal}
-          user={selectedUser}
-          onClose={handleCloseDetailsModal}
-        />
-      )}
-      {/* --- End NEW --- */}
+      {/* User Details Modal */}
+      <UserDetailsModal
+        isOpen={showDetailsModal}
+        user={selectedUser}
+        onClose={handleCloseDetailsModal}
+        onDeleteRequest={handleDeleteRequestFromModal} // Pass the adapter function
+      />
     </div>
   );
 };

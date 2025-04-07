@@ -1,26 +1,29 @@
+// src/App.js
+
 import React, { useEffect, useState, useCallback } from "react";
 import {
   BrowserRouter as Router,
   Routes,
   Route,
   Navigate,
-  Outlet,
   useLocation,
+  Link, // Import Link for error pages
 } from "react-router-dom";
 import axios from "axios";
-import "./index.css"; // Assuming this exists
+import "./index.css"; // Ensure this path is correct
 
-// Page Imports
+// --- Page Imports ---
 import Home from "./Page/Home";
 import Explore from "./Page/Explore";
 import SignupPage from "./Page/SignupPage";
 import LoginPage from "./Page/LoginPage";
-import Profile from "./Page/Profile";
-import Publication from "./Page/Publication";
+import Profile from "./Page/Profile"; // Contains the publication form now
+import Publication from "./Page/Publication"; // <-- CORRECTED IMPORT: Use this for display
+// import MyPublications from "./Page/Publications"; // <-- REMOVED incorrect/unused import
 import MyProjects from "./Page/MyProjects";
 import Messages from "./Page/Messages";
 
-// Component Imports (Signup Forms, Profile Sections, Navbar)
+// --- Component Imports ---
 import AcademicSignupForm from "./Component/AcademicSignupForm";
 import CorporateSignupForm from "./Component/CorporateSignupForm";
 import MedicalSignupForm from "./Component/MedicalSignupForm";
@@ -32,90 +35,136 @@ import ProfileSkills from "./Component/ProfileSkills";
 import ProfileResearch from "./Component/ProfileResearch";
 import Navbar from "./Component/Navbar";
 
-// Admin Page Imports
+// --- Admin Page Imports ---
 import AdminDashboardPage from "./Page/Admin/AdminDashboardPage";
 import AdminUsersPage from "./Page/Admin/AdminUsersPage";
 import AdminSettingsPage from "./Page/Admin/AdminSettingsPage";
 import AdminReportsPage from "./Page/Admin/AdminReportsPage";
-import AdminPendingUsersPage from "./Page/Admin/AdminPendingUsersPage"; // <--- IMPORT ADDED HERE
+import AdminPendingUsersPage from "./Page/Admin/AdminPendingUsersPage";
+import AdminChatPage from "./Page/Admin/AdminChatPage";
 
-// Admin Layout Component (Placeholder/Example)
-const AdminLayout = ({ isAdmin }) => {
-  // Add a proper loading state check
-  if (isAdmin === null) {
-    // Check explicitly for null (initial state)
+// --- Layout Imports ---
+import AdminLayout from "./Layout/AdminLayout";
+
+// --- Helper Components ---
+
+// Standard protected route - requires login
+const ProtectedRoute = ({ isLoggedIn, children }) => {
+  const location = useLocation();
+  if (isLoggedIn === null) {
     return (
-      <div className="flex justify-center items-center h-screen text-xl font-semibold">
-        Verifying Admin Access... {/* Changed loading message */}
+      <div className="flex justify-center items-center h-screen">
+        Checking authentication...
       </div>
     );
   }
-  // Redirect if not admin or access not determined yet
-  return isAdmin ? <Outlet /> : <Navigate to="/login" replace />; // Redirect non-admins to login
+  if (!isLoggedIn) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+  return children;
 };
 
-function App() {
-  const [isAdmin, setIsAdmin] = useState(null); // null = checking, false = not admin, true = is admin
-  const [isLoggedIn, setIsLoggedIn] = useState(null); // null = checking, false = not logged in, true = is logged in
-  const [currentUser, setCurrentUser] = useState(null);
+// Admin specific protected route - requires login AND admin role
+const AdminProtectedRoute = ({ isLoggedIn, isAdmin, children }) => {
+  const location = useLocation();
+  if (isLoggedIn === null || isAdmin === null) {
+    return (
+      <div className="flex justify-center items-center h-screen text-xl font-semibold">
+        Verifying Admin Access...
+      </div>
+    );
+  }
+  if (!isLoggedIn) {
+    console.warn("Admin Route Guard: Not logged in. Redirecting to login.");
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+  if (!isAdmin) {
+    console.warn(
+      "Admin Route Guard: Access Denied - User is not an admin. Redirecting."
+    );
+    return <Navigate to="/profile" replace />;
+  }
+  return children; // Render the child (which will be AdminLayout)
+};
 
-  // Memoized logout function
+// --- Main App Component ---
+function App() {
+  const [isAdmin, setIsAdmin] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+
   const handleLogout = useCallback(() => {
-    localStorage.removeItem("authToken"); // Clear token
-    localStorage.removeItem("user"); // Clear stored user data
+    console.log("Logging out...");
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("user");
     setIsLoggedIn(false);
     setIsAdmin(false);
     setCurrentUser(null);
-    // Optional: navigate to home or login after logout
-    // window.location.href = '/login'; // Force reload if needed
+    setLoadingAuth(false);
   }, []);
 
-  // Effect to validate token on initial load or refresh
   useEffect(() => {
     const token = localStorage.getItem("authToken");
     if (!token) {
-      // No token found, definitely not logged in
+      console.log("No auth token found.");
       setIsLoggedIn(false);
       setIsAdmin(false);
       setCurrentUser(null);
-      return; // Stop processing
+      setLoadingAuth(false);
+      return;
     }
-
-    // If token exists, validate it with the backend
-    // *** NOTE: Ensure you have a `/api/auth/validate` endpoint ***
-    // This endpoint should verify the token and return the user object if valid
+    console.log("Auth token found, validating...");
+    setLoadingAuth(true);
     axios
       .post(
-        // Using POST for validate, adjust if your endpoint is GET
-        "http://localhost:5000/api/auth/validate", // Replace with your actual validation endpoint
-        {}, // Empty body for validation if needed
+        "/api/auth/validate",
+        {},
         { headers: { Authorization: `Bearer ${token}` } }
       )
       .then((response) => {
-        if (response.data.success && response.data.user) {
-          // Token is valid, user data received
+        if (response.data?.success && response.data?.user) {
+          console.log("Token validation successful:", response.data.user);
           setIsLoggedIn(true);
           const isAdminUser = response.data.user.role === "admin";
           setIsAdmin(isAdminUser);
           setCurrentUser(response.data.user);
-          // Also store user data in localStorage for profile page consistency?
           localStorage.setItem("user", JSON.stringify(response.data.user));
         } else {
-          // Token invalid or backend indicates failure
+          console.warn(
+            "Token validation failed (API success false or no user data)."
+          );
           handleLogout();
         }
       })
       .catch((error) => {
-        // Network error or backend error (e.g., 401 Unauthorized)
-        console.error("Token validation failed:", error);
-        handleLogout(); // Log out user if token validation fails
+        if (error.response) {
+          console.error(
+            `Token validation failed: Server responded with status ${error.response.status}`,
+            error.response.data
+          );
+        } else if (error.request) {
+          console.error(
+            "Token validation failed: No response received from server.",
+            error.request
+          );
+        } else {
+          console.error(
+            "Token validation failed: Error setting up request.",
+            error.message
+          );
+        }
+        handleLogout();
+      })
+      .finally(() => {
+        console.log("Auth validation complete.");
+        setLoadingAuth(false);
       });
-  }, [handleLogout]); // Rerun only if handleLogout changes (which it shouldn't)
+  }, [handleLogout]);
 
-  // Show a global loading state while checking authentication
-  if (isLoggedIn === null) {
+  if (loadingAuth) {
     return (
-      <div className="flex justify-center items-center h-screen text-xl font-semibold">
+      <div className="flex justify-center items-center h-screen text-xl font-semibold bg-gray-100">
         Loading Application...
       </div>
     );
@@ -123,21 +172,20 @@ function App() {
 
   return (
     <Router>
-      {/* Pass all necessary state and handlers down to the Routes component */}
       <AppRoutes
         isLoggedIn={isLoggedIn}
         isAdmin={isAdmin}
         currentUser={currentUser}
         handleLogout={handleLogout}
-        setIsLoggedIn={setIsLoggedIn} // Pass setters for login component
+        setIsLoggedIn={setIsLoggedIn}
         setIsAdmin={setIsAdmin}
-        setCurrentUser={setCurrentUser}
+        setCurrentUser={setCurrentUser} // Pass down setter if Login needs to update App state directly
       />
     </Router>
   );
 }
 
-// Component to handle actual routing logic
+// --- AppRoutes Component (Handles Routing and Conditional Navbar) ---
 const AppRoutes = ({
   isLoggedIn,
   isAdmin,
@@ -145,25 +193,21 @@ const AppRoutes = ({
   handleLogout,
   setIsLoggedIn,
   setIsAdmin,
-  setCurrentUser,
+  setCurrentUser, // Receive setter if needed by children like LoginPage
 }) => {
   const location = useLocation();
-  // Determine if the current route is within the /admin path
-  const isAdminRoute = location.pathname.toLowerCase().startsWith("/admin");
+  const showNavbar = !location.pathname.toLowerCase().startsWith("/admin");
 
   return (
     <>
-      {/* Conditionally render Navbar only if not an admin route */}
-      {!isAdminRoute && (
+      {showNavbar && (
         <Navbar
           isLoggedIn={isLoggedIn}
-          isAdmin={isAdmin}
           currentUser={currentUser}
           onLogout={handleLogout}
         />
       )}
-      {/* Adjust main padding based on whether Navbar is present */}
-      <main className={!isAdminRoute ? "pt-16 md:pt-20" : ""}>
+      <main className={showNavbar ? "pt-16 md:pt-20" : ""}>
         <Routes>
           {/* --- Public Routes --- */}
           <Route path="/" element={<Home />} />
@@ -176,7 +220,6 @@ const AppRoutes = ({
               isLoggedIn ? <Navigate to="/profile" replace /> : <SignupPage />
             }
           />
-          {/* Specific Signup Forms */}
           <Route path="/signup/academic" element={<AcademicSignupForm />} />
           <Route path="/signup/corporate" element={<CorporateSignupForm />} />
           <Route path="/signup/medical" element={<MedicalSignupForm />} />
@@ -184,122 +227,126 @@ const AppRoutes = ({
             path="/signup/not-researcher"
             element={<NotResearcherSignupForm />}
           />
-
-          {/* Login Routes */}
           <Route
             path="/login"
             element={
               isLoggedIn ? (
-                isAdmin ? (
-                  <Navigate to="/admin" replace />
-                ) : (
-                  <Navigate to="/profile" replace />
-                )
+                <Navigate to={isAdmin ? "/admin" : "/profile"} replace />
               ) : (
                 <LoginPage
                   setIsLoggedIn={setIsLoggedIn}
                   setIsAdmin={setIsAdmin}
                   setCurrentUser={setCurrentUser}
-                  isForAdmin={false}
                 />
               )
-            }
-          />
-          <Route
-            path="/admin-login"
-            element={
-              isLoggedIn ? (
-                isAdmin ? (
-                  <Navigate to="/admin" replace />
-                ) : (
-                  <Navigate to="/profile" replace />
-                )
-              ) : (
-                <LoginPage
-                  setIsLoggedIn={setIsLoggedIn}
-                  setIsAdmin={setIsAdmin}
-                  setCurrentUser={setCurrentUser}
-                  isForAdmin={true}
-                />
-              ) // *** isForAdmin is TRUE here ***
             }
           />
 
-          {/* --- Protected User Routes --- */}
-          {/* Profile route with nested sections */}
+          {/* --- Protected User Routes (Require Login) --- */}
           <Route
-            path="/profile"
+            path="/profile" // Profile page WITH the form
             element={
-              isLoggedIn ? (
+              <ProtectedRoute isLoggedIn={isLoggedIn}>
                 <Profile currentUser={currentUser} />
-              ) : (
-                <Navigate to="/login" replace />
-              )
+              </ProtectedRoute>
             }
           >
-            {/* Default to account or dashboard within profile */}
+            {/* Keep nested routes if Profile component renders an <Outlet /> */}
             <Route index element={<Navigate to="account" replace />} />
             <Route path="account" element={<ProfileAccount />} />
             <Route path="about" element={<ProfileAbout />} />
             <Route path="education" element={<ProfileEducation />} />
             <Route path="skills" element={<ProfileSkills />} />
             <Route path="research" element={<ProfileResearch />} />
-            {/* Add other profile sub-routes */}
           </Route>
 
-          {/* Other protected routes */}
+          {/* --- Route for displaying user's publications --- */}
           <Route
-            path="/publications"
+            path="/publications" // *** CORRECTED PATH (or use /my-publications if preferred) ***
             element={
-              isLoggedIn ? (
+              <ProtectedRoute isLoggedIn={isLoggedIn}>
+                {/* *** CORRECTED COMPONENT NAME *** */}
                 <Publication currentUser={currentUser} />
-              ) : (
-                <Navigate to="/login" replace />
-              )
+              </ProtectedRoute>
             }
           />
-          <Route
-            path="/my-projects"
-            element={
-              isLoggedIn ? (
-                <MyProjects currentUser={currentUser} />
-              ) : (
-                <Navigate to="/login" replace />
-              )
-            }
-          />
-          <Route
-            path="/messages"
-            element={
-              isLoggedIn ? (
-                <Messages currentUser={currentUser} />
-              ) : (
-                <Navigate to="/login" replace />
-              )
-            }
-          />
-          {/* Removed duplicate /Explore, it's public */}
+          {/* --------------------------------------------------- */}
 
-          {/* --- Protected Admin Routes --- */}
-          <Route path="/admin" element={<AdminLayout isAdmin={isAdmin} />}>
-            {/* Admin Dashboard is the index route */}
+          <Route
+            path="/my-projects" // Assuming this is separate
+            element={
+              <ProtectedRoute isLoggedIn={isLoggedIn}>
+                <MyProjects currentUser={currentUser} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/messages" // Assuming this is separate
+            element={
+              <ProtectedRoute isLoggedIn={isLoggedIn}>
+                <Messages currentUser={currentUser} />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* --- Protected Admin Routes (Require Login + Admin Role) --- */}
+          <Route
+            path="/admin"
+            element={
+              <AdminProtectedRoute isLoggedIn={isLoggedIn} isAdmin={isAdmin}>
+                <AdminLayout />
+              </AdminProtectedRoute>
+            }
+          >
             <Route index element={<AdminDashboardPage />} />
-            {/* Specific Admin Sections */}
-            <Route path="users" element={<AdminUsersPage />} />{" "}
-            {/* Manage all users */}
-            <Route
-              path="pending-users"
-              element={<AdminPendingUsersPage />}
-            />{" "}
-            {/* <--- ROUTE ADDED HERE */}
+            <Route path="users" element={<AdminUsersPage />} />
+            <Route path="pending-users" element={<AdminPendingUsersPage />} />
+            <Route path="chat" element={<AdminChatPage />} />
             <Route path="settings" element={<AdminSettingsPage />} />
             <Route path="reports" element={<AdminReportsPage />} />
-            {/* Add routes for user profile view/edit within admin? */}
-            {/* Example: <Route path="users/:userId/edit" element={<AdminUserEditPage />} /> */}
+            <Route
+              path="*"
+              element={
+                /* ... Admin Not Found ... */
+                <div className="p-6 text-center bg-yellow-100 border border-yellow-300 rounded">
+                  <h2 className="text-xl font-semibold text-yellow-800">
+                    Admin Page Not Found
+                  </h2>
+                  <p className="text-yellow-700 mt-2">
+                    The specific admin page you requested does not exist.
+                  </p>
+                  <Link
+                    to="/admin"
+                    className="text-blue-600 hover:underline mt-4 inline-block"
+                  >
+                    Go to Admin Dashboard
+                  </Link>
+                </div>
+              }
+            />
           </Route>
 
-          {/* Catch-all / Not Found */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          {/* --- Catch-all / Not Found (Must be the last route) --- */}
+          <Route
+            path="*"
+            element={
+              /* ... General 404 ... */
+              <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] text-center p-10">
+                <h1 className="text-4xl font-bold text-gray-700 mb-4">
+                  404 - Page Not Found
+                </h1>
+                <p className="text-lg text-gray-500 mb-6">
+                  Sorry, the page you are looking for could not be found.
+                </p>
+                <Link
+                  to="/"
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                >
+                  Go to Homepage
+                </Link>
+              </div>
+            }
+          />
         </Routes>
       </main>
     </>

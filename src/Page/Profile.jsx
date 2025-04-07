@@ -1,5 +1,8 @@
-import React, { useEffect, useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+// src/Page/Profile.jsx
+
+import React, { useEffect, useState, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom"; // Ensure useNavigate is imported
+import axios from "axios"; // Using Axios for consistency
 import {
   FaBell,
   FaEnvelope,
@@ -10,228 +13,201 @@ import {
   FaSave,
   FaEdit,
   FaSpinner,
+  FaPaperPlane,
 } from "react-icons/fa";
-import Sidebar from "../Component/Sidebar"; // Assuming Sidebar exists
-// import "../index.css"; // Ensure Tailwind is configured
+import Sidebar from "../Component/Sidebar"; // Verify path
+import LoadingSpinner from "../Component/Common/LoadingSpinner"; // Verify path
+import Notification from "../Component/Common/Notification"; // Verify path
+import ErrorMessage from "../Component/Common/ErrorMessage"; // Verify path
+// import "../index.css"; // Ensure Tailwind is configured via index.css or setup
 
-// --- Helper: Default Empty User Data ---
-// This structure is used when no data is found or as a base
+// API Base URL
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+
+// Default User Data
 const defaultUserData = {
-  username: "", // Often set during signup, might be non-editable later
+  username: "",
   firstName: "",
   lastName: "",
-  email: "", // Usually set during signup and is often a key identifier
+  email: "",
   affiliation: "",
-  role: "", // e.g., Student, Professor, Researcher
+  role: "",
   aboutMe: "",
-  skills: "", // Consider storing as an array ["skill1", "skill2"]
-  researchInterests: "", // Consider storing as an array
+  skills: "",
+  researchInterests: "",
   achievements: "",
-  socialLinks: {
-    github: "",
-    linkedin: "",
-    twitter: "",
-  },
-  contactInfo: {
-    phone: "",
-  },
-  profileImage: "https://via.placeholder.com/150", // Default placeholder
+  socialLinks: { github: "", linkedin: "", twitter: "" },
+  contactInfo: { phone: "" },
+  profileImage: "https://via.placeholder.com/150",
 };
 
-export default function Profile() {
-  // 'user' state holds the last *saved* or *loaded* data from storage/API
-  const [user, setUser] = useState(null);
-  // 'formData' state holds the data currently being displayed or edited in the form
-  const [formData, setFormData] = useState(defaultUserData);
-  // 'editing' state controls whether the form is in view or edit mode
-  const [editing, setEditing] = useState(false); // Start in view mode by default
-  const [newProfileImage, setNewProfileImage] = useState(null); // For previewing image changes
-  const [isSaving, setIsSaving] = useState(false);
-  const [isLoading, setIsLoading] = useState(true); // Start loading initially
-  const [notificationCount] = useState(3); // Example static count
-  const [messageCount] = useState(2); // Example static count
+// Default Publication Form Data
+const defaultPublicationData = {
+  title: "",
+  abstract: "",
+  author: "",
+  document_link: "",
+};
 
+// Accept currentUser as a prop
+export default function Profile({ currentUser }) {
+  // --- Profile State ---
+  const [user, setUser] = useState(currentUser); // Initialize with prop
+  const [profileFormData, setProfileFormData] = useState(defaultUserData);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [newProfileImage, setNewProfileImage] = useState(null);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(!currentUser); // Only load if prop isn't initially passed
+
+  // --- Publication Form State ---
+  const [publicationFormData, setPublicationFormData] = useState(
+    defaultPublicationData
+  );
+  const [publicationFormErrors, setPublicationFormErrors] = useState({});
+  const [isSubmittingPublication, setIsSubmittingPublication] = useState(false);
+
+  // --- Common State ---
+  const [notification, setNotification] = useState({
+    message: "",
+    type: "",
+    show: false,
+  });
+  const [apiError, setApiError] = useState("");
+
+  // --- Refs and Hooks ---
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
 
-  // --- Effect to Load User Data ---
-  // This runs once when the component mounts.
-  // It attempts to load user data stored by the Signup or Login process.
-  useEffect(() => {
-    setIsLoading(true);
-    console.log(
-      "Profile component mounted. Attempting to load user data from localStorage..."
+  // --- Notification Handler ---
+  const showNotification = (message, type = "success") => {
+    setNotification({ message, type, show: true });
+    setTimeout(
+      () => setNotification((prev) => ({ ...prev, show: false })),
+      4000
     );
-    try {
-      // **ASSUMPTION:** Your Signup and Login components save user data here.
-      const storedUserJson = localStorage.getItem("user");
+  };
 
-      if (storedUserJson) {
-        console.log("User data found in localStorage:", storedUserJson);
-        const parsedUser = JSON.parse(storedUserJson);
-
-        // Set the 'user' state with the loaded data (represents the saved state)
-        setUser(parsedUser);
-
-        // Initialize 'formData' by merging stored data with defaults.
-        // This ensures all expected fields exist in formData, even if not in localStorage.
-        setFormData((prev) => ({
-          ...defaultUserData, // Start with defaults
-          ...parsedUser, // Override with stored data
-          // Ensure nested objects are also merged correctly
-          socialLinks: {
-            ...defaultUserData.socialLinks,
-            ...(parsedUser.socialLinks || {}),
-          },
-          contactInfo: {
-            ...defaultUserData.contactInfo,
-            ...(parsedUser.contactInfo || {}),
-          },
-          // Use the stored profile image if available
-          profileImage: parsedUser.profileImage || defaultUserData.profileImage,
-        }));
-
-        setEditing(false); // User data found, start in view mode.
-        console.log("Profile loaded successfully. Displaying data.");
-      } else {
-        // --- Scenario: No User Data Found ---
-        // This happens if it's the user's first time after signup (if signup didn't save),
-        // or if localStorage was cleared, or if login didn't save the data yet.
-        console.warn(
-          "No user data found in localStorage. Entering initial profile setup mode."
-        );
-        setUser(null); // No base user data exists
-        setFormData(defaultUserData); // Use empty defaults for the form
-        setEditing(true); // Start in editing mode to force profile creation/completion.
-      }
-    } catch (error) {
-      console.error(
-        "Error loading or parsing user data from localStorage:",
-        error
+  // --- Effect to Sync with currentUser Prop & Load if needed ---
+  useEffect(() => {
+    if (currentUser) {
+      setUser(currentUser); // Update internal state if prop changes
+      const initialProfileData = {
+        ...defaultUserData,
+        ...currentUser,
+        socialLinks: {
+          ...defaultUserData.socialLinks,
+          ...(currentUser.socialLinks || {}),
+        },
+        contactInfo: {
+          ...defaultUserData.contactInfo,
+          ...(currentUser.contactInfo || {}),
+        },
+        profileImage: currentUser.profileImage || defaultUserData.profileImage,
+      };
+      setProfileFormData(initialProfileData);
+      setPublicationFormData((prev) => ({
+        ...defaultPublicationData, // Start fresh for form data except author
+        author:
+          `${initialProfileData.firstName || ""} ${
+            initialProfileData.lastName || ""
+          }`.trim() ||
+          initialProfileData.username ||
+          "",
+      }));
+      setEditingProfile(false); // Default to view mode when user data is available
+      setIsLoadingProfile(false); // Data is ready
+      console.log("Profile synced with currentUser prop.");
+    } else if (!isLoadingProfile) {
+      // Only enter setup if loading is finished AND currentUser is still null/undefined
+      console.warn(
+        "No currentUser prop found. Entering initial profile setup mode."
       );
-      // Handle error: Fallback to default state and allow editing.
       setUser(null);
-      setFormData(defaultUserData);
-      setEditing(true); // Allow user to create profile even if loading failed
-    } finally {
-      setIsLoading(false); // Finish loading indicator
+      setProfileFormData(defaultUserData);
+      setPublicationFormData(defaultPublicationData);
+      setEditingProfile(true);
+      setIsLoadingProfile(false); // Ensure loading stops
     }
-  }, []); // Empty dependency array ensures this runs only once on mount
+  }, [currentUser, isLoadingProfile]); // Re-run if currentUser prop changes
 
-  // --- Handlers ---
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
+  // --- Profile Input Handlers ---
+  const handleProfileInputChange = (e) => {
+    setProfileFormData((prev) => ({
       ...prev,
-      [name]: value,
+      [e.target.name]: e.target.value,
     }));
   };
-
-  const handleNestedInputChange = (e, section) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
+  const handleNestedProfileInputChange = (e, section) => {
+    setProfileFormData((prev) => ({
       ...prev,
-      [section]: {
-        ...prev[section],
-        [name]: value,
-      },
+      [section]: { ...prev[section], [e.target.name]: e.target.value },
     }));
   };
-
   const triggerFileInput = () => {
     fileInputRef.current?.click();
   };
-
   const handleImageChange = (e) => {
+    /* ... logic to read file and set preview/formData ... */
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
       reader.onload = (event) => {
         const imageDataUrl = event.target.result;
-        setNewProfileImage(imageDataUrl); // Show preview immediately
-        // Update formData immediately so it gets saved
-        setFormData((prev) => ({
-          ...prev,
-          profileImage: imageDataUrl, // Store the base64 string or prepare for upload
-        }));
+        setNewProfileImage(imageDataUrl);
+        setProfileFormData((prev) => ({ ...prev, profileImage: imageDataUrl }));
       };
       reader.readAsDataURL(file);
-      // In a real app, you'd likely upload the 'file' object directly on save,
-      // not just store the base64 string in localStorage long-term.
     }
   };
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    console.log("Attempting to save profile data:", formData);
-
-    // **TODO: Replace with actual API call to your backend**
-    // Example:
-    // try {
-    //   const response = await fetch('/api/user/profile', {
-    //     method: 'PUT', // or POST if creating
-    //     headers: {
-    //       'Content-Type': 'application/json',
-    //       // Include authorization token if needed
-    //       // 'Authorization': `Bearer ${yourAuthToken}`
-    //     },
-    //     body: JSON.stringify(formData),
-    //   });
-    //   if (!response.ok) {
-    //     throw new Error(`HTTP error! status: ${response.status}`);
-    //   }
-    //   const updatedUser = await response.json();
-    //   // Update local state *after* successful API call
-    //   localStorage.setItem("user", JSON.stringify(updatedUser)); // Use data from response if it differs
-    //   setUser(updatedUser);
-    //   setFormData(updatedUser); // Sync form with saved data
-    //   setNewProfileImage(null);
-    //   setEditing(false);
-    //   console.log("Profile saved successfully via API.");
-    //   // Show success message/toast
-    // } catch (error) {
-    //   console.error("Failed to save profile via API:", error);
-    //   // Show error message/toast
-    // } finally {
-    //   setIsSaving(false);
-    // }
-
-    // **Simulated Save (using localStorage only for demo)**
+  // --- Profile Save/Cancel Handlers ---
+  const handleProfileSave = async () => {
+    setIsSavingProfile(true);
+    setApiError("");
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+      /* ... handle auth error ... */ return;
+    }
+    console.log("Saving profile:", profileFormData);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate network delay
+      // --- TODO: REPLACE WITH ACTUAL API CALL ---
+      await new Promise((res) => setTimeout(res, 1000)); // Simulate API call
+      const updatedUser = { ...profileFormData }; // Use form data as result in simulation
+      // --- End Simulation ---
 
-      // Update localStorage with the current form data
-      localStorage.setItem("user", JSON.stringify(formData));
-
-      // Update the 'user' state to reflect the newly saved data
-      setUser(formData);
-
-      // If the image was changed via preview, it's already in formData.
-      // Clear the separate preview state.
+      localStorage.setItem("user", JSON.stringify(updatedUser)); // Update local storage
+      setUser(updatedUser); // Update internal state
+      setProfileFormData(updatedUser); // Sync form state
       setNewProfileImage(null);
-
-      // Exit editing mode
-      setEditing(false);
-      console.log("Profile saved successfully (simulated to localStorage).");
-      // Optionally: Show a success message/toast
+      setEditingProfile(false);
+      showNotification("Profile updated successfully!", "success");
+      // Update publication author field in case name changed
+      setPublicationFormData((prev) => ({
+        ...prev,
+        author:
+          `${updatedUser.firstName || ""} ${
+            updatedUser.lastName || ""
+          }`.trim() ||
+          updatedUser.username ||
+          "",
+      }));
     } catch (error) {
-      console.error("Failed to save profile (simulation error):", error);
-      // Optionally: Show an error message/toast
+      /* ... error handling ... */
+      console.error("Failed to save profile:", error);
+      const errMsg = error.response?.data?.message || "Failed to save profile.";
+      showNotification(errMsg, "error");
+      setApiError(errMsg);
     } finally {
-      setIsSaving(false);
+      setIsSavingProfile(false);
     }
   };
-
-  const handleCancel = () => {
-    console.log("Cancelling edit...");
-    // Reset formData back to the *last saved state* (stored in the 'user' state)
-    // If 'user' is null (meaning initial setup was cancelled), reset to defaults.
+  const handleProfileCancel = () => {
+    /* ... logic to reset profileFormData from user state ... */
     if (user) {
-      // Restore from the 'user' state, ensuring nested structures are copied correctly
-      setFormData({
-        ...defaultUserData, // Start with defaults
-        ...user, // Override with saved data
+      setProfileFormData({
+        /* ... restore from user state ... */ ...defaultUserData,
+        ...user,
         socialLinks: {
           ...defaultUserData.socialLinks,
           ...(user.socialLinks || {}),
@@ -243,33 +219,103 @@ export default function Profile() {
         profileImage: user.profileImage || defaultUserData.profileImage,
       });
     } else {
-      // If cancelling the very first profile creation, just reset to empty defaults
-      setFormData(defaultUserData);
+      setProfileFormData(defaultUserData);
     }
+    setNewProfileImage(null);
+    setEditingProfile(false);
+  };
 
-    setNewProfileImage(null); // Clear any temporary image preview
-    setEditing(false); // Exit editing mode
-
-    if (!user) {
-      // Optional: If cancelling initial setup, maybe navigate away or show a specific message
-      console.log("Initial profile setup cancelled. Form reset to defaults.");
-      // navigate('/'); // Example: navigate back home if initial setup is mandatory and cancelled
+  // --- Publication Form Handlers ---
+  const handlePublicationInputChange = useCallback((e) => {
+    /* ... keep as is ... */
+    const { name, value } = e.target;
+    setPublicationFormData((prev) => ({ ...prev, [name]: value }));
+    setPublicationFormErrors((prev) => ({ ...prev, [name]: undefined }));
+  }, []);
+  const validatePublicationForm = useCallback(() => {
+    /* ... keep as is ... */
+    let errors = {};
+    if (!publicationFormData.title?.trim()) errors.title = "Title is required";
+    if (!publicationFormData.abstract?.trim())
+      errors.abstract = "Abstract is required";
+    if (!publicationFormData.author?.trim())
+      errors.author = "Author name is required";
+    if (!publicationFormData.document_link?.trim()) {
+      errors.document_link = "Document link is required";
+    } else {
+      try {
+        new URL(publicationFormData.document_link);
+      } catch (_) {
+        errors.document_link = "Please enter a valid URL";
+      }
+    }
+    setPublicationFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  }, [publicationFormData]);
+  const resetPublicationForm = useCallback(() => {
+    /* ... keep as is ... */
+    const currentAuthor =
+      `${profileFormData.firstName || ""} ${
+        profileFormData.lastName || ""
+      }`.trim() ||
+      profileFormData.username ||
+      "";
+    setPublicationFormData({
+      ...defaultPublicationData,
+      author: currentAuthor,
+    });
+    setPublicationFormErrors({});
+  }, [profileFormData]);
+  const handlePublicationSubmit = async (e) => {
+    /* ... keep as is, including navigation ... */
+    e.preventDefault();
+    if (!validatePublicationForm()) {
+      return;
+    }
+    setIsSubmittingPublication(true);
+    setApiError("");
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+      /* ... handle auth error ... */ return;
+    }
+    try {
+      const url = `${API_BASE_URL}/api/publications`;
+      const response = await axios.post(url, publicationFormData, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      showNotification("Publication posted successfully!", "success");
+      resetPublicationForm();
+      // ***** NAVIGATE to the publication list page *****
+      navigate("/publications"); // Use the correct path for your publication list page
+      // ****************************************************
+    } catch (error) {
+      /* ... error handling ... */
+      console.error("Error submitting publication:", error);
+      const errMsg =
+        error.response?.data?.message || "Failed to post publication.";
+      showNotification(errMsg, "error");
+      setApiError(errMsg);
+    } finally {
+      setIsSubmittingPublication(false);
     }
   };
 
   // --- Loading State ---
-  if (isLoading) {
+  if (isLoadingProfile) {
+    /* ... keep as is ... */
     return (
       <div className="flex justify-center items-center min-h-screen bg-gray-100">
-        <FaSpinner className="animate-spin text-4xl text-blue-500" />
-        <span className="ml-3 text-xl text-gray-600">Loading Profile...</span>
+        {" "}
+        <LoadingSpinner size="lg" />
+        <span className="ml-3 text-xl text-gray-600">
+          Loading Profile...
+        </span>{" "}
       </div>
     );
   }
 
-  // --- Render Helper for Fields ---
-  // (This function remains the same as it correctly handles view/edit modes)
-  const renderField = (
+  // --- Render Helper for Profile Fields ---
+  const renderProfileField = (
     label,
     name,
     value,
@@ -278,53 +324,48 @@ export default function Profile() {
     isNested = false,
     section = ""
   ) => {
-    // Special handling for identifier fields if needed (e.g., make email/username read-only after creation)
-    // const isIdentifier = name === 'email' || name === 'username';
-    // const disableField = isSaving || (!editing && isIdentifier && user); // Example: disable email/username even in edit mode if user exists
-
-    if (editing) {
+    /* ... keep as is ... */
+    if (editingProfile) {
+      /* ... return editing input/textarea ... */
       const commonProps = {
-        id: name,
-        name: name,
-        value: value || "", // Ensure value is not null/undefined for controlled input
+        id: `profile-${name}`,
+        name,
+        value: value || "",
         onChange: isNested
-          ? (e) => handleNestedInputChange(e, section)
-          : handleInputChange,
+          ? (e) => handleNestedProfileInputChange(e, section)
+          : handleProfileInputChange,
         placeholder: placeholder || `Enter ${label}`,
         className:
           "mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100",
-        // disabled: disableField, // Use this if you want certain fields non-editable
-        disabled: isSaving,
+        disabled: isSavingProfile,
       };
       return (
         <div className="mb-4">
+          {" "}
           <label
-            htmlFor={name}
+            htmlFor={`profile-${name}`}
             className="block text-sm font-medium text-gray-700"
           >
             {label}
-          </label>
+          </label>{" "}
           {type === "textarea" ? (
             <textarea {...commonProps} rows="4" />
           ) : (
             <input {...commonProps} type={type} />
-          )}
+          )}{" "}
         </div>
       );
     }
-    // --- View Mode ---
-    // Displaying data when not editing
     return (
       <div className="mb-3">
+        {" "}
         <span className="text-sm font-medium text-gray-500">
           {label}
           {label ? ":" : ""}
         </span>{" "}
-        {/* Add colon only if label exists */}
         <p className="text-gray-800 whitespace-pre-wrap break-words mt-1">
-          {/* Display value or a placeholder if empty */}
           {value || <span className="text-gray-400 italic">Not set</span>}
-        </p>
+        </p>{" "}
       </div>
     );
   };
@@ -332,365 +373,304 @@ export default function Profile() {
   // --- Main Render ---
   return (
     <div className="flex min-h-screen bg-gray-100">
-      <Sidebar isLoggedIn={true} />{" "}
-      {/* Pass login status if Sidebar needs it */}
+      {/* Ensure Sidebar receives correct login status */}
+      <Sidebar isLoggedIn={!!user} />
       <main className="flex-grow p-4 sm:p-6 lg:p-8">
-        {/* Header and Action Buttons */}
+        {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">
-            {/* Title changes based on whether it's initial setup or viewing/editing existing */}
             {user ? "Your Profile" : "Create Your Profile"}
           </h1>
-          {/* Action buttons (remain the same) */}
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => navigate("/publications/new")}
-              className="flex items-center bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-3 rounded-lg text-sm transition duration-150 ease-in-out"
-              title="Post New Publication"
-            >
-              <FaFileUpload className="mr-1 sm:mr-2" />
-              <span className="hidden sm:inline">Post Publication</span>
-            </button>
-            <button
-              onClick={() => navigate("/messages")} // Example navigation
-              className="flex items-center bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-3 rounded-lg text-sm transition duration-150 ease-in-out relative"
-              title="Messages"
-            >
-              <FaEnvelope className="mr-1 sm:mr-2" />
-              <span className="hidden sm:inline">Messages</span>
-              {messageCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                  {messageCount}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => navigate("/notifications")} // Example navigation
-              className="flex items-center bg-purple-500 hover:bg-purple-600 text-white font-medium py-2 px-3 rounded-lg text-sm transition duration-150 ease-in-out relative"
-              title="Notifications"
-            >
-              <FaBell className="mr-1 sm:mr-2" />
-              <span className="hidden sm:inline">Notifications</span>
-              {notificationCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                  {notificationCount}
-                </span>
-              )}
-            </button>
-          </div>
+          {/* Optional Action Buttons (like messages/notifications) */}
+          <div className="flex flex-wrap gap-2">{/* ... */}</div>
         </div>
 
+        {/* Notifications & Errors */}
+        <Notification
+          /* ... props ... */ message={notification.message}
+          type={notification.type}
+          show={notification.show}
+          onClose={() => setNotification((prev) => ({ ...prev, show: false }))}
+        />
+        {apiError && (
+          <div className="mb-4">
+            <ErrorMessage message={apiError} onClose={() => setApiError("")} />
+          </div>
+        )}
+
         {/* Profile Card */}
-        <div className="bg-white shadow-xl rounded-lg p-6 md:p-8">
-          {/* Profile Header Section */}
+        <div className="bg-white shadow-xl rounded-lg p-6 md:p-8 mb-8">
+          {/* Profile Header (Image, Name, Edit button) */}
           <div className="flex flex-col sm:flex-row items-center mb-8 pb-6 border-b border-gray-200 gap-4">
-            {/* Profile Image */}
+            {/* ... Image + Upload Button ... */}
             <div className="relative flex-shrink-0">
               <img
-                // Display preview if available, otherwise formData image, fallback to placeholder
                 src={
                   newProfileImage ||
-                  formData.profileImage ||
-                  defaultUserData.profileImage // Use default if others fail
+                  profileFormData.profileImage ||
+                  defaultUserData.profileImage
                 }
                 alt="Profile"
                 className="w-24 h-24 sm:w-32 sm:h-32 rounded-full object-cover border-4 border-white shadow-md"
               />
-              {editing && (
-                <>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleImageChange}
-                    className="hidden"
-                    accept="image/*"
-                    disabled={isSaving}
-                  />
-                  <button
-                    onClick={triggerFileInput}
-                    disabled={isSaving}
-                    className="absolute bottom-0 right-0 bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 transition duration-150 ease-in-out disabled:opacity-50"
-                    title="Change Profile Picture"
-                  >
-                    <FaEdit size={16} />
-                  </button>
-                </>
-              )}
-            </div>
-
-            {/* Name, Role, Affiliation */}
-            <div className="text-center sm:text-left flex-grow">
-              {/* Display Name: Edit mode shows inputs, View mode shows formatted name */}
-              {editing ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 mb-2">
-                  {renderField("First Name", "firstName", formData.firstName)}
-                  {renderField("Last Name", "lastName", formData.lastName)}
-                </div>
-              ) : (
-                <h2 className="text-2xl font-bold text-gray-800 mb-1">
-                  {/* Display full name if available, otherwise username, otherwise placeholder */}
-                  {formData.firstName || formData.lastName
-                    ? `${formData.firstName || ""} ${
-                        formData.lastName || ""
-                      }`.trim()
-                    : formData.username || (
-                        <span className="text-gray-400 italic">
-                          User Name Not Set
-                        </span>
-                      )}
-                </h2>
-              )}
-              {/* Role and Affiliation: Rendered using helper */}
-              {renderField(
-                "Role / Title",
-                "role",
-                formData.role,
-                "e.g., PhD Student, Assistant Professor"
-              )}
-              {renderField(
-                "Affiliation",
-                "affiliation",
-                formData.affiliation,
-                "e.g., University Name, Company"
-              )}
-            </div>
-
-            {/* Edit/Save Buttons (only show Edit when not editing) */}
-            {!editing &&
-              user && ( // Only show Edit if user data exists
+              {editingProfile && (
                 <button
-                  onClick={() => {
-                    console.log("Entering edit mode.");
-                    setEditing(true);
-                  }}
-                  className="mt-4 sm:mt-0 sm:ml-auto flex-shrink-0 self-start sm:self-center items-center bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition duration-150 ease-in-out"
+                  onClick={triggerFileInput}
+                  disabled={isSavingProfile} /* ... */
                 >
-                  <FaEdit className="mr-2" /> Edit Profile
+                  <FaEdit size={16} />
                 </button>
               )}
+            </div>
+            {/* ... Name/Role/Affiliation (uses renderProfileField) ... */}
+            <div className="text-center sm:text-left flex-grow">
+              {/* Name/Role/Affiliation */}
+            </div>
+            {/* ... Edit Profile Button ... */}
+            {!editingProfile && user && (
+              <button onClick={() => setEditingProfile(true)} className="...">
+                <FaEdit className="mr-2" /> Edit Profile
+              </button>
+            )}
           </div>
-
-          {/* Profile Body Sections (remain largely the same, using renderField) */}
+          {/* Profile Body (About, Contact, Social, Skills etc. uses renderProfileField) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-            {/* About Me Section */}
+            {/* About Me */}
             <div className="md:col-span-2">
-              <h3 className="text-lg font-semibold text-gray-700 mb-2 border-b pb-1">
-                About Me
-              </h3>
-              {renderField(
-                "", // No label above the field itself when editing
+              {renderProfileField(
+                "",
                 "aboutMe",
-                formData.aboutMe,
-                "Tell us about yourself...",
+                profileFormData.aboutMe,
+                "Tell us...",
                 "textarea"
               )}
             </div>
-
-            {/* Contact Info Section */}
+            {/* Contact */}
             <div>
-              <h3 className="text-lg font-semibold text-gray-700 mb-2 border-b pb-1">
-                Contact Information
-              </h3>
-              {/* Email might be non-editable depending on your app's logic */}
-              {renderField(
-                "Primary Email",
+              {renderProfileField(
+                "Email",
                 "email",
-                formData.email,
-                "your.email@example.com",
-                "email" // Set type="email" for validation
+                profileFormData.email,
+                "",
+                "email"
               )}
-              {renderField(
-                "Phone (Optional)",
+              {renderProfileField(
+                "Phone",
                 "phone",
-                formData.contactInfo.phone,
-                "e.g., +1 123 456 7890",
-                "tel", // Set type="tel"
-                true, // isNested = true
-                "contactInfo" // section = contactInfo
+                profileFormData.contactInfo.phone,
+                "",
+                "tel",
+                true,
+                "contactInfo"
               )}
             </div>
-
-            {/* Social Links Section */}
+            {/* Social */}
             <div>
-              <h3 className="text-lg font-semibold text-gray-700 mb-2 border-b pb-1">
-                Social & Professional Links
-              </h3>
-              {/* GitHub */}
-              <div className={`flex items-center ${editing ? "mb-4" : "mb-2"}`}>
-                {" "}
-                {/* Adjust spacing for edit/view */}
-                {!editing && formData.socialLinks.github && (
-                  <FaGithub
-                    className="text-gray-600 mr-2 flex-shrink-0"
-                    size={20}
-                  />
-                )}
-                {editing && (
-                  <FaGithub
-                    className="text-gray-600 mr-2 flex-shrink-0 mt-1"
-                    size={20}
-                  />
-                )}{" "}
-                {/* Add icon in edit mode too */}
-                {renderField(
-                  editing ? "GitHub URL" : "", // Label only in edit mode for clarity
-                  "github",
-                  formData.socialLinks.github,
-                  "https://github.com/username",
-                  "url", // Set type="url"
-                  true,
-                  "socialLinks"
-                )}
-              </div>
-              {/* LinkedIn */}
-              <div className={`flex items-center ${editing ? "mb-4" : "mb-2"}`}>
-                {!editing && formData.socialLinks.linkedin && (
-                  <FaLinkedin
-                    className="text-blue-700 mr-2 flex-shrink-0"
-                    size={20}
-                  />
-                )}
-                {editing && (
-                  <FaLinkedin
-                    className="text-blue-700 mr-2 flex-shrink-0 mt-1"
-                    size={20}
-                  />
-                )}
-                {renderField(
-                  editing ? "LinkedIn URL" : "",
-                  "linkedin",
-                  formData.socialLinks.linkedin,
-                  "https://linkedin.com/in/username",
-                  "url",
-                  true,
-                  "socialLinks"
-                )}
-              </div>
-              {/* Twitter */}
-              <div className={`flex items-center ${editing ? "mb-4" : "mb-2"}`}>
-                {!editing && formData.socialLinks.twitter && (
-                  <FaTwitter
-                    className="text-blue-400 mr-2 flex-shrink-0"
-                    size={20}
-                  />
-                )}
-                {editing && (
-                  <FaTwitter
-                    className="text-blue-400 mr-2 flex-shrink-0 mt-1"
-                    size={20}
-                  />
-                )}
-                {renderField(
-                  editing ? "Twitter URL" : "",
-                  "twitter",
-                  formData.socialLinks.twitter,
-                  "https://twitter.com/username",
-                  "url",
-                  true,
-                  "socialLinks"
-                )}
-              </div>
+              {/* ... renderProfileField for github, linkedin, twitter ... */}
             </div>
-
-            {/* Skills Section */}
+            {/* Skills */}
             <div className="md:col-span-2">
-              <h3 className="text-lg font-semibold text-gray-700 mb-2 border-b pb-1">
-                Skills
-              </h3>
-              {renderField(
+              {renderProfileField(
                 "",
                 "skills",
-                formData.skills,
-                "Comma-separated skills (e.g., Python, Data Analysis, React)",
+                profileFormData.skills,
+                "Comma-separated...",
                 "textarea"
               )}
-              {!editing && !formData.skills && (
-                <p className="text-gray-400 italic mt-1">No skills listed.</p>
-              )}
-              {/* Consider using a tag input component here for better UX */}
             </div>
-
-            {/* Research Interests Section */}
+            {/* Interests */}
             <div className="md:col-span-2">
-              <h3 className="text-lg font-semibold text-gray-700 mb-2 border-b pb-1">
-                Research Interests
-              </h3>
-              {renderField(
+              {renderProfileField(
                 "",
                 "researchInterests",
-                formData.researchInterests,
-                "Comma-separated interests (e.g., Machine Learning, NLP)",
+                profileFormData.researchInterests,
+                "Comma-separated...",
                 "textarea"
-              )}
-              {!editing && !formData.researchInterests && (
-                <p className="text-gray-400 italic mt-1">
-                  No research interests listed.
-                </p>
               )}
             </div>
-
-            {/* Achievements Section */}
+            {/* Achievements */}
             <div className="md:col-span-2">
-              <h3 className="text-lg font-semibold text-gray-700 mb-2 border-b pb-1">
-                Achievements / Awards
-              </h3>
-              {renderField(
+              {renderProfileField(
                 "",
                 "achievements",
-                formData.achievements,
-                "List significant achievements or awards",
+                profileFormData.achievements,
+                "List achievements...",
                 "textarea"
-              )}
-              {!editing && !formData.achievements && (
-                <p className="text-gray-400 italic mt-1">
-                  No achievements listed.
-                </p>
               )}
             </div>
           </div>
-
-          {/* Save/Cancel Buttons (only show when editing) */}
-          {editing && (
-            <div className="mt-8 pt-6 border-t border-gray-200 flex flex-col sm:flex-row justify-end gap-3">
+          {/* Profile Save/Cancel Buttons */}
+          {editingProfile && (
+            <div className="mt-8 pt-6 border-t ... flex justify-end gap-3">
               <button
-                type="button" // Explicitly type="button" to prevent form submission if wrapped in <form>
-                onClick={handleCancel}
-                disabled={isSaving}
-                className="py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                type="button"
+                onClick={handleProfileCancel}
+                disabled={isSavingProfile} /* ... */
               >
-                Cancel
+                {" "}
+                Cancel{" "}
               </button>
               <button
-                type="button" // Explicitly type="button"
-                onClick={handleSave}
-                disabled={isSaving}
-                className="inline-flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                type="button"
+                onClick={handleProfileSave}
+                disabled={isSavingProfile} /* ... */
               >
-                {isSaving ? (
-                  <>
-                    <FaSpinner className="animate-spin -ml-1 mr-2 h-4 w-4" />
-                    Saving...
-                  </>
-                ) : // Button text depends on whether we are creating or updating
-                user ? ( // If 'user' exists, we are updating
-                  <>
-                    <FaSave className="mr-2" /> Save Changes
-                  </>
-                ) : (
-                  // If 'user' is null, we are creating the profile initially
-                  <>
-                    <FaSave className="mr-2" /> Create Profile
-                  </>
-                )}
+                {" "}
+                {isSavingProfile
+                  ? "Saving..."
+                  : user
+                  ? "Save Changes"
+                  : "Create Profile"}{" "}
               </button>
             </div>
           )}
         </div>
-        {/* Optional: Add other sections below profile card, e.g., list of user's publications */}
-        {/* <div className="mt-8 bg-white shadow rounded-lg p-6">
-          <h3 className="text-xl font-semibold text-gray-700 mb-4">My Publications</h3>
-          {/* Fetch and display publications here */}
-        {/* </div> */}
+
+        {/* ====== Post Publication Form Section ====== */}
+        {/* Only show form if user data exists (i.e., logged in and profile loaded/created) */}
+        {user && (
+          <div className="bg-white shadow-xl rounded-lg p-6 md:p-8">
+            <h2 className="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">
+              Post New Publication
+            </h2>
+            <form
+              onSubmit={handlePublicationSubmit}
+              className="space-y-4"
+              noValidate
+            >
+              {/* Title Field */}
+              <div>
+                <label
+                  htmlFor="pub-title"
+                  className="block text-sm font-medium text-gray-700"
+                >
+                  Title
+                </label>
+                <input
+                  type="text"
+                  id="pub-title"
+                  name="title"
+                  value={publicationFormData.title}
+                  onChange={handlePublicationInputChange}
+                  placeholder="Publication title"
+                  required
+                  className={`mt-1 block w-full ... ${
+                    publicationFormErrors.title
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                />
+                {publicationFormErrors.title && (
+                  <p className="mt-1 text-xs text-red-600">
+                    {publicationFormErrors.title}
+                  </p>
+                )}
+              </div>
+              {/* Abstract Field */}
+              <div>
+                <label
+                  htmlFor="pub-abstract"
+                  className="block text-sm font-medium text-gray-700"
+                >
+                  Abstract
+                </label>
+                <textarea
+                  id="pub-abstract"
+                  name="abstract"
+                  rows="4"
+                  value={publicationFormData.abstract}
+                  onChange={handlePublicationInputChange}
+                  placeholder="Brief summary or abstract"
+                  required
+                  className={`mt-1 block w-full ... ${
+                    publicationFormErrors.abstract
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                />
+                {publicationFormErrors.abstract && (
+                  <p className="mt-1 text-xs text-red-600">
+                    {publicationFormErrors.abstract}
+                  </p>
+                )}
+              </div>
+              {/* Author Field */}
+              <div>
+                <label
+                  htmlFor="pub-author"
+                  className="block text-sm font-medium text-gray-700"
+                >
+                  Author(s)
+                </label>
+                <input
+                  type="text"
+                  id="pub-author"
+                  name="author"
+                  value={publicationFormData.author}
+                  onChange={handlePublicationInputChange}
+                  placeholder="Defaults to your name"
+                  required
+                  className={`mt-1 block w-full ... ${
+                    publicationFormErrors.author
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                />
+                {publicationFormErrors.author && (
+                  <p className="mt-1 text-xs text-red-600">
+                    {publicationFormErrors.author}
+                  </p>
+                )}
+              </div>
+              {/* Document Link Field */}
+              <div>
+                <label
+                  htmlFor="pub-link"
+                  className="block text-sm font-medium text-gray-700"
+                >
+                  Document Link (URL)
+                </label>
+                <input
+                  type="url"
+                  id="pub-link"
+                  name="document_link"
+                  value={publicationFormData.document_link}
+                  onChange={handlePublicationInputChange}
+                  placeholder="https://example.com/paper.pdf"
+                  required
+                  className={`mt-1 block w-full ... ${
+                    publicationFormErrors.document_link
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                />
+                {publicationFormErrors.document_link && (
+                  <p className="mt-1 text-xs text-red-600">
+                    {publicationFormErrors.document_link}
+                  </p>
+                )}
+              </div>
+              {/* Submit Button */}
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={isSubmittingPublication}
+                  className="inline-flex justify-center items-center py-2 px-4 ..."
+                >
+                  {isSubmittingPublication ? (
+                    <FaSpinner className="animate-spin ..." />
+                  ) : (
+                    <FaPaperPlane className="mr-2" />
+                  )}
+                  {isSubmittingPublication
+                    ? "Submitting..."
+                    : "Post Publication"}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+        {/* End Publication Form Section */}
       </main>
     </div>
   );

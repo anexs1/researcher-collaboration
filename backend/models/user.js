@@ -14,7 +14,9 @@ const User = sequelize.define(
     username: {
       type: DataTypes.STRING,
       allowNull: false,
-      unique: true,
+      // unique: true, // <-- REMOVE THIS LINE AS WELL
+      // WARNING: Database will NOT enforce username uniqueness.
+      // Your application MUST handle this check before saving.
       validate: {
         notEmpty: true,
         len: [3, 30],
@@ -23,7 +25,7 @@ const User = sequelize.define(
     email: {
       type: DataTypes.STRING,
       allowNull: false,
-      unique: true,
+      // unique: true, // <-- Keep this commented out or removed
       validate: {
         isEmail: true,
         notEmpty: true,
@@ -38,36 +40,32 @@ const User = sequelize.define(
       },
     },
     role: {
-      // Ensure all roles from your signup forms are included
       type: DataTypes.ENUM(
         "user",
         "admin",
         "medical",
         "academic",
         "non-researcher"
+        // Add 'corporate' if needed
       ),
       defaultValue: "user",
     },
-    // --- ADDED STATUS FIELD ---
     status: {
       type: DataTypes.ENUM("pending", "approved", "rejected", "suspended"),
       allowNull: false,
-      defaultValue: "pending", // New users start as pending
+      defaultValue: "pending",
     },
-    // --- Optional but recommended: Add fields from specific signup forms ---
+    // Optional fields
     university: { type: DataTypes.STRING, allowNull: true },
     department: { type: DataTypes.STRING, allowNull: true },
     companyName: { type: DataTypes.STRING, allowNull: true },
     jobTitle: { type: DataTypes.STRING, allowNull: true },
     medicalSpecialty: { type: DataTypes.STRING, allowNull: true },
     hospitalName: { type: DataTypes.STRING, allowNull: true },
-    // researchInterests: { type: DataTypes.TEXT, allowNull: true },
-    // publicationLinks: { type: DataTypes.TEXT, allowNull: true },
   },
   {
-    timestamps: true, // Adds createdAt and updatedAt
+    timestamps: true,
     hooks: {
-      // Password hashing hook (remains the same)
       beforeSave: async (user) => {
         if (user.changed("password")) {
           const salt = await bcrypt.genSalt(10);
@@ -76,14 +74,15 @@ const User = sequelize.define(
       },
     },
     indexes: [
-      // Optional: Add indexes for performance
+      // These explicit indexes might also contribute to the count
       { fields: ["status"] },
       { fields: ["role"] },
     ],
+    tableName: "Users",
   }
 );
 
-// Password comparison method (remains the same)
+// Password comparison method
 User.prototype.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };

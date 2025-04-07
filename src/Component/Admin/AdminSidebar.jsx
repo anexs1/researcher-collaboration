@@ -1,111 +1,97 @@
-import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
-import { FaUsers, FaProjectDiagram, FaNewspaper } from "react-icons/fa";
+// src/Component/Admin/AdminSidebar.js
+import React from "react";
+import { NavLink, Link } from "react-router-dom";
+import {
+  FaTachometerAlt,
+  FaUsers,
+  FaProjectDiagram, // Keep if needed, otherwise remove if not used
+  FaNewspaper, // Keep if needed, otherwise remove if not used
+  FaCog,
+  FaChartBar,
+  FaUserClock,
+  FaSignOutAlt,
+  FaComments, // <-- Import the chat icon
+} from "react-icons/fa";
 
-import StatCard from "../../Component/Admin/StatCard";
-import LoadingSkeleton from "../../Component/Common/LoadingSkeleton";
-import ErrorMessage from "../../Component/Common/ErrorMessage";
+// You might want to get the logout function via props or context
+const AdminSidebar = ({ onLogout }) => {
+  const navLinks = [
+    { to: "/admin", icon: <FaTachometerAlt />, label: "Dashboard", end: true },
+    { to: "/admin/users", icon: <FaUsers />, label: "Manage Users" },
+    {
+      to: "/admin/pending-users",
+      icon: <FaUserClock />,
+      label: "Pending Users",
+    },
+    // --- NEW CHAT LINK ADDED ---
+    { to: "/admin/chat", icon: <FaComments />, label: "Chat" }, // Or "/admin/messages"
+    // ---------------------------
+    { to: "/admin/reports", icon: <FaChartBar />, label: "Reports" },
+    { to: "/admin/settings", icon: <FaCog />, label: "Settings" },
+    // Add back ProjectDiagram/Newspaper if you have routes for them
+    // { to: '/admin/projects', icon: <FaProjectDiagram />, label: 'Projects' },
+    // { to: '/admin/publications', icon: <FaNewspaper />, label: 'Publications' },
+  ];
 
-const AdminDashboardPage = () => {
-  const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const navigate = useNavigate();
+  const baseLinkClass =
+    "flex items-center px-4 py-3 text-gray-300 hover:bg-gray-700 hover:text-white rounded-md transition duration-150 ease-in-out text-sm font-medium";
+  const activeLinkClass = "bg-gray-900 text-white"; // Darker background for active
 
-  useEffect(() => {
-    const fetchAdminStats = async () => {
-      setLoading(true);
-      setError(null);
-
-      const token = localStorage.getItem("authToken");
-      if (!token) {
-        setError("You are not authenticated. Please log in.");
-        setLoading(false);
-        // Optional: Redirect to login
-        setTimeout(() => navigate("/login"), 2000);
-        return;
-      }
-
-      try {
-        const { data } = await axios.get("/api/admin/stats", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        setStats(data?.data || {}); // Fallback to empty object
-      } catch (err) {
-        console.error("Error fetching stats:", err);
-        setError(
-          err.response?.data?.message ||
-            err.message ||
-            "Failed to fetch dashboard data."
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchAdminStats();
-  }, [navigate]);
-
-  if (loading) {
-    return (
-      <div className="p-6 space-y-4">
-        <LoadingSkeleton lines={3} />
-      </div>
-    );
-  }
+  // Placeholder Logout - Replace with actual logout logic from App.js context or props
+  const handleLogoutClick = () => {
+    console.log("Logout clicked - implement actual logout");
+    // Call onLogout if passed as prop, or dispatch context action
+    // Example: if (onLogout) onLogout();
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("user");
+    window.location.href = "/login"; // Force redirect after logout
+  };
 
   return (
-    <div className="p-4 md:p-6 space-y-6 bg-gray-100 min-h-screen">
-      {error && <ErrorMessage message={error} />}
+    <div className="w-64 bg-gray-800 text-white flex flex-col flex-shrink-0 h-screen shadow-lg">
+      {/* Logo/Title */}
+      <div className="h-16 flex items-center justify-center px-4 bg-gray-900 flex-shrink-0">
+        <Link
+          to="/admin"
+          className="text-xl font-semibold text-white hover:text-gray-200"
+        >
+          Admin Panel
+        </Link>
+      </div>
 
-      {stats && Object.keys(stats).length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-          <StatCard
-            title="Total Users"
-            value={stats.userCount ?? "N/A"}
-            icon={<FaUsers className="text-blue-500" />}
-            linkTo="/admin/users"
-            linkText="Manage Users"
-          />
-          <StatCard
-            title="Total Projects"
-            value={stats.projectCount ?? "N/A"}
-            icon={<FaProjectDiagram className="text-green-500" />}
-          />
-          <StatCard
-            title="Total Publications"
-            value={stats.publicationCount ?? "N/A"}
-            icon={<FaNewspaper className="text-purple-500" />}
-          />
-        </div>
-      ) : (
-        !error && (
-          <p className="text-center text-gray-500 text-sm">
-            No statistics available at the moment.
-          </p>
-        )
-      )}
-
-      <div className="mt-8 p-4 bg-white rounded-lg shadow">
-        <h2 className="text-xl font-semibold mb-4 text-gray-700">
-          Quick Links
-        </h2>
-        <div className="flex flex-wrap gap-4">
-          <Link
-            to="/admin/users"
-            className="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded inline-flex items-center transition"
+      {/* Navigation */}
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        {navLinks.map((link) => (
+          <NavLink
+            key={link.to}
+            to={link.to}
+            end={link.end || false} // Use end prop if specified
+            className={({ isActive }) =>
+              `${baseLinkClass} ${isActive ? activeLinkClass : ""}`
+            }
           >
-            <FaUsers className="mr-2" />
-            Manage Users
-          </Link>
-          {/* Add more Quick Links below */}
-        </div>
+            <span className="mr-3 text-lg w-5 text-center">{link.icon}</span>
+            {link.label}
+          </NavLink>
+        ))}
+      </nav>
+
+      {/* Footer/Logout Section */}
+      <div className="p-4 border-t border-gray-700 mt-auto flex-shrink-0">
+        {/* Example Logout Button */}
+        <button
+          onClick={handleLogoutClick}
+          className={`${baseLinkClass} w-full justify-start hover:bg-red-700`} // Style as needed
+        >
+          <span className="mr-3 text-lg w-5 text-center">
+            <FaSignOutAlt />
+          </span>
+          Logout
+        </button>
+        {/* <p className="text-xs text-gray-400 text-center mt-4">© Your App Name</p> */}
       </div>
     </div>
   );
 };
 
-export default AdminDashboardPage;
+export default AdminSidebar;

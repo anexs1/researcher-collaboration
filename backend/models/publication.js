@@ -1,31 +1,16 @@
+// models/publication.js
 import { DataTypes } from "sequelize";
 import sequelize from "../config/db.js";
-
-const backendURL = "http://localhost:5000"; // <---- MAKE THIS CHANGE
-const fetchPublications = async () => {
-  try {
-    const response = await fetch(`${backendURL}/api/user`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem("token")}`,
-      },
-    });
-
-    const data = await response.json();
-    setPublications(data);
-  } catch (error) {
-    console.error("Error fetching publications:", error);
-  }
-};
 
 const Publication = sequelize.define(
   "Publication",
   {
+    // Keep existing fields
     title: {
       type: DataTypes.STRING,
       allowNull: false,
     },
     abstract: {
-      // Changed from description to abstract
       type: DataTypes.TEXT,
       allowNull: false,
     },
@@ -36,13 +21,42 @@ const Publication = sequelize.define(
     document_link: {
       type: DataTypes.STRING,
       allowNull: false,
+      validate: {
+        isUrl: true, // Keep basic URL validation
+      },
     },
-    //Qualifications and contact doesnt exist, so we deleted them to prevent any future bugs
+    // Keep userId Foreign Key
+    userId: {
+      type: DataTypes.INTEGER,
+      allowNull: false, // Keep this as false if new publications MUST have a user
+      references: {
+        model: "users",
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "CASCADE", // Or 'SET NULL'/'RESTRICT' depending on desired behavior
+    },
+    // NOTE: createdAt and updatedAt are NOT explicitly defined here
   },
   {
-    tableName: "publications", // Optional: Specify table name
-    timestamps: false, // Disable auto created columns
+    // --- Explicitly Disable Timestamps ---
+    // This tells Sequelize NOT to automatically add/manage
+    // `createdAt` and `updatedAt` columns for this model.
+    // Therefore, it won't try to run the ALTER TABLE ADD command causing the error.
+    timestamps: false,
+    // -------------------------------------
+
+    tableName: "publications",
+    // underscored: false, // Use if your column names are camelCase (like userId)
   }
 );
+
+// Define Association (keep as is)
+Publication.associate = (models) => {
+  Publication.belongsTo(models.User, {
+    foreignKey: "userId",
+    as: "owner",
+  });
+};
 
 export default Publication;
