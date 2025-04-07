@@ -7,7 +7,7 @@ import { FaStar, FaHeart, FaEye } from "react-icons/fa"; //Import heart and eye 
 const Home = () => {
   const navigate = useNavigate();
   const [publications, setPublications] = useState([]);
-  
+
   const [refreshPublications, setRefreshPublications] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterOptions, setFilterOptions] = useState({});
@@ -70,6 +70,7 @@ const Home = () => {
 
   const handleGetStartedClick = () => {
     navigate("/login");
+    // navigate("/signup");
   };
 
   const handleContactSubmit = async (e) => {
@@ -152,6 +153,8 @@ const Home = () => {
       "Biomedical Research",
       "Climate Science",
       "Social Sciences",
+      "Mchine Research",
+      "Social",
     ];
 
     return (
@@ -289,7 +292,6 @@ const Home = () => {
 
   return (
     <div className="bg-gradient-to-br from-gray-100 to-blue-100 font-sans overflow-hidden">
-      {/* Hero Section */}
       <section className="relative bg-blue-600 text-white py-24 px-6 text-center">
         <div className="absolute inset-0 bg-blue-700 opacity-20 animate-pulse"></div>
         <div className="relative z-10">
@@ -327,12 +329,12 @@ const Home = () => {
             <option value="">All Categories</option>
             <option value="AI">Artificial Intelligence</option>
             <option value="DS">Data Science</option>
+            <option value="ML "> Machine Learning </option>
             {/* Add other categories */}
           </select>
         </div>
       </section>
 
-      {/* Features Section */}
       <section className="py-16 px-6">
         <h2 className="text-3xl font-semibold mb-12 text-center text-gray-800 animate-slide-in-left">
           Key Features

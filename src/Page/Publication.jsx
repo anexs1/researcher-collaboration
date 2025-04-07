@@ -2,11 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 const backendURL = "http://localhost:5000"; // Make sure this is correct
 import "../index.css"; // Ensure your CSS file is correctly linked and styled
 
-// Assume currentUser prop is passed: { id: 1, name: 'John Doe', email: '...', ... } or null/undefined
 export default function MyPublications({ currentUser }) {
-  // State for the user's publications
   const [myPublications, setMyPublications] = useState([]);
-  // State for the form (create/edit)
   const [formData, setFormData] = useState({
     title: "",
     abstract: "",
@@ -17,16 +14,12 @@ export default function MyPublications({ currentUser }) {
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState(null);
   const [formErrors, setFormErrors] = useState({});
-  // State for search and sort specific to user's publications
   const [searchQuery, setSearchQuery] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("date"); // 'date', 'title', 'author'
   const [showAllAbstracts, setShowAllAbstracts] = useState(false);
 
-  // --- Utility Functions ---
-
   const formatDate = (dateString) => {
-    // (Keep your existing formatDate function)
     if (!dateString) return "N/A";
     try {
       const date = new Date(dateString);
@@ -38,9 +31,6 @@ export default function MyPublications({ currentUser }) {
     }
   };
 
-  // --- API Interaction ---
-
-  // Fetch ONLY the logged-in user's publications
   const fetchMyPublications = useCallback(async () => {
     if (!currentUser) {
       setLoading(false);
@@ -54,8 +44,6 @@ export default function MyPublications({ currentUser }) {
       if (!token) {
         throw new Error("Authentication token not found. Please log in.");
       }
-      // *** IMPORTANT: Adjust this URL to your backend endpoint for fetching user's posts ***
-      // This endpoint MUST be protected and use the token to identify the user.
       const response = await fetch(`${backendURL}/api/publications/my`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -71,7 +59,6 @@ export default function MyPublications({ currentUser }) {
         );
       }
       const data = await response.json();
-      // Sort initial data by date descending
       data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       setMyPublications(Array.isArray(data) ? data : []); // Ensure data is an array
     } catch (error) {
@@ -95,7 +82,7 @@ export default function MyPublications({ currentUser }) {
     if (currentUser && !editingId) {
       setFormData((prev) => ({
         ...prev,
-        author: prev.author || currentUser.name || "", // Use current user's name if author is empty
+        author: prev.author || currentUser.name || "",
       }));
     }
   }, [currentUser, editingId]);
@@ -201,7 +188,6 @@ export default function MyPublications({ currentUser }) {
           document_link: publicationToEdit.document_link,
         });
         setFormErrors({});
-        // Scroll form into view
         document
           .querySelector(".publication-form-container")
           ?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -274,7 +260,6 @@ export default function MyPublications({ currentUser }) {
   const handleDelete = useCallback(
     async (id) => {
       const publicationToDelete = myPublications.find((p) => p.id === id);
-      // Again, frontend check is good, but backend MUST enforce ownership via token.
       if (
         !currentUser ||
         !publicationToDelete ||
@@ -391,7 +376,6 @@ export default function MyPublications({ currentUser }) {
     );
   }
 
-  // Main component render when user is logged in
   return (
     <div className="publication-container">
       {/* Use a more specific title */}
@@ -514,7 +498,6 @@ export default function MyPublications({ currentUser }) {
               </p>
             )}
           </div>
-          {/* Actions */}
           <div className="form-actions">
             {editingId && (
               <button
@@ -534,7 +517,6 @@ export default function MyPublications({ currentUser }) {
         </form>
       </div>
 
-      {/* ====== Search, Sort, Toggle Controls for User's Publications ====== */}
       <div className="publication-controls">
         <div className="publication-search-sort">
           {/* Search */}
@@ -579,7 +561,6 @@ export default function MyPublications({ currentUser }) {
             </select>
           </div>
         </div>
-        {/* Toggle Abstracts (only relevant if abstracts can be long) */}
         {myPublications.some((p) => p.abstract.length > 150) && ( // Only show if potentially useful
           <button
             onClick={handleToggleAbstracts}
@@ -662,8 +643,6 @@ export default function MyPublications({ currentUser }) {
           </div>
         )}
       </div>
-
-      {/* Collaboration Modal Removed */}
     </div>
   );
 }

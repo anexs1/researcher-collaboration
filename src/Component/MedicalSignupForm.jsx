@@ -1,6 +1,25 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import InputField from "../Component/InputField";
+import {
+  UserIcon,
+  EnvelopeIcon,
+  LockClosedIcon,
+  BeakerIcon,
+  BuildingStorefrontIcon,
+  EyeIcon,
+  EyeSlashIcon,
+} from "@heroicons/react/24/outline";
+
+const defaultUserDataForSignup = {
+  _id: null,
+  username: "",
+  email: "",
+  role: "medical",
+  affiliation: "",
+  medicalSpecialty: "",
+  hospitalName: "",
+};
 
 const MedicalSignupForm = () => {
   const [formData, setFormData] = useState({
@@ -11,17 +30,14 @@ const MedicalSignupForm = () => {
     medicalSpecialty: "",
     hospitalName: "",
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
+  const handleChange = (e) =>
+    setFormData({ ...formData, [e.target.name]: e.target.value });
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -29,13 +45,13 @@ const MedicalSignupForm = () => {
     setIsLoading(true);
 
     if (formData.password !== formData.confirmPassword) {
-      setErrorMessage("Passwords do not match");
+      setErrorMessage("Passwords do not match.");
       setIsLoading(false);
       return;
     }
 
     if (formData.password.length < 6) {
-      setErrorMessage("Password must be at least 6 characters");
+      setErrorMessage("Password must be at least 6 characters long.");
       setIsLoading(false);
       return;
     }
@@ -43,9 +59,7 @@ const MedicalSignupForm = () => {
     try {
       const response = await fetch("http://localhost:5000/api/auth/signup", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           username: formData.username,
           email: formData.email,
@@ -58,19 +72,29 @@ const MedicalSignupForm = () => {
 
       const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.message || "Registration failed");
-      }
+      if (!response.ok) throw new Error(data.message || "Registration failed");
 
-      console.log("Registration successful:", data);
+      const initialUserData = {
+        ...defaultUserDataForSignup,
+        _id: data.user?._id || null,
+        username: formData.username,
+        email: formData.email,
+        role: data.user?.role || "medical",
+        affiliation: formData.hospitalName,
+        medicalSpecialty: formData.medicalSpecialty,
+        hospitalName: formData.hospitalName,
+      };
+
+      localStorage.setItem("user", JSON.stringify(initialUserData));
+
       navigate("/login", {
         state: {
           registrationSuccess: true,
-          message: "Medical account created successfully!",
+          message: "Medical account created successfully! Please log in.",
+          email: formData.email,
         },
       });
     } catch (error) {
-      console.error("Registration error:", error);
       setErrorMessage(
         error.message || "Registration failed. Please try again."
       );
@@ -80,96 +104,96 @@ const MedicalSignupForm = () => {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-50 px-4">
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-tr from-red-100 to-blue-100 px-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
-        <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">
-          Medical Signup
+        <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">
+          ⚕️ Medical Signup
         </h2>
 
         {errorMessage && (
-          <div className="mb-4 text-sm text-red-600 bg-red-100 p-2 rounded-md">
+          <div className="text-red-500 text-sm text-center mb-4">
             {errorMessage}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <InputField
-            type="text"
-            id="username"
             name="username"
             placeholder="Username"
+            icon={<UserIcon className="h-5 w-5 text-gray-400" />}
             value={formData.username}
             onChange={handleChange}
-            required
-            minLength="3"
           />
           <InputField
-            type="email"
-            id="email"
             name="email"
+            type="email"
             placeholder="Email"
+            icon={<EnvelopeIcon className="h-5 w-5 text-gray-400" />}
             value={formData.email}
             onChange={handleChange}
-            required
           />
+          <div className="relative">
+            <InputField
+              name="password"
+              type={showPassword ? "text" : "password"}
+              placeholder="Password"
+              icon={<LockClosedIcon className="h-5 w-5 text-gray-400" />}
+              value={formData.password}
+              onChange={handleChange}
+            />
+            <span
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-2.5 text-gray-500 hover:text-indigo-600 cursor-pointer"
+            >
+              {showPassword ? (
+                <EyeSlashIcon className="h-5 w-5" />
+              ) : (
+                <EyeIcon className="h-5 w-5" />
+              )}
+            </span>
+          </div>
+          <div className="relative">
+            <InputField
+              name="confirmPassword"
+              type={showConfirmPassword ? "text" : "password"}
+              placeholder="Confirm Password"
+              icon={<LockClosedIcon className="h-5 w-5 text-gray-400" />}
+              value={formData.confirmPassword}
+              onChange={handleChange}
+            />
+            <span
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              className="absolute right-3 top-2.5 text-gray-500 hover:text-indigo-600 cursor-pointer"
+            >
+              {showConfirmPassword ? (
+                <EyeSlashIcon className="h-5 w-5" />
+              ) : (
+                <EyeIcon className="h-5 w-5" />
+              )}
+            </span>
+          </div>
           <InputField
-            type="password"
-            id="password"
-            name="password"
-            placeholder="Password (min 6 characters)"
-            value={formData.password}
-            onChange={handleChange}
-            required
-            minLength="6"
-          />
-          <InputField
-            type="password"
-            id="confirmPassword"
-            name="confirmPassword"
-            placeholder="Confirm Password"
-            value={formData.confirmPassword}
-            onChange={handleChange}
-            required
-          />
-          <InputField
-            type="text"
-            id="medicalSpecialty"
             name="medicalSpecialty"
             placeholder="Medical Specialty"
+            icon={<BeakerIcon className="h-5 w-5 text-gray-400" />}
             value={formData.medicalSpecialty}
             onChange={handleChange}
           />
           <InputField
-            type="text"
-            id="hospitalName"
             name="hospitalName"
-            placeholder="Hospital Name"
+            placeholder="Hospital/Clinic Name"
+            icon={<BuildingStorefrontIcon className="h-5 w-5 text-gray-400" />}
             value={formData.hospitalName}
             onChange={handleChange}
           />
-
           <button
             type="submit"
             disabled={isLoading}
-            className={`w-full py-3 font-medium rounded-lg text-white transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              isLoading
-                ? "bg-blue-400 cursor-not-allowed"
-                : "bg-blue-600 hover:bg-blue-700"
-            }`}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg transition"
           >
             {isLoading ? "Registering..." : "Sign Up as Medical"}
           </button>
         </form>
-
-        <p className="mt-6 text-sm text-center text-gray-600">
-          Already have an account?{" "}
-          <button
-            onClick={() => navigate("/login")}
-            className="text-blue-600 hover:underline focus:outline-none"
-          >
-            Log in
-          </button>
-        </p>
       </div>
     </div>
   );

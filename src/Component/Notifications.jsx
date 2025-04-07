@@ -75,5 +75,4 @@ const Notifications = ({ userId }) => {
     </div>
   );
 };
-
 export default Notifications;

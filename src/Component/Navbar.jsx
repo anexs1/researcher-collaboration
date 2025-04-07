@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import Notifications from "./Notifications";
 import ProfileMenu from "./ProfileMenu";
-import "../index.css"; // Or your specific Navbar CSS
+import "../index.css";
 
 const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -13,10 +13,8 @@ const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
 
   return (
     <header className="relative bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg py-5 px-6 flex items-center justify-between transition-all duration-500 ease-in-out">
-      {/* ... (Animated Background Blob - keep as is) ... */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
         {" "}
-        ...{" "}
       </div>
 
       <Link
@@ -26,12 +24,10 @@ const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
         Researcher Collaboration Portal
       </Link>
 
-      {/* --- Hamburger Icon (For Mobile - keep as is) --- */}
       <button
         className="md:hidden text-white focus:outline-none relative z-10"
         onClick={() => setMenuOpen(!menuOpen)}
       >
-        {/* ... (SVG Icon - keep as is) ... */}
         <svg
           className="w-7 h-7 fill-current"
           viewBox="0 0 20 20"
@@ -42,8 +38,6 @@ const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
         </svg>
       </button>
 
-      {/* --- Navigation Links --- */}
-      {/* Apply mobile visibility logic here */}
       <nav
         className={`absolute md:relative top-full left-0 right-0 bg-gradient-to-r from-purple-500 to-pink-500 md:bg-none md:top-auto md:left-auto md:right-auto p-4 md:p-0 transition-all duration-300 ease-in-out ${
           menuOpen
@@ -60,15 +54,6 @@ const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
               🏠 Home
             </Link>
           </li>
-          <li>
-            <Link
-              to="/explore"
-              onClick={closeMenu}
-              className="navbar-link-style"
-            >
-              🔬 Explore
-            </Link>
-          </li>
           {/* --- Logged In User Links --- */}
           {isLoggedIn && (
             <>
@@ -81,6 +66,16 @@ const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
                   📁 My Projects
                 </Link>
               </li>
+              <li>
+                <Link
+                  to="/Explorer"
+                  onClick={closeMenu}
+                  className="navbar-link-style"
+                >
+                  🔬 Explore
+                </Link>
+              </li>
+
               <li>
                 <Link
                   to="/publications"

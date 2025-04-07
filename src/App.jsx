@@ -32,7 +32,6 @@ import AdminDashboardPage from "./Page/Admin/AdminDashboardPage";
 import AdminUsersPage from "./Page/Admin/AdminUsersPage";
 import AdminSettingsPage from "./Page/Admin/AdminSettingsPage";
 import AdminReportsPage from "./Page/Admin/AdminReportsPage";
-
 const AdminLayout = ({ isAdmin }) => {
   if (isAdmin === null) {
     return (
@@ -44,7 +43,6 @@ const AdminLayout = ({ isAdmin }) => {
   return isAdmin ? <Outlet /> : <Navigate to="/" replace />;
 };
 
-// --- App Entry Point ---
 function App() {
   const [isAdmin, setIsAdmin] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(null);
@@ -65,7 +63,6 @@ function App() {
       setCurrentUser(null);
       return;
     }
-
     axios
       .post(
         "http://localhost:5000/api/auth/validate",
@@ -109,8 +106,6 @@ function App() {
     </Router>
   );
 }
-
-// --- Internal App Routes (safe useLocation here) ---
 const AppRoutes = ({
   isLoggedIn,
   isAdmin,
@@ -188,7 +183,6 @@ const AppRoutes = ({
               )
             }
           />
-
           <Route path="/signup/academic" element={<AcademicSignupForm />} />
           <Route path="/signup/corporate" element={<CorporateSignupForm />} />
           <Route path="/signup/medical" element={<MedicalSignupForm />} />
@@ -196,8 +190,6 @@ const AppRoutes = ({
             path="/signup/not-researcher"
             element={<NotResearcherSignupForm />}
           />
-
-          {/* --- Protected User Routes --- */}
           <Route
             path="/profile"
             element={
@@ -215,7 +207,6 @@ const AppRoutes = ({
             <Route path="skills" element={<ProfileSkills />} />
             <Route path="research" element={<ProfileResearch />} />
           </Route>
-
           <Route
             path="/publications"
             element={
@@ -256,7 +247,6 @@ const AppRoutes = ({
               )
             }
           />
-
           {/* --- Protected Admin Routes --- */}
           <Route path="/admin" element={<AdminLayout isAdmin={isAdmin} />}>
             <Route index element={<AdminDashboardPage />} />
@@ -264,8 +254,6 @@ const AppRoutes = ({
             <Route path="settings" element={<AdminSettingsPage />} />
             <Route path="reports" element={<AdminReportsPage />} />
           </Route>
-
-          {/* --- Catch-all --- */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

@@ -24,7 +24,6 @@ const AdminSettingsPage = () => {
         return;
       }
       try {
-        // *** Replace with your ACTUAL API endpoint ***
         const response = await axios.get("/api/admin/settings", {
           headers: { Authorization: `Bearer ${token}` },
         });

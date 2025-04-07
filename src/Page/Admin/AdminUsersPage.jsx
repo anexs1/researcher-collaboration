@@ -72,11 +72,9 @@ const AdminUsersPage = () => {
   };
 
   const handleSaveUser = async (updatedUserData) => {
-    // --- TODO: Implement API call to update user ---
     console.log("Saving user:", updatedUserData);
     const token = localStorage.getItem("authToken");
     try {
-      // *** Replace with your ACTUAL API endpoint ***
       await axios.put(
         `/api/admin/users/${updatedUserData.id}`,
         updatedUserData,
@@ -165,9 +163,9 @@ const AdminUsersPage = () => {
   return (
     <div className="p-4 md:p-6 space-y-4">
       <AdminPageHeader title="Manage Users" /* Optional: Add button maybe */>
-        {/* <button className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded inline-flex items-center">
-                   <FaPlus className="mr-2"/> Add User
-                </button> */}
+        <button className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded inline-flex items-center">
+          <FaPlus className="mr-2" /> Add User
+        </button>
       </AdminPageHeader>
 
       <SearchBar

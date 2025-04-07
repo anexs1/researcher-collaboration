@@ -11,6 +11,16 @@ import {
   AcademicCapIcon,
 } from "@heroicons/react/24/outline";
 
+const defaultUserDataForSignup = {
+  username: "",
+  email: "",
+  password: "",
+  role: "academic",
+  affiliation: "",
+  university: "",
+  department: "",
+};
+
 const AcademicSignupForm = () => {
   const [formData, setFormData] = useState({
     username: "",
@@ -20,6 +30,7 @@ const AcademicSignupForm = () => {
     university: "",
     department: "",
   });
+
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -28,10 +39,7 @@ const AcademicSignupForm = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prevData) => ({ ...prevData, [name]: value }));
   };
 
   const handleSubmit = async (event) => {
@@ -40,13 +48,13 @@ const AcademicSignupForm = () => {
     setIsLoading(true);
 
     if (formData.password !== formData.confirmPassword) {
-      setErrorMessage("Passwords do not match.");
+      setErrorMessage("Passwords do not match");
       setIsLoading(false);
       return;
     }
 
     if (formData.password.length < 6) {
-      setErrorMessage("Password must be at least 6 characters.");
+      setErrorMessage("Password must be at least 6 characters long");
       setIsLoading(false);
       return;
     }
@@ -56,8 +64,12 @@ const AcademicSignupForm = () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...formData,
+          username: formData.username,
+          email: formData.email,
+          password: formData.password,
           role: "academic",
+          university: formData.university,
+          department: formData.department,
         }),
       });
 
@@ -65,67 +77,75 @@ const AcademicSignupForm = () => {
 
       if (!response.ok) throw new Error(data.message || "Registration failed");
 
-      navigate("/login", { state: { registrationSuccess: true } });
+      const initialUserData = {
+        ...defaultUserDataForSignup,
+        _id: data.user?._id || null,
+        username: formData.username,
+        email: formData.email,
+        role: data.user?.role || "academic",
+        affiliation: formData.university,
+        university: formData.university,
+        department: formData.department,
+      };
+
+      localStorage.setItem("user", JSON.stringify(initialUserData));
+      console.log(
+        "Academic signup successful, initial data saved:",
+        initialUserData
+      );
+
+      navigate("/login", {
+        state: {
+          registrationSuccess: true,
+          message: "Academic account created successfully! Please log in.",
+          email: formData.email,
+        },
+      });
     } catch (error) {
       setErrorMessage(error.message || "Registration failed. Try again.");
+      console.error("Registration error:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <motion.div
-      className="flex items-center justify-center min-h-screen bg-gradient-to-tr from-blue-100 to-purple-200 px-4"
-      initial={{ opacity: 0, y: 40 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6 }}
-    >
+    <motion.div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-yellow-100 to-purple-200 px-4">
       <div className="w-full max-w-md p-6 bg-white rounded-xl shadow-lg">
         <h2 className="text-2xl font-bold text-gray-700 text-center mb-4">
           🎓 Academic Signup
         </h2>
 
         {errorMessage && (
-          <motion.p
-            className="text-red-600 text-sm mb-4 text-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-          >
+          <div className="text-red-600 text-sm text-center mb-4">
             {errorMessage}
-          </motion.p>
+          </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <InputField
-            type="text"
             name="username"
-            placeholder="Username"
-            icon={<UserIcon className="h-5 w-5 text-gray-400" />}
             value={formData.username}
             onChange={handleChange}
-            required
-            minLength={3}
+            placeholder="Username"
+            icon={<UserIcon className="h-5 w-5 text-gray-400" />}
           />
-
           <InputField
-            type="email"
             name="email"
-            placeholder="Email"
-            icon={<EnvelopeIcon className="h-5 w-5 text-gray-400" />}
+            type="email"
             value={formData.email}
             onChange={handleChange}
-            required
+            placeholder="Email"
+            icon={<EnvelopeIcon className="h-5 w-5 text-gray-400" />}
           />
-
           <div className="relative">
             <InputField
-              type={showPassword ? "text" : "password"}
               name="password"
-              placeholder="Password (min 6 chars)"
+              type={showPassword ? "text" : "password"}
               value={formData.password}
               onChange={handleChange}
-              required
-              minLength={6}
+              placeholder="Password"
+              icon={<EyeIcon className="h-5 w-5 text-gray-400" />}
             />
             <span
               onClick={() => setShowPassword(!showPassword)}
@@ -138,15 +158,14 @@ const AcademicSignupForm = () => {
               )}
             </span>
           </div>
-
           <div className="relative">
             <InputField
-              type={showConfirmPassword ? "text" : "password"}
               name="confirmPassword"
-              placeholder="Confirm Password"
+              type={showConfirmPassword ? "text" : "password"}
               value={formData.confirmPassword}
               onChange={handleChange}
-              required
+              placeholder="Confirm Password"
+              icon={<EyeIcon className="h-5 w-5 text-gray-400" />}
             />
             <span
               onClick={() => setShowConfirmPassword(!showConfirmPassword)}
@@ -159,71 +178,36 @@ const AcademicSignupForm = () => {
               )}
             </span>
           </div>
-
           <InputField
-            type="text"
             name="university"
-            placeholder="University"
-            icon={<BuildingLibraryIcon className="h-5 w-5 text-gray-400" />}
             value={formData.university}
             onChange={handleChange}
-            required
+            placeholder="University"
+            icon={<BuildingLibraryIcon className="h-5 w-5 text-gray-400" />}
           />
-
           <InputField
-            type="text"
             name="department"
-            placeholder="Department"
-            icon={<AcademicCapIcon className="h-5 w-5 text-gray-400" />}
             value={formData.department}
             onChange={handleChange}
-            required
+            placeholder="Department"
+            icon={<AcademicCapIcon className="h-5 w-5 text-gray-400" />}
           />
 
           <button
             type="submit"
             disabled={isLoading}
-            className={`w-full flex justify-center items-center gap-2 py-2 px-4 text-sm font-medium text-white rounded-md transition duration-150 ${
-              isLoading
-                ? "bg-blue-400 cursor-not-allowed"
-                : "bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            }`}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-xl transition duration-200"
           >
-            {isLoading && (
-              <svg
-                className="animate-spin h-5 w-5 text-white"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8z"
-                />
-              </svg>
-            )}
             {isLoading ? "Registering..." : "Sign Up as Academic"}
           </button>
         </form>
 
-        <div className="mt-4 text-center">
-          <p className="text-sm text-gray-600">
-            Already have an account?{" "}
-            <span
-              className="text-blue-600 hover:underline cursor-pointer"
-              onClick={() => navigate("/login")}
-            >
-              Log in
-            </span>
-          </p>
-        </div>
+        <p className="mt-4 text-center text-sm text-gray-600">
+          Already have an account?{" "}
+          <a href="/login" className="text-indigo-600 hover:underline">
+            Login
+          </a>
+        </p>
       </div>
     </motion.div>
   );

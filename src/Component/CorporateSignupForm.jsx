@@ -1,6 +1,25 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import InputField from "../Component/InputField";
+import InputField from "../Component/InputField"; // Assuming this path is correct
+import {
+  UserIcon,
+  EnvelopeIcon,
+  LockClosedIcon,
+  BuildingOfficeIcon,
+  BriefcaseIcon,
+  EyeIcon,
+  EyeSlashIcon,
+} from "@heroicons/react/24/outline";
+
+const defaultUserDataForSignup = {
+  username: "",
+  email: "",
+  password: "",
+  role: "corporate",
+  affiliation: "",
+  companyName: "",
+  jobTitle: "",
+};
 
 const CorporateSignupForm = () => {
   const [formData, setFormData] = useState({
@@ -12,13 +31,15 @@ const CorporateSignupForm = () => {
     jobTitle: "",
   });
 
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prevData) => ({ ...prevData, [name]: value }));
   };
 
   const handleSubmit = async (event) => {
@@ -33,7 +54,7 @@ const CorporateSignupForm = () => {
     }
 
     if (formData.password.length < 6) {
-      setErrorMessage("Password must be at least 6 characters");
+      setErrorMessage("Password must be at least 6 characters long");
       setIsLoading(false);
       return;
     }
@@ -41,9 +62,7 @@ const CorporateSignupForm = () => {
     try {
       const response = await fetch("http://localhost:5000/api/auth/signup", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           username: formData.username,
           email: formData.email,
@@ -55,115 +74,140 @@ const CorporateSignupForm = () => {
       });
 
       const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || "Registration failed");
-      }
 
-      console.log("Registration successful:", data);
+      if (!response.ok) throw new Error(data.message || "Registration failed");
+
+      const initialUserData = {
+        ...defaultUserDataForSignup,
+        _id: data.user?._id || null,
+        username: formData.username,
+        email: formData.email,
+        role: data.user?.role || "corporate",
+        affiliation: formData.companyName,
+        companyName: formData.companyName,
+        jobTitle: formData.jobTitle,
+      };
+
+      localStorage.setItem("user", JSON.stringify(initialUserData));
+      console.log(
+        "Corporate signup successful, initial data saved:",
+        initialUserData
+      );
+
       navigate("/login", {
         state: {
           registrationSuccess: true,
-          message: "Corporate account created successfully!",
+          message: "Corporate account created successfully! Please log in.",
+          email: formData.email,
         },
       });
     } catch (error) {
-      console.error("Registration error:", error);
       setErrorMessage(
         error.message || "Registration failed. Please try again."
       );
+      console.error("Registration error:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
-      <div className="w-full max-w-lg p-8 bg-white rounded-2xl shadow-lg">
-        <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">
-          Corporate Signup
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-tr from-green-100 to-blue-200 px-4">
+      <div className="w-full max-w-md p-8 bg-white rounded-2xl shadow-lg">
+        <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">
+          🏢 Corporate Signup
         </h2>
 
         {errorMessage && (
-          <p className="text-red-500 text-sm text-center mb-4">
+          <div className="text-red-600 text-sm text-center mb-4">
             {errorMessage}
-          </p>
+          </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <InputField
-            type="text"
             name="username"
-            placeholder="Username"
             value={formData.username}
             onChange={handleChange}
-            required
-            minLength="3"
+            placeholder="Username"
+            icon={<UserIcon className="h-5 w-5 text-gray-400" />}
           />
           <InputField
-            type="email"
             name="email"
-            placeholder="Email"
+            type="email"
             value={formData.email}
             onChange={handleChange}
-            required
+            placeholder="Email"
+            icon={<EnvelopeIcon className="h-5 w-5 text-gray-400" />}
           />
+          <div className="relative">
+            <InputField
+              name="password"
+              type={showPassword ? "text" : "password"}
+              value={formData.password}
+              onChange={handleChange}
+              placeholder="Password"
+              icon={<LockClosedIcon className="h-5 w-5 text-gray-400" />}
+            />
+            <span
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-2.5 text-gray-500 hover:text-indigo-600 cursor-pointer"
+            >
+              {showPassword ? (
+                <EyeSlashIcon className="h-5 w-5" />
+              ) : (
+                <EyeIcon className="h-5 w-5" />
+              )}
+            </span>
+          </div>
+          <div className="relative">
+            <InputField
+              name="confirmPassword"
+              type={showConfirmPassword ? "text" : "password"}
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              placeholder="Confirm Password"
+              icon={<LockClosedIcon className="h-5 w-5 text-gray-400" />}
+            />
+            <span
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              className="absolute right-3 top-2.5 text-gray-500 hover:text-indigo-600 cursor-pointer"
+            >
+              {showConfirmPassword ? (
+                <EyeSlashIcon className="h-5 w-5" />
+              ) : (
+                <EyeIcon className="h-5 w-5" />
+              )}
+            </span>
+          </div>
           <InputField
-            type="password"
-            name="password"
-            placeholder="Password (min 6 characters)"
-            value={formData.password}
-            onChange={handleChange}
-            required
-            minLength="6"
-          />
-          <InputField
-            type="password"
-            name="confirmPassword"
-            placeholder="Confirm Password"
-            value={formData.confirmPassword}
-            onChange={handleChange}
-            required
-          />
-          <InputField
-            type="text"
             name="companyName"
-            placeholder="Company Name"
             value={formData.companyName}
             onChange={handleChange}
-            required
+            placeholder="Company Name"
+            icon={<BuildingOfficeIcon className="h-5 w-5 text-gray-400" />}
           />
           <InputField
-            type="text"
             name="jobTitle"
-            placeholder="Job Title"
             value={formData.jobTitle}
             onChange={handleChange}
+            placeholder="Job Title"
+            icon={<BriefcaseIcon className="h-5 w-5 text-gray-400" />}
           />
 
           <button
             type="submit"
             disabled={isLoading}
-            className={`w-full py-2 px-4 text-white font-semibold rounded-lg transition duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-              isLoading
-                ? "bg-blue-400 cursor-not-allowed"
-                : "bg-blue-600 hover:bg-blue-700 focus:ring-blue-500"
-            }`}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-xl transition duration-200"
           >
             {isLoading ? "Registering..." : "Sign Up as Corporate"}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-gray-600">
+        <p className="mt-4 text-center text-sm text-gray-600">
           Already have an account?{" "}
-          <a
-            href="/login"
-            onClick={(e) => {
-              e.preventDefault();
-              navigate("/login");
-            }}
-            className="text-blue-600 hover:underline font-medium"
-          >
-            Log in
+          <a href="/login" className="text-indigo-600 hover:underline">
+            Login
           </a>
         </p>
       </div>
