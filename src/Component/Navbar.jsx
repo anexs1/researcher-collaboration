@@ -1,115 +1,173 @@
 // src/Component/Navbar.jsx
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
-import Notifications from "./Notifications";
-import ProfileMenu from "./ProfileMenu";
-import "../index.css";
+import { Link, NavLink } from "react-router-dom"; // Use NavLink for active styling if desired
+import ProfileMenu from "./ProfileMenu"; // Assuming this exists
+// import "../index.css"; // Make sure Tailwind/CSS is imported elsewhere (like main.jsx or index.js)
 
-const Navbar = ({ isLoggedIn, isAdmin, onLogout }) => {
+const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
+  // Accept currentUser if needed by ProfileMenu
   const [menuOpen, setMenuOpen] = useState(false);
-  const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
 
   const closeMenu = () => setMenuOpen(false);
 
+  // Define reusable link style - adjust as needed
+  const linkStyle =
+    "block py-2 px-3 md:p-0 text-white rounded hover:bg-pink-600 md:hover:bg-transparent md:hover:text-pink-200 transition-colors duration-200";
+  const activeLinkStyle =
+    "bg-pink-700 md:bg-transparent md:text-pink-100 md:font-semibold"; // Example active style
+
   return (
-    <header className="relative bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg py-5 px-6 flex items-center justify-between transition-all duration-500 ease-in-out">
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-        {" "}
-      </div>
-
-      <Link
-        to="/"
-        className="relative z-10 text-3xl font-extrabold tracking-tight hover:text-blue-100 transition-colors duration-300"
-      >
-        Researcher Collaboration Portal
-      </Link>
-
-      <button
-        className="md:hidden text-white focus:outline-none relative z-10"
-        onClick={() => setMenuOpen(!menuOpen)}
-      >
-        <svg
-          className="w-7 h-7 fill-current"
-          viewBox="0 0 20 20"
-          xmlns="http://www.w3.org/2000/svg"
+    // Consider removing gradient if Admin Panel has dark sidebar, or adjust colors
+    <header className="sticky top-0 z-40 bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16 md:h-20">
+        {/* Logo/Brand */}
+        <Link
+          to="/"
+          className="text-xl md:text-2xl font-bold tracking-tight hover:text-purple-100 transition-colors"
+          onClick={closeMenu}
         >
-          {" "}
-          ...{" "}
-        </svg>
-      </button>
+          Research Portal {/* Simplified Name */}
+        </Link>
 
-      <nav
-        className={`absolute md:relative top-full left-0 right-0 bg-gradient-to-r from-purple-500 to-pink-500 md:bg-none md:top-auto md:left-auto md:right-auto p-4 md:p-0 transition-all duration-300 ease-in-out ${
-          menuOpen
-            ? "opacity-100 translate-y-0"
-            : "opacity-0 -translate-y-4 pointer-events-none"
-        } md:opacity-100 md:translate-y-0 md:pointer-events-auto flex-grow md:flex-grow-0 md:block z-10 md:z-auto`}
-      >
-        <ul className="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-4 lg:space-x-6">
-          {" "}
-          {/* Adjusted spacing */}
-          {/* --- Common Links --- */}
-          <li>
-            <Link to="/" onClick={closeMenu} className="navbar-link-style">
-              🏠 Home
-            </Link>
-          </li>
-          {/* --- Logged In User Links --- */}
-          {isLoggedIn && (
-            <>
-              <li>
-                <Link
-                  to="/my-projects"
-                  onClick={closeMenu}
-                  className="navbar-link-style"
-                >
-                  📁 My Projects
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/Explorer"
-                  onClick={closeMenu}
-                  className="navbar-link-style"
-                >
-                  🔬 Explore
-                </Link>
-              </li>
+        {/* Mobile Menu Button */}
+        <div className="md:hidden">
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            type="button"
+            className="inline-flex items-center justify-center p-2 rounded-md text-purple-100 hover:text-white hover:bg-pink-500 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white"
+            aria-controls="mobile-menu"
+            aria-expanded={menuOpen}
+          >
+            <span className="sr-only">Open main menu</span>
+            {/* Icon based on menu state */}
+            {menuOpen ? (
+              <svg
+                className="block h-6 w-6"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            ) : (
+              <svg
+                className="block h-6 w-6"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
+              </svg>
+            )}
+          </button>
+        </div>
 
-              <li>
-                <Link
-                  to="/publications"
-                  onClick={closeMenu}
-                  className="navbar-link-style"
-                >
-                  📰 Publications
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/messages"
-                  onClick={closeMenu}
-                  className="navbar-link-style"
-                >
-                  💬 Messages
-                </Link>
-              </li>
-              <li>
-                <Notifications />
-              </li>
-            </>
-          )}
-          <li>
-            <ProfileMenu
-              isLoggedIn={isLoggedIn}
-              onLogout={() => {
-                closeMenu();
-                onLogout();
-              }}
-            />
-          </li>
-        </ul>
-      </nav>
+        {/* Desktop Menu & Mobile Menu Content */}
+        {/* Use NavLink for active state styling */}
+        <nav
+          className={`absolute md:relative top-full left-0 right-0 w-full md:w-auto bg-gradient-to-r from-purple-600 to-pink-600 md:bg-none md:top-auto transition-transform duration-300 ease-in-out ${
+            menuOpen ? "translate-x-0" : "-translate-x-full"
+          } md:translate-x-0 md:flex md:items-center md:space-x-4 lg:space-x-6`}
+        >
+          <ul className="flex flex-col p-4 md:p-0 md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-4 lg:space-x-6 text-sm font-medium">
+            {/* === Always Visible Links === */}
+            <li>
+              <NavLink
+                to="/"
+                end
+                onClick={closeMenu}
+                className={({ isActive }) =>
+                  `${linkStyle} ${isActive ? activeLinkStyle : ""}`
+                }
+              >
+                Home
+              </NavLink>
+            </li>
+            <li>
+              <NavLink
+                to="/explore"
+                onClick={closeMenu}
+                className={({ isActive }) =>
+                  `${linkStyle} ${isActive ? activeLinkStyle : ""}`
+                }
+              >
+                Explore
+              </NavLink>
+            </li>
+            {/* === NEW: Job Board Link (Public or Logged In) === */}
+
+            {/* === Logged In User Links === */}
+            {isLoggedIn && (
+              <>
+                <li>
+                  <NavLink
+                    to="/my-projects"
+                    onClick={closeMenu}
+                    className={({ isActive }) =>
+                      `${linkStyle} ${isActive ? activeLinkStyle : ""}`
+                    }
+                  >
+                    My Projects
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink
+                    to="/publications"
+                    onClick={closeMenu}
+                    className={({ isActive }) =>
+                      `${linkStyle} ${isActive ? activeLinkStyle : ""}`
+                    }
+                  >
+                    My Publications
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink
+                    to="/messages"
+                    onClick={closeMenu}
+                    className={({ isActive }) =>
+                      `${linkStyle} ${isActive ? activeLinkStyle : ""}`
+                    }
+                  >
+                    Messages
+                  </NavLink>
+                </li>
+                {/* Notifications Icon/Dropdown */}
+                {/* <li className="relative">
+                                    <Notifications />
+                                </li> */}
+              </>
+            )}
+
+            {/* Profile Menu / Login/Signup */}
+            {/* Wrap in li for consistent spacing */}
+            <li className="relative pt-2 md:pt-0">
+              <ProfileMenu
+                isLoggedIn={isLoggedIn}
+                currentUser={currentUser} // Pass user data if needed by menu
+                onLogout={() => {
+                  closeMenu();
+                  onLogout();
+                }}
+              />
+            </li>
+          </ul>
+        </nav>
+      </div>
     </header>
   );
 };

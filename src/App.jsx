@@ -18,10 +18,10 @@ import Explore from "./Page/Explore";
 import SignupPage from "./Page/SignupPage";
 import LoginPage from "./Page/LoginPage";
 import Profile from "./Page/Profile"; // Contains the publication form now
-import Publication from "./Page/Publication"; // <-- CORRECTED IMPORT: Use this for display
-// import MyPublications from "./Page/Publications"; // <-- REMOVED incorrect/unused import
-import MyProjects from "./Page/MyProjects";
+import Publication from "./Page/Publication"; // Displays user's publication list
+import MyProjects from "./Page/MyProjects"; // Original List for User's Projects
 import Messages from "./Page/Messages";
+// --- REMOVED New Feature Page Imports ---
 
 // --- Component Imports ---
 import AcademicSignupForm from "./Component/AcademicSignupForm";
@@ -47,14 +47,13 @@ import AdminChatPage from "./Page/Admin/AdminChatPage";
 import AdminLayout from "./Layout/AdminLayout";
 
 // --- Helper Components ---
-
-// Standard protected route - requires login
 const ProtectedRoute = ({ isLoggedIn, children }) => {
   const location = useLocation();
   if (isLoggedIn === null) {
     return (
       <div className="flex justify-center items-center h-screen">
-        Checking authentication...
+        {" "}
+        Checking authentication...{" "}
       </div>
     );
   }
@@ -63,28 +62,25 @@ const ProtectedRoute = ({ isLoggedIn, children }) => {
   }
   return children;
 };
-
-// Admin specific protected route - requires login AND admin role
 const AdminProtectedRoute = ({ isLoggedIn, isAdmin, children }) => {
   const location = useLocation();
   if (isLoggedIn === null || isAdmin === null) {
     return (
       <div className="flex justify-center items-center h-screen text-xl font-semibold">
-        Verifying Admin Access...
+        {" "}
+        Verifying Admin Access...{" "}
       </div>
     );
   }
   if (!isLoggedIn) {
-    console.warn("Admin Route Guard: Not logged in. Redirecting to login.");
+    console.warn("Admin Route Guard: Not logged in.");
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
   if (!isAdmin) {
-    console.warn(
-      "Admin Route Guard: Access Denied - User is not an admin. Redirecting."
-    );
+    console.warn("Admin Route Guard: Access Denied - Not admin.");
     return <Navigate to="/profile" replace />;
   }
-  return children; // Render the child (which will be AdminLayout)
+  return children;
 };
 
 // --- Main App Component ---
@@ -131,26 +127,21 @@ function App() {
           setCurrentUser(response.data.user);
           localStorage.setItem("user", JSON.stringify(response.data.user));
         } else {
-          console.warn(
-            "Token validation failed (API success false or no user data)."
-          );
+          console.warn("Token validation failed.");
           handleLogout();
         }
       })
       .catch((error) => {
         if (error.response) {
           console.error(
-            `Token validation failed: Server responded with status ${error.response.status}`,
+            `Validation failed: Status ${error.response.status}`,
             error.response.data
           );
         } else if (error.request) {
-          console.error(
-            "Token validation failed: No response received from server.",
-            error.request
-          );
+          console.error("Validation failed: No response");
         } else {
           console.error(
-            "Token validation failed: Error setting up request.",
+            "Validation failed: Request setup error",
             error.message
           );
         }
@@ -165,7 +156,8 @@ function App() {
   if (loadingAuth) {
     return (
       <div className="flex justify-center items-center h-screen text-xl font-semibold bg-gray-100">
-        Loading Application...
+        {" "}
+        Loading Application...{" "}
       </div>
     );
   }
@@ -179,13 +171,13 @@ function App() {
         handleLogout={handleLogout}
         setIsLoggedIn={setIsLoggedIn}
         setIsAdmin={setIsAdmin}
-        setCurrentUser={setCurrentUser} // Pass down setter if Login needs to update App state directly
+        setCurrentUser={setCurrentUser}
       />
     </Router>
   );
 }
 
-// --- AppRoutes Component (Handles Routing and Conditional Navbar) ---
+// --- AppRoutes Component ---
 const AppRoutes = ({
   isLoggedIn,
   isAdmin,
@@ -193,7 +185,7 @@ const AppRoutes = ({
   handleLogout,
   setIsLoggedIn,
   setIsAdmin,
-  setCurrentUser, // Receive setter if needed by children like LoginPage
+  setCurrentUser,
 }) => {
   const location = useLocation();
   const showNavbar = !location.pathname.toLowerCase().startsWith("/admin");
@@ -242,16 +234,16 @@ const AppRoutes = ({
             }
           />
 
-          {/* --- Protected User Routes (Require Login) --- */}
+          {/* --- Protected User Routes (Existing) --- */}
           <Route
-            path="/profile" // Profile page WITH the form
+            path="/profile" // Profile page WITH the publication form
             element={
               <ProtectedRoute isLoggedIn={isLoggedIn}>
                 <Profile currentUser={currentUser} />
               </ProtectedRoute>
             }
           >
-            {/* Keep nested routes if Profile component renders an <Outlet /> */}
+            {/* Nested Profile routes */}
             <Route index element={<Navigate to="account" replace />} />
             <Route path="account" element={<ProfileAccount />} />
             <Route path="about" element={<ProfileAbout />} />
@@ -260,20 +252,17 @@ const AppRoutes = ({
             <Route path="research" element={<ProfileResearch />} />
           </Route>
 
-          {/* --- Route for displaying user's publications --- */}
           <Route
-            path="/publications" // *** CORRECTED PATH (or use /my-publications if preferred) ***
+            path="/publications" // Display user's publication list
             element={
               <ProtectedRoute isLoggedIn={isLoggedIn}>
-                {/* *** CORRECTED COMPONENT NAME *** */}
                 <Publication currentUser={currentUser} />
               </ProtectedRoute>
             }
           />
-          {/* --------------------------------------------------- */}
 
           <Route
-            path="/my-projects" // Assuming this is separate
+            path="/my-projects" // Original list of user's projects
             element={
               <ProtectedRoute isLoggedIn={isLoggedIn}>
                 <MyProjects currentUser={currentUser} />
@@ -281,7 +270,7 @@ const AppRoutes = ({
             }
           />
           <Route
-            path="/messages" // Assuming this is separate
+            path="/messages" // User messages
             element={
               <ProtectedRoute isLoggedIn={isLoggedIn}>
                 <Messages currentUser={currentUser} />
@@ -289,7 +278,11 @@ const AppRoutes = ({
             }
           />
 
-          {/* --- Protected Admin Routes (Require Login + Admin Role) --- */}
+          {/* === REMOVED ROUTES for New Features === */}
+          {/* Project, Job, Feed routes are removed */}
+          {/* ==================================== */}
+
+          {/* --- Protected Admin Routes --- */}
           <Route
             path="/admin"
             element={
@@ -304,45 +297,51 @@ const AppRoutes = ({
             <Route path="chat" element={<AdminChatPage />} />
             <Route path="settings" element={<AdminSettingsPage />} />
             <Route path="reports" element={<AdminReportsPage />} />
+            {/* Corrected Admin Not Found */}
             <Route
               path="*"
               element={
-                /* ... Admin Not Found ... */
                 <div className="p-6 text-center bg-yellow-100 border border-yellow-300 rounded">
                   <h2 className="text-xl font-semibold text-yellow-800">
-                    Admin Page Not Found
+                    {" "}
+                    Admin Page Not Found{" "}
                   </h2>
                   <p className="text-yellow-700 mt-2">
-                    The specific admin page you requested does not exist.
+                    {" "}
+                    Admin page does not exist.{" "}
                   </p>
                   <Link
                     to="/admin"
                     className="text-blue-600 hover:underline mt-4 inline-block"
                   >
-                    Go to Admin Dashboard
+                    {" "}
+                    Admin Dashboard{" "}
                   </Link>
                 </div>
               }
             />
           </Route>
 
-          {/* --- Catch-all / Not Found (Must be the last route) --- */}
+          {/* --- Catch-all / Not Found --- */}
+          {/* Corrected General 404 */}
           <Route
             path="*"
             element={
-              /* ... General 404 ... */
               <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] text-center p-10">
                 <h1 className="text-4xl font-bold text-gray-700 mb-4">
-                  404 - Page Not Found
+                  {" "}
+                  404 - Not Found{" "}
                 </h1>
                 <p className="text-lg text-gray-500 mb-6">
-                  Sorry, the page you are looking for could not be found.
+                  {" "}
+                  Sorry, the page you requested could not be found.{" "}
                 </p>
                 <Link
                   to="/"
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                 >
-                  Go to Homepage
+                  {" "}
+                  Homepage{" "}
                 </Link>
               </div>
             }
