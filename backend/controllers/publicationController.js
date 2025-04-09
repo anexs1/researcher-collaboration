@@ -1,39 +1,50 @@
-// controllers/publicationController.js
-import Publication from "../models/publication.js";
-// Potentially import User model if needed for specific checks/includes
-// import User from '../models/user.js';
+// File: backend/controllers/publicationController.js
 
-// Create a new publication (associates with logged-in user)
+import db from "../models/index.js"; // Import the default export (the 'db' object)
+const { Publication, User } = db; // Destructure the models from the 'db' object
+import { Op } from "sequelize";
+
+// =============================================
+//        REGULAR USER CONTROLLERS
+// =============================================
+
 export const createPublication = async (req, res) => {
   try {
-    const { title, abstract, author, document_link } = req.body;
-    const userId = req.user?.id; // Get userId from auth middleware
+    const {
+      title,
+      summary,
+      author,
+      tags,
+      area,
+      publicationDate,
+      document_link,
+    } = req.body;
+    const ownerId = req.user?.id;
 
-    if (!userId) {
+    if (!ownerId) {
       return res
         .status(401)
         .json({ success: false, message: "Authentication required." });
     }
-
-    // Basic validation (can be expanded or moved to middleware/service)
-    if (!title || !abstract || !author || !document_link) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Missing required fields." });
+    if (!title || !summary || !author) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields (title, summary, author).",
+      });
     }
 
     const newPublication = await Publication.create({
       title,
-      abstract,
-      author, // Keep author field as provided, but link via userId
-      document_link,
-      userId: userId, // Associate with the logged-in user
+      summary,
+      author,
+      tags: tags || [],
+      area: area || null,
+      publicationDate: publicationDate || new Date(),
+      document_link: document_link || null,
+      ownerId: ownerId,
+      collaborationStatus: "open",
     });
-
-    // Fetch the newly created publication maybe including owner info if needed later
-    const createdPublication = await Publication.findByPk(newPublication.id);
-
-    res.status(201).json({ success: true, data: createdPublication });
+    res.status(201).json({ success: true, data: newPublication });
   } catch (error) {
     console.error("Error creating publication:", error);
     res.status(500).json({
@@ -44,13 +55,12 @@ export const createPublication = async (req, res) => {
   }
 };
 
-// Get ALL publications (public feed)
 export const getAllPublications = async (req, res) => {
+  // Consider if this is still needed or if '/explore' covers public view
   try {
-    // Optionally include owner info if needed for display
     const publications = await Publication.findAll({
-      order: [["createdAt", "DESC"]], // Example ordering
-      // include: [{ model: User, as: 'owner', attributes: ['id', 'username', 'profileImage'] }] // Example include
+      order: [["createdAt", "DESC"]],
+      include: [{ model: User, as: "owner", attributes: ["id", "username"] }], // Only include necessary public fields
     });
     res.status(200).json({ success: true, data: publications });
   } catch (error) {
@@ -63,22 +73,19 @@ export const getAllPublications = async (req, res) => {
   }
 };
 
-// *** NEW: Get publications for the currently logged-in user ***
 export const getMyPublications = async (req, res) => {
   try {
-    const userId = req.user?.id;
-
-    if (!userId) {
+    const ownerId = req.user?.id;
+    if (!ownerId)
       return res
         .status(401)
         .json({ success: false, message: "Authentication required." });
-    }
 
     const publications = await Publication.findAll({
-      where: { userId: userId }, // Filter by the logged-in user's ID
-      order: [["createdAt", "DESC"]], // Order by creation date, newest first
+      where: { ownerId: ownerId },
+      order: [["createdAt", "DESC"]],
+      // No need to include owner details here usually, as it's known
     });
-
     res.status(200).json({ success: true, data: publications });
   } catch (error) {
     console.error("Error fetching user's publications:", error);
@@ -90,11 +97,12 @@ export const getMyPublications = async (req, res) => {
   }
 };
 
-// Get a single publication by ID (public)
 export const getPublicationById = async (req, res) => {
   const { id } = req.params;
   try {
-    const publication = await Publication.findByPk(id);
+    const publication = await Publication.findByPk(id, {
+      include: [{ model: User, as: "owner", attributes: ["id", "username"] }], // Public view, limited owner details
+    });
     if (publication) {
       res.status(200).json({ success: true, data: publication });
     } else {
@@ -112,49 +120,63 @@ export const getPublicationById = async (req, res) => {
   }
 };
 
-// Update a publication by ID (checks ownership)
 export const updatePublication = async (req, res) => {
   const { id } = req.params;
-  const userId = req.user?.id;
-  const { title, abstract, author, document_link } = req.body; // Get fields to update
+  const ownerId = req.user?.id;
+  const {
+    title,
+    summary,
+    author,
+    tags,
+    area,
+    publicationDate,
+    document_link,
+    collaborationStatus,
+  } = req.body;
 
-  if (!userId) {
+  if (!ownerId)
     return res
       .status(401)
       .json({ success: false, message: "Authentication required." });
-  }
 
   try {
+    // Find the publication first to check ownership
     const publication = await Publication.findByPk(id);
-
-    if (!publication) {
+    if (!publication)
       return res
         .status(404)
         .json({ success: false, message: "Publication not found" });
-    }
-
-    // --- Ownership Check ---
-    if (publication.userId !== userId) {
+    if (publication.ownerId !== ownerId)
       return res.status(403).json({
         success: false,
         message: "Forbidden: You cannot edit this publication.",
       });
-    }
 
-    // Proceed with update
+    // Proceed with update since ownership is confirmed
     const [updatedCount] = await Publication.update(
-      { title, abstract, author, document_link }, // Only update allowed fields
-      { where: { id: id } }
+      {
+        title,
+        summary,
+        author,
+        tags,
+        area,
+        publicationDate,
+        document_link,
+        collaborationStatus,
+      },
+      { where: { id: id } } // Can remove ownerId here as it was checked
     );
 
     if (updatedCount > 0) {
-      const updatedPublication = await Publication.findByPk(id); // Fetch updated record
+      // Fetch the updated record to return it
+      const updatedPublication = await Publication.findByPk(id);
       res.status(200).json({ success: true, data: updatedPublication });
     } else {
-      // Should not happen if findByPk succeeded, but handle defensively
-      res.status(404).json({
+      // Should not happen often if findByPk succeeded, maybe no fields changed
+      res.status(304).json({
+        // 304 Not Modified might be appropriate
         success: false,
-        message: "Publication found but update failed.",
+        message: "Publication update failed (no changes detected).",
       });
     }
   } catch (error) {
@@ -167,53 +189,286 @@ export const updatePublication = async (req, res) => {
   }
 };
 
-// Delete a publication by ID (checks ownership)
 export const deletePublication = async (req, res) => {
   const { id } = req.params;
-  const userId = req.user?.id;
+  const ownerId = req.user?.id;
 
-  if (!userId) {
+  if (!ownerId)
     return res
       .status(401)
       .json({ success: false, message: "Authentication required." });
-  }
 
   try {
-    const publication = await Publication.findByPk(id);
-
-    if (!publication) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Publication not found" });
-    }
-
-    // --- Ownership Check ---
-    if (publication.userId !== userId) {
-      return res.status(403).json({
+    // Check ownership before deleting
+    const publication = await Publication.findOne({
+      where: { id: id, ownerId: ownerId },
+    });
+    if (!publication)
+      return res.status(404).json({
         success: false,
-        message: "Forbidden: You cannot delete this publication.",
+        message: "Publication not found or you do not own it.",
       });
-    }
 
-    // Proceed with deletion
     const deletedCount = await Publication.destroy({
-      where: { id: id },
+      where: { id: id, ownerId: ownerId }, // Ensure atomicity
     });
 
     if (deletedCount > 0) {
-      // Send 200 OK with success message instead of 204 No Content for clarity
       res
         .status(200)
         .json({ success: true, message: "Publication deleted successfully." });
     } else {
-      // Should not happen if findByPk succeeded, but handle defensively
+      // Should be caught above, but safety net
       res.status(404).json({
         success: false,
-        message: "Publication found but delete failed.",
+        message: "Publication not found or delete failed.",
       });
     }
   } catch (error) {
     console.error("Error deleting publication:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete publication",
+      error: error.message,
+    });
+  }
+};
+
+export const getExplorePublications = async (req, res) => {
+  try {
+    const { search, area, sortBy, page = 1, limit = 10 } = req.query;
+    const loggedInUserId = req.user?.id;
+
+    let whereClause = { collaborationStatus: "open" };
+    let orderClause = [];
+
+    if (search) {
+      const searchPattern = `%${search}%`;
+      whereClause[Op.or] = [
+        { title: { [Op.like]: searchPattern } },
+        { summary: { [Op.like]: searchPattern } },
+        { author: { [Op.like]: searchPattern } },
+        { area: { [Op.like]: searchPattern } },
+      ];
+    }
+    if (area && area !== "All") whereClause.area = area;
+    if (loggedInUserId) whereClause.ownerId = { [Op.ne]: loggedInUserId };
+
+    switch (sortBy) {
+      case "title_asc":
+        orderClause.push(["title", "ASC"]);
+        break;
+      case "date_asc":
+        orderClause.push(["publicationDate", "ASC"]);
+        orderClause.push(["createdAt", "ASC"]);
+        break;
+      case "date_desc":
+      default:
+        orderClause.push(["publicationDate", "DESC"]);
+        orderClause.push(["createdAt", "DESC"]);
+        break;
+    }
+
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    if (isNaN(pageNum) || isNaN(limitNum) || pageNum < 1 || limitNum < 1) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid pagination parameters." });
+    }
+    const offset = (pageNum - 1) * limitNum;
+
+    const { count, rows } = await Publication.findAndCountAll({
+      where: whereClause,
+      include: [{ model: User, as: "owner", attributes: ["id", "username"] }],
+      order: orderClause,
+      limit: limitNum,
+      offset: offset,
+      distinct: true,
+    });
+
+    const formattedPublications = rows.map((pub) => {
+      const pubJson = pub.toJSON();
+      // Use author field if owner is not present (shouldn't happen with include but safety)
+      return {
+        ...pubJson,
+        authors: pubJson.owner ? [pubJson.owner.username] : [pubJson.author],
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      count: formattedPublications.length, // Items on current page
+      totalItems: count, // Total matching items
+      totalPages: Math.ceil(count / limitNum),
+      currentPage: pageNum,
+      data: formattedPublications,
+    });
+  } catch (error) {
+    console.error("Error fetching explore publications:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error fetching publications",
+      error: error.message,
+    });
+  }
+};
+
+// =============================================
+//        ADMIN PUBLICATION CONTROLLERS
+// =============================================
+
+// --- Controller for Admin GET /api/admin/publications ---
+// ----- CORRECTED VERSION (Assuming 'name' column does NOT exist on User) -----
+export const adminGetAllPublications = async (req, res) => {
+  try {
+    const {
+      search,
+      status,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+      page = 1,
+      limit = 15,
+    } = req.query;
+
+    let whereClause = {};
+    let orderClause = [];
+    // ----- Correction 1: Removed 'name' from attributes -----
+    let includeClause = [
+      {
+        model: User,
+        as: "owner", // <<< VERIFY this alias matches your model association
+        attributes: ["id", "username", "email"], // Only include existing fields
+      },
+    ];
+
+    if (status) whereClause.collaborationStatus = status;
+    if (search) {
+      const searchPattern = `%${search}%`;
+      // ----- Correction 2: Removed '$owner.name$' from search -----
+      whereClause[Op.or] = [
+        { title: { [Op.like]: searchPattern } },
+        { summary: { [Op.like]: searchPattern } },
+        { author: { [Op.like]: searchPattern } }, // Still search the publication's author string field
+        { area: { [Op.like]: searchPattern } },
+        { "$owner.username$": { [Op.like]: searchPattern } }, // Search existing fields
+        { "$owner.email$": { [Op.like]: searchPattern } }, // Search existing fields
+      ];
+    }
+
+    // ----- Correction 3: Adjusted sorting logic -----
+    // Allow sorting only by fields that exist on Publication or included User fields that exist
+    // Add '$owner.username$' or '$owner.email$' here if you want to allow sorting by them
+    const validSortColumns = [
+      "title",
+      "publicationDate",
+      "createdAt",
+      "collaborationStatus",
+      "author",
+      "area",
+      "$owner.username$",
+      "$owner.email$", // Example allowed included sorts
+    ];
+
+    if (validSortColumns.includes(sortBy)) {
+      // Special handling if sorting by included model field using '$...$' syntax
+      if (sortBy.startsWith("$owner.")) {
+        // Extract actual field name (e.g., 'username')
+        const ownerFieldName = sortBy.split(".")[1];
+        // Ensure the included model (index 0) and the field name are correct
+        orderClause.push([
+          includeClause[0],
+          ownerFieldName,
+          sortOrder === "asc" ? "ASC" : "DESC",
+        ]);
+      } else {
+        // Sort by Publication field directly
+        orderClause.push([sortBy, sortOrder === "asc" ? "ASC" : "DESC"]);
+      }
+    } else {
+      // Default sort if provided sortBy is invalid
+      orderClause.push(["createdAt", "DESC"]);
+    }
+    // Add consistent secondary sort
+    if (sortBy !== "createdAt") {
+      // Avoid duplicating if primary sort is createdAt
+      orderClause.push(["createdAt", "DESC"]);
+    }
+
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    if (isNaN(pageNum) || isNaN(limitNum) || pageNum < 1 || limitNum < 1) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid pagination parameters." });
+    }
+    const offset = (pageNum - 1) * limitNum;
+
+    const { count, rows } = await Publication.findAndCountAll({
+      where: whereClause,
+      include: includeClause,
+      order: orderClause,
+      limit: limitNum,
+      offset: offset,
+      distinct: true, // Necessary for accurate counts with includes/limits
+      subQuery: false, // Often needed for '$field$.field$' searches/sorts
+    });
+
+    const pagination = {
+      totalItems: count,
+      totalPages: Math.ceil(count / limitNum),
+      currentPage: pageNum,
+    };
+
+    // Rename owner -> user for frontend consistency
+    const publicationsWithUser = rows.map((pub) => {
+      const plainPub = pub.toJSON();
+      return { ...plainPub, user: plainPub.owner }; // Assign owner object to user key
+    });
+
+    res.status(200).json({
+      success: true,
+      data: { publications: publicationsWithUser, pagination: pagination },
+    });
+  } catch (error) {
+    console.error("Error fetching publications for admin:", error);
+    // Log the specific SQL error if available
+    if (error.original) {
+      console.error("SQL Error:", error.original.sqlMessage);
+      console.error("SQL Query:", error.sql); // Log the generated SQL
+    }
+    res.status(500).json({
+      success: false,
+      message: "Server Error fetching publications for admin",
+      error: error.message,
+    });
+  }
+};
+
+// --- Controller for Admin DELETE /api/admin/publications/:id ---
+export const adminDeletePublication = async (req, res) => {
+  const { id } = req.params;
+  if (!id || isNaN(parseInt(id, 10))) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Invalid publication ID." });
+  }
+  try {
+    // Admin deletes directly without checking ownership
+    const deletedCount = await Publication.destroy({ where: { id: id } });
+    if (deletedCount > 0) {
+      res.status(200).json({
+        success: true,
+        message: "Publication deleted successfully by admin.",
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        message: "Publication not found or already deleted.",
+      });
+    }
+  } catch (error) {
+    console.error("Error deleting publication by admin:", error);
     res.status(500).json({
       success: false,
       message: "Failed to delete publication",

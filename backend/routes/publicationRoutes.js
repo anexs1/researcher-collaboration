@@ -1,22 +1,26 @@
 // routes/publicationRoutes.js
 import express from "express";
 import * as publicationController from "../controllers/publicationController.js";
+// Assuming 'protect' is your middleware for checking JWT authentication
 import { protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
 // --- Routes ---
 
-// GET /api/publications/ -> Get ALL publications (public) OR Filtered (e.g., by user)
-// The controller will handle filtering based on query params or auth
-router.get("/", publicationController.getAllPublications); // Keep this for public view if needed
+// GET /api/publications/explore -> Get publications for the Explore page (filtered, sorted etc)
+// Use protect if exploring requires login, otherwise leave it public/semi-public
+router.get("/explore", protect, publicationController.getExplorePublications); // ADDED ROUTE FOR EXPLORE
+
+// GET /api/publications/ -> Get ALL publications (less useful for explore, maybe for a general feed)
+router.get("/", publicationController.getAllPublications);
 
 // GET /api/publications/my-publications -> Get ONLY the logged-in user's publications
 router.get(
   "/my-publications",
   protect,
   publicationController.getMyPublications
-); // USE THIS ENDPOINT
+);
 
 // GET /api/publications/:id -> Get ONE specific publication by ID
 router.get("/:id", publicationController.getPublicationById);

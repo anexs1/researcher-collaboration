@@ -1,37 +1,29 @@
-// src/routes/authRoutes.js
+// File: backend/routes/authRoutes.js
+
 import express from "express";
 import {
-  registerUser,
-  loginUser,
-  loginAdminUser,
-  getMe,
-  getAllUsers,
-  // --- IMPORT NEW CONTROLLERS ---
-  getPendingUsers,
-  updateUserStatus,
+  registerUser, // Handles POST /signup
+  loginUser, // Handles POST /login
+  loginAdminUser, // Handles POST /admin-login
+  getMe, // Handles GET /me (for fetching logged-in user's profile)
+  // REMOVE getAllUsers, getPendingUsers, updateUserStatus FROM HERE
 } from "../controllers/authController.js"; // Verify path
-import { protect, adminOnly } from "../middleware/authMiddleware.js"; // Verify path
+
+// Only import 'protect' if needed for routes defined *in this file* (like /me)
+import { protect } from "../middleware/authMiddleware.js"; // Verify path
+// <<< REMOVE adminOnly import from this file >>>
 
 const router = express.Router();
 
 // --- Public Auth Routes ---
+router.post("/signup", registerUser); // User registration (creates pending usually)
+router.post("/login", loginUser); // Regular user login
 router.post("/admin-login", loginAdminUser); // Specific endpoint for admin login
-router.post("/signup", registerUser); // Creates pending users
-router.post("/login", loginUser); // Regular user login (checks status)
 
 // --- Protected User Route ---
-router.get("/me", protect, getMe); // Gets profile for logged-in (and approved) user
+// Route to get the profile of the currently logged-in user
+router.get("/me", protect, getMe);
 
-// --- ADMIN ONLY ROUTES ---
-router.get("/admin/users", protect, adminOnly, getAllUsers); // Gets list of users (e.g., all or approved)
-
-// --- NEW Admin Approval Routes ---
-router.get("/admin/users/pending", protect, adminOnly, getPendingUsers); // List pending users
-router.patch(
-  "/admin/users/:userId/status",
-  protect,
-  adminOnly,
-  updateUserStatus
-); // Update status
+// <<< REMOVE THE '/admin/*' routes from this file >>>
 
 export default router;

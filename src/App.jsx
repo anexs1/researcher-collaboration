@@ -1,5 +1,3 @@
-// src/App.js
-
 import React, { useEffect, useState, useCallback } from "react";
 import {
   BrowserRouter as Router,
@@ -7,21 +5,21 @@ import {
   Route,
   Navigate,
   useLocation,
-  Link, // Import Link for error pages
+  Link,
 } from "react-router-dom";
 import axios from "axios";
-import "./index.css"; // Ensure this path is correct
+import "./index.css";
 
 // --- Page Imports ---
 import Home from "./Page/Home";
-import Explore from "./Page/Explore";
+import ExplorePage from "./Page/ExplorePage";
 import SignupPage from "./Page/SignupPage";
 import LoginPage from "./Page/LoginPage";
-import Profile from "./Page/Profile"; // Contains the publication form now
-import Publication from "./Page/Publication"; // Displays user's publication list
-import MyProjects from "./Page/MyProjects"; // Original List for User's Projects
+import Profile from "./Page/Profile";
+import Publication from "./Page/Publication";
+import EditPublicationPage from "./Page/EditPublicationPage";
+import MyProjects from "./Page/MyProjects";
 import Messages from "./Page/Messages";
-// --- REMOVED New Feature Page Imports ---
 
 // --- Component Imports ---
 import AcademicSignupForm from "./Component/AcademicSignupForm";
@@ -42,6 +40,7 @@ import AdminSettingsPage from "./Page/Admin/AdminSettingsPage";
 import AdminReportsPage from "./Page/Admin/AdminReportsPage";
 import AdminPendingUsersPage from "./Page/Admin/AdminPendingUsersPage";
 import AdminChatPage from "./Page/Admin/AdminChatPage";
+import AdminPublicationManagementPage from "./Page/Admin/AdminPublicationManagementPage"; // <-- IMPORT ADDED
 
 // --- Layout Imports ---
 import AdminLayout from "./Layout/AdminLayout";
@@ -52,8 +51,7 @@ const ProtectedRoute = ({ isLoggedIn, children }) => {
   if (isLoggedIn === null) {
     return (
       <div className="flex justify-center items-center h-screen">
-        {" "}
-        Checking authentication...{" "}
+        Checking authentication...
       </div>
     );
   }
@@ -62,22 +60,20 @@ const ProtectedRoute = ({ isLoggedIn, children }) => {
   }
   return children;
 };
+
 const AdminProtectedRoute = ({ isLoggedIn, isAdmin, children }) => {
   const location = useLocation();
   if (isLoggedIn === null || isAdmin === null) {
     return (
       <div className="flex justify-center items-center h-screen text-xl font-semibold">
-        {" "}
-        Verifying Admin Access...{" "}
+        Verifying Admin Access...
       </div>
     );
   }
   if (!isLoggedIn) {
-    console.warn("Admin Route Guard: Not logged in.");
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
   if (!isAdmin) {
-    console.warn("Admin Route Guard: Access Denied - Not admin.");
     return <Navigate to="/profile" replace />;
   }
   return children;
@@ -90,74 +86,71 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
 
+  const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+
   const handleLogout = useCallback(() => {
-    console.log("Logging out...");
     localStorage.removeItem("authToken");
     localStorage.removeItem("user");
     setIsLoggedIn(false);
     setIsAdmin(false);
     setCurrentUser(null);
-    setLoadingAuth(false);
   }, []);
 
   useEffect(() => {
     const token = localStorage.getItem("authToken");
+    const storedUser = localStorage.getItem("user");
+
     if (!token) {
-      console.log("No auth token found.");
       setIsLoggedIn(false);
       setIsAdmin(false);
       setCurrentUser(null);
       setLoadingAuth(false);
       return;
     }
-    console.log("Auth token found, validating...");
+
+    if (storedUser) {
+      try {
+        const parsedUser = JSON.parse(storedUser);
+        setCurrentUser(parsedUser);
+        setIsLoggedIn(true);
+        setIsAdmin(parsedUser.role === "admin");
+      } catch (e) {
+        localStorage.removeItem("user");
+      }
+    }
+
     setLoadingAuth(true);
+
     axios
       .post(
-        "/api/auth/validate",
+        `${API_BASE}/api/auth/validate`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       )
       .then((response) => {
         if (response.data?.success && response.data?.user) {
-          console.log("Token validation successful:", response.data.user);
           setIsLoggedIn(true);
           const isAdminUser = response.data.user.role === "admin";
           setIsAdmin(isAdminUser);
           setCurrentUser(response.data.user);
           localStorage.setItem("user", JSON.stringify(response.data.user));
         } else {
-          console.warn("Token validation failed.");
           handleLogout();
         }
       })
       .catch((error) => {
-        if (error.response) {
-          console.error(
-            `Validation failed: Status ${error.response.status}`,
-            error.response.data
-          );
-        } else if (error.request) {
-          console.error("Validation failed: No response");
-        } else {
-          console.error(
-            "Validation failed: Request setup error",
-            error.message
-          );
-        }
+        console.error("Token validation error:", error);
         handleLogout();
       })
       .finally(() => {
-        console.log("Auth validation complete.");
         setLoadingAuth(false);
       });
-  }, [handleLogout]);
+  }, [handleLogout, API_BASE]);
 
   if (loadingAuth) {
     return (
       <div className="flex justify-center items-center h-screen text-xl font-semibold bg-gray-100">
-        {" "}
-        Loading Application...{" "}
+        Loading Application...
       </div>
     );
   }
@@ -177,7 +170,7 @@ function App() {
   );
 }
 
-// --- AppRoutes Component ---
+// --- AppRoutes Component (Handles Navbar and Routing) ---
 const AppRoutes = ({
   isLoggedIn,
   isAdmin,
@@ -203,7 +196,10 @@ const AppRoutes = ({
         <Routes>
           {/* --- Public Routes --- */}
           <Route path="/" element={<Home />} />
-          <Route path="/explore" element={<Explore />} />
+          <Route
+            path="/explore"
+            element={<ExplorePage currentUser={currentUser} />}
+          />
 
           {/* --- Authentication Routes --- */}
           <Route
@@ -234,9 +230,9 @@ const AppRoutes = ({
             }
           />
 
-          {/* --- Protected User Routes (Existing) --- */}
+          {/* --- Protected User Routes --- */}
           <Route
-            path="/profile" // Profile page WITH the publication form
+            path="/profile"
             element={
               <ProtectedRoute isLoggedIn={isLoggedIn}>
                 <Profile currentUser={currentUser} />
@@ -253,16 +249,23 @@ const AppRoutes = ({
           </Route>
 
           <Route
-            path="/publications" // Display user's publication list
+            path="/publications"
             element={
               <ProtectedRoute isLoggedIn={isLoggedIn}>
                 <Publication currentUser={currentUser} />
               </ProtectedRoute>
             }
           />
-
           <Route
-            path="/my-projects" // Original list of user's projects
+            path="/publications/edit/:id"
+            element={
+              <ProtectedRoute isLoggedIn={isLoggedIn}>
+                <EditPublicationPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/my-projects"
             element={
               <ProtectedRoute isLoggedIn={isLoggedIn}>
                 <MyProjects currentUser={currentUser} />
@@ -270,17 +273,13 @@ const AppRoutes = ({
             }
           />
           <Route
-            path="/messages" // User messages
+            path="/messages"
             element={
               <ProtectedRoute isLoggedIn={isLoggedIn}>
                 <Messages currentUser={currentUser} />
               </ProtectedRoute>
             }
           />
-
-          {/* === REMOVED ROUTES for New Features === */}
-          {/* Project, Job, Feed routes are removed */}
-          {/* ==================================== */}
 
           {/* --- Protected Admin Routes --- */}
           <Route
@@ -291,57 +290,55 @@ const AppRoutes = ({
               </AdminProtectedRoute>
             }
           >
+            {/* Nested Admin Routes */}
             <Route index element={<AdminDashboardPage />} />
             <Route path="users" element={<AdminUsersPage />} />
             <Route path="pending-users" element={<AdminPendingUsersPage />} />
+            {/* --- ROUTE FOR ADMIN PUBLICATION MANAGEMENT ADDED --- */}
+            <Route
+              path="publications"
+              element={<AdminPublicationManagementPage />}
+            />
+            {/* --- END ADDED ROUTE --- */}
             <Route path="chat" element={<AdminChatPage />} />
             <Route path="settings" element={<AdminSettingsPage />} />
             <Route path="reports" element={<AdminReportsPage />} />
-            {/* Corrected Admin Not Found */}
+            {/* Admin Catch-all */}
             <Route
               path="*"
               element={
-                <div className="p-6 text-center bg-yellow-100 border border-yellow-300 rounded">
-                  <h2 className="text-xl font-semibold text-yellow-800">
+                <div className="p-4">
+                  {" "}
+                  {/* Added padding */}
+                  <h2 className="text-xl font-semibold mb-4">
                     {" "}
                     Admin Page Not Found{" "}
                   </h2>
-                  <p className="text-yellow-700 mt-2">
+                  <Link to="/admin" className="text-blue-600 hover:underline">
                     {" "}
-                    Admin page does not exist.{" "}
-                  </p>
-                  <Link
-                    to="/admin"
-                    className="text-blue-600 hover:underline mt-4 inline-block"
-                  >
-                    {" "}
-                    Admin Dashboard{" "}
+                    Go to Admin Dashboard{" "}
                   </Link>
                 </div>
               }
             />
           </Route>
 
-          {/* --- Catch-all / Not Found --- */}
-          {/* Corrected General 404 */}
+          {/* --- General Catch-all / 404 --- */}
           <Route
             path="*"
             element={
               <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] text-center p-10">
                 <h1 className="text-4xl font-bold text-gray-700 mb-4">
-                  {" "}
-                  404 - Not Found{" "}
+                  404 - Page Not Found
                 </h1>
                 <p className="text-lg text-gray-500 mb-6">
-                  {" "}
-                  Sorry, the page you requested could not be found.{" "}
+                  Sorry, the page you requested could not be found.
                 </p>
                 <Link
                   to="/"
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
                 >
-                  {" "}
-                  Homepage{" "}
+                  Go to Homepage
                 </Link>
               </div>
             }

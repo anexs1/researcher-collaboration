@@ -2,7 +2,6 @@
 import React, { useState } from "react";
 import { Link, NavLink } from "react-router-dom"; // Use NavLink for active styling if desired
 import ProfileMenu from "./ProfileMenu"; // Assuming this exists
-// import "../index.css"; // Make sure Tailwind/CSS is imported elsewhere (like main.jsx or index.js)
 
 const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
   // Accept currentUser if needed by ProfileMenu
@@ -20,7 +19,6 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
     // Consider removing gradient if Admin Panel has dark sidebar, or adjust colors
     <header className="sticky top-0 z-40 bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16 md:h-20">
-        {/* Logo/Brand */}
         <Link
           to="/"
           className="text-xl md:text-2xl font-bold tracking-tight hover:text-purple-100 transition-colors"
@@ -76,8 +74,6 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
           </button>
         </div>
 
-        {/* Desktop Menu & Mobile Menu Content */}
-        {/* Use NavLink for active state styling */}
         <nav
           className={`absolute md:relative top-full left-0 right-0 w-full md:w-auto bg-gradient-to-r from-purple-600 to-pink-600 md:bg-none md:top-auto transition-transform duration-300 ease-in-out ${
             menuOpen ? "translate-x-0" : "-translate-x-full"
@@ -110,20 +106,9 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
             </li>
             {/* === NEW: Job Board Link (Public or Logged In) === */}
 
-            {/* === Logged In User Links === */}
+            {/* === Logged In Links === */}
             {isLoggedIn && (
               <>
-                <li>
-                  <NavLink
-                    to="/my-projects"
-                    onClick={closeMenu}
-                    className={({ isActive }) =>
-                      `${linkStyle} ${isActive ? activeLinkStyle : ""}`
-                    }
-                  >
-                    My Projects
-                  </NavLink>
-                </li>
                 <li>
                   <NavLink
                     to="/publications"

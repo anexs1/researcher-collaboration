@@ -1,88 +1,253 @@
-// import CollaborationRequest from "../models/collaborationRequestModel.js";
-// import Publication from "../models/publicationModel.js";
-// import User from "../models/user.js";
+import db from "../models/index.js"; // Import the default export
+const { CollaborationRequest, Publication, User } = db; // Destructure models
+import { Op } from "sequelize";
 
-// // Send a collaboration request
-// export const sendRequest = async (req, res) => {
-//   try {
-//     const { publicationId } = req.body;
-//     const userId = req.user.id;
+export const sendRequest = async (req, res) => {
+  const { publicationId, message } = req.body;
+  const senderId = req.user?.id; // From authMiddleware
 
-//     // Check if the publication exists
-//     const publication = await Publication.findByPk(publicationId);
-//     if (!publication) {
-//       return res.status(404).json({ message: "Publication not found" });
-//     }
+  if (!senderId)
+    return res
+      .status(401)
+      .json({ success: false, message: "Authentication required." });
+  if (!publicationId)
+    return res
+      .status(400)
+      .json({ success: false, message: "Publication ID is required" });
 
-//     // Prevent duplicate requests
-//     const existingRequest = await CollaborationRequest.findOne({
-//       where: { requesterId: userId, publicationId },
-//     });
+  try {
+    const publication = await Publication.findByPk(publicationId);
 
-//     if (existingRequest) {
-//       return res.status(400).json({ message: "Request already sent" });
-//     }
+    if (!publication)
+      return res
+        .status(404)
+        .json({ success: false, message: "Publication not found" });
+    if (publication.collaborationStatus !== "open")
+      return res.status(400).json({
+        success: false,
+        message: "Publication is not open for collaboration requests",
+      });
 
-//     const newRequest = await CollaborationRequest.create({
-//       requesterId: userId,
-//       publicationId,
-//     });
+    const receiverId = publication.ownerId;
 
-//     res.status(201).json(newRequest);
-//   } catch (error) {
-//     console.error("Error sending request:", error);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// };
+    if (senderId === receiverId)
+      return res.status(400).json({
+        success: false,
+        message: "Cannot send collaboration request for your own publication",
+      });
 
-// // Get collaboration requests for the logged-in user
-// export const getRequests = async (req, res) => {
-//   try {
-//     const userId = req.user.id;
+    // Check if a request already exists (pending or accepted)
+    const existingRequest = await CollaborationRequest.findOne({
+      where: {
+        publicationId: publicationId,
+        senderId: senderId,
+        receiverId: receiverId,
+        status: { [Op.in]: ["pending", "accepted"] },
+      },
+    });
 
-//     const requests = await CollaborationRequest.findAll({
-//       where: { requesterId: userId },
-//       include: [
-//         { model: Publication, attributes: ["title"] },
-//         { model: User, as: "Requester", attributes: ["name"] },
-//       ],
-//     });
+    if (existingRequest)
+      return res.status(400).json({
+        success: false,
+        message: "A collaboration request already exists or has been accepted",
+      });
 
-//     res.status(200).json(requests);
-//   } catch (error) {
-//     console.error("Error fetching requests:", error);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// };
+    const newRequest = await CollaborationRequest.create({
+      publicationId,
+      senderId,
+      receiverId,
+      message: message || "",
+      status: "pending",
+    });
 
-// // Approve a collaboration request
-// export const approveRequest = async (req, res) => {
-//   try {
-//     const { requestId } = req.params;
+    // Fetch related data to return if needed immediately
+    const populatedRequest = await CollaborationRequest.findByPk(
+      newRequest.id,
+      {
+        include: [
+          { model: User, as: "sender", attributes: ["id", "username"] },
+          { model: User, as: "receiver", attributes: ["id", "username"] },
+          {
+            model: Publication,
+            as: "publication",
+            attributes: ["id", "title"],
+          },
+        ],
+      }
+    );
 
-//     const request = await CollaborationRequest.findByPk(requestId);
-//     if (!request) {
-//       return res.status(404).json({ message: "Request not found" });
-//     }
-//     request.status = "approved";
-//     await request.save();
-//     4;
+    res.status(201).json({
+      success: true,
+      message: "Collaboration request sent successfully",
+      data: populatedRequest,
+    });
+  } catch (error) {
+    console.error("Error sending collaboration request:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error sending request",
+      error: error.message,
+    });
+  }
+};
 
-//     res.status(200).json({ message: "Request approved", request });
-//     const requesterEmail = await User.findOne({
-//       where: { id: request.requesterId },
-//       attributes: ["email"],
-//     });
-//     // Send email notification to the requester and the publication owner
+// Helper to format requests for frontend
+const formatRequestForFrontend = (request) => {
+  const reqJson = request.toJSON ? request.toJSON() : request; // Handle raw vs Sequelize instances
+  return {
+    id: reqJson.id,
+    publicationId: reqJson.publicationId,
+    publicationTitle: reqJson.publication?.title || "N/A",
+    senderId: reqJson.senderId,
+    senderName: reqJson.sender?.username || "N/A",
+    receiverId: reqJson.receiverId,
+    receiverName: reqJson.receiver?.username || "N/A",
+    message: reqJson.message,
+    status: reqJson.status,
+    createdAt: reqJson.createdAt,
+  };
+};
 
-//     const publicationOwnerEmail = await User.findOne({
-//       where: { id: request.publication.userId },
-//       attributes: ["email"],
-//     });
+export const getReceivedRequests = async (req, res) => {
+  const receiverId = req.user?.id;
+  if (!receiverId)
+    return res
+      .status(401)
+      .json({ success: false, message: "Authentication required." });
 
-//     res.status(200).json({ message: "Request approved", request });
-//   } catch (error) {
-//     console.error("Error approving request:", error);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// };
+  try {
+    const requests = await CollaborationRequest.findAll({
+      where: { receiverId: receiverId /*, status: 'pending' */ }, // Filter by status if needed
+      include: [
+        { model: User, as: "sender", attributes: ["id", "username"] },
+        { model: Publication, as: "publication", attributes: ["id", "title"] },
+      ],
+      order: [["createdAt", "DESC"]],
+    });
+
+    const formattedRequests = requests.map(formatRequestForFrontend);
+    res.status(200).json({ success: true, data: formattedRequests });
+  } catch (error) {
+    console.error("Error fetching received requests:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error fetching received requests",
+      error: error.message,
+    });
+  }
+};
+
+export const getSentRequests = async (req, res) => {
+  const senderId = req.user?.id;
+  if (!senderId)
+    return res
+      .status(401)
+      .json({ success: false, message: "Authentication required." });
+
+  try {
+    const requests = await CollaborationRequest.findAll({
+      where: { senderId: senderId },
+      include: [
+        { model: User, as: "receiver", attributes: ["id", "username"] },
+        { model: Publication, as: "publication", attributes: ["id", "title"] },
+      ],
+      order: [["createdAt", "DESC"]],
+    });
+
+    const formattedRequests = requests.map(formatRequestForFrontend);
+    res.status(200).json({ success: true, data: formattedRequests });
+  } catch (error) {
+    console.error("Error fetching sent requests:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error fetching sent requests",
+      error: error.message,
+    });
+  }
+};
+
+// Helper function to update request status
+const updateRequestStatus = async (req, res, newStatus, checkRole) => {
+  const { requestId } = req.params;
+  const userId = req.user?.id;
+
+  if (!userId)
+    return res
+      .status(401)
+      .json({ success: false, message: "Authentication required." });
+  if (!requestId)
+    return res
+      .status(400)
+      .json({ success: false, message: "Request ID is required." });
+
+  try {
+    const request = await CollaborationRequest.findByPk(requestId);
+    if (!request)
+      return res
+        .status(404)
+        .json({ success: false, message: "Collaboration request not found" });
+
+    // Authorization Check
+    if (checkRole === "receiver" && request.receiverId !== userId)
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to update this request",
+      });
+    if (checkRole === "sender" && request.senderId !== userId)
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to update this request",
+      });
+
+    // Can only update if pending
+    if (request.status !== "pending")
+      return res.status(400).json({
+        success: false,
+        message: `Cannot update request, status is already '${request.status}'`,
+      });
+
+    const [updatedCount] = await CollaborationRequest.update(
+      { status: newStatus },
+      { where: { id: requestId } }
+    );
+
+    if (updatedCount > 0) {
+      // Optionally update publication status if request is accepted
+      if (newStatus === "accepted") {
+        await Publication.update(
+          { collaborationStatus: "in_progress" },
+          { where: { id: request.publicationId } }
+        );
+      }
+      const updatedRequest = await CollaborationRequest.findByPk(requestId); // Fetch updated
+      res.status(200).json({
+        success: true,
+        message: `Request ${newStatus} successfully`,
+        data: updatedRequest,
+      });
+    } else {
+      res
+        .status(404)
+        .json({ success: false, message: "Request found but update failed." });
+    }
+  } catch (error) {
+    console.error(`Error updating request to ${newStatus}:`, error);
+    res.status(500).json({
+      success: false,
+      message: `Server Error updating request`,
+      error: error.message,
+    });
+  }
+};
+
+export const acceptRequest = async (req, res) => {
+  await updateRequestStatus(req, res, "accepted", "receiver");
+};
+
+export const rejectRequest = async (req, res) => {
+  await updateRequestStatus(req, res, "rejected", "receiver");
+};
+
+export const cancelRequest = async (req, res) => {
+  await updateRequestStatus(req, res, "cancelled", "sender");
+};

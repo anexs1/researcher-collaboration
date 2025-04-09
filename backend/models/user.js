@@ -14,9 +14,6 @@ const User = sequelize.define(
     username: {
       type: DataTypes.STRING,
       allowNull: false,
-      // unique: true, // <-- REMOVE THIS LINE AS WELL
-      // WARNING: Database will NOT enforce username uniqueness.
-      // Your application MUST handle this check before saving.
       validate: {
         notEmpty: true,
         len: [3, 30],
@@ -25,7 +22,6 @@ const User = sequelize.define(
     email: {
       type: DataTypes.STRING,
       allowNull: false,
-      // unique: true, // <-- Keep this commented out or removed
       validate: {
         isEmail: true,
         notEmpty: true,
@@ -73,12 +69,9 @@ const User = sequelize.define(
         }
       },
     },
-    indexes: [
-      // These explicit indexes might also contribute to the count
-      { fields: ["status"] },
-      { fields: ["role"] },
-    ],
-    tableName: "Users",
+    indexes: [{ fields: ["status"] }, { fields: ["role"] }],
+    tableName: "Users", // Ensure this matches your actual table name 'users' or 'Users'
+    // Conventionally lowercase 'users' is common. If it's 'users', change here.
   }
 );
 
@@ -86,5 +79,27 @@ const User = sequelize.define(
 User.prototype.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
+
+// --- ADD THIS ASSOCIATION METHOD ---
+User.associate = (models) => {
+  // A User (as owner) has many Publications
+  User.hasMany(models.Publication, {
+    foreignKey: "ownerId", // This is the foreign key column in the 'publications' table
+    as: "publications", // Alias to use when querying User and including publications
+  });
+
+  // A User (as sender) has many CollaborationRequests
+  User.hasMany(models.CollaborationRequest, {
+    foreignKey: "senderId", // Foreign key in the 'collaboration_requests' table
+    as: "sentRequests", // Alias for requests sent by this user
+  });
+
+  // A User (as receiver) has many CollaborationRequests
+  User.hasMany(models.CollaborationRequest, {
+    foreignKey: "receiverId", // Foreign key in the 'collaboration_requests' table
+    as: "receivedRequests", // Alias for requests received by this user
+  });
+};
+// --- END ASSOCIATION METHOD ---
 
 export default User;

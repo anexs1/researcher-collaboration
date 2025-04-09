@@ -1,95 +1,143 @@
-// src/Component/Common/ConfirmationModal.jsx
-import React from "react";
-import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
+// src/components/common/ConfirmationModal.js
 
+import React from "react";
+
+/**
+ * A reusable confirmation modal component.
+ *
+ * @param {object} props - The component props.
+ * @param {boolean} props.isOpen - Whether the modal is currently open.
+ * @param {string} props.title - The title text for the modal.
+ * @param {string|React.ReactNode} props.message - The main content/message of the modal.
+ * @param {function} props.onConfirm - Callback function executed when the confirm button is clicked.
+ * @param {function} props.onCancel - Callback function executed when the cancel button or overlay is clicked.
+ * @param {string} [props.confirmButtonText='Confirm'] - Text for the confirm button.
+ * @param {string} [props.cancelButtonText='Cancel'] - Text for the cancel button.
+ * @param {string} [props.confirmButtonClass='bg-red-500 hover:bg-red-600'] - Tailwind classes for the confirm button.
+ * @param {string} [props.cancelButtonClass='bg-gray-300 hover:bg-gray-400'] - Tailwind classes for the cancel button.
+ * @param {boolean} [props.isConfirming=false] - If true, shows a loading state on the confirm button.
+ */
 const ConfirmationModal = ({
   isOpen,
-  onClose,
+  title,
+  message,
   onConfirm,
-  title = "Confirm Action",
-  message = "Are you sure you want to proceed?",
-  confirmText = "Confirm",
-  cancelText = "Cancel",
-  confirmButtonColor = "red", // 'red', 'green', 'blue', etc.
+  onCancel,
+  confirmButtonText = "Confirm",
+  cancelButtonText = "Cancel",
+  confirmButtonClass = "bg-red-500 hover:bg-red-600 text-white", // Default to red for destructive actions
+  cancelButtonClass = "bg-gray-200 hover:bg-gray-300 text-gray-800",
+  isConfirming = false, // Optional loading state for async actions
 }) => {
-  if (!isOpen) return null;
+  if (!isOpen) {
+    return null;
+  }
 
-  const colorClasses = {
-    red: "bg-red-600 hover:bg-red-700 focus:ring-red-500",
-    green: "bg-green-600 hover:bg-green-700 focus:ring-green-500",
-    blue: "bg-blue-600 hover:bg-blue-700 focus:ring-blue-500",
-    indigo: "bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500",
-  };
-
-  const confirmColor = colorClasses[confirmButtonColor] || colorClasses.red;
+  // Base button style
+  const baseButtonClass =
+    "px-4 py-2 rounded font-semibold transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
 
   return (
     <div
-      className="fixed inset-0 z-50 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm"
+      onClick={onCancel} // Close on overlay click
       aria-labelledby="modal-title"
       role="dialog"
       aria-modal="true"
     >
-      <div className="flex items-end justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-        {/* Background overlay */}
-        <div
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
-          aria-hidden="true"
-          onClick={onClose} // Close on overlay click
-        ></div>
-
-        {/* Modal panel */}
-        <span
-          className="hidden sm:inline-block sm:align-middle sm:h-screen"
-          aria-hidden="true"
+      <div
+        className="relative bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4 transform transition-all duration-300 ease-out scale-95 opacity-0 animate-modal-enter"
+        onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside modal content
+      >
+        {/* Close button top right */}
+        <button
+          onClick={onCancel}
+          className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 p-1 rounded-full transition-colors"
+          aria-label="Close modal"
         >
-          ​ {/* Trick to center modal */}
-        </span>
-        <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-          <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-            <div className="sm:flex sm:items-start">
-              <div
-                className={`mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-${confirmButtonColor}-100 sm:mx-0 sm:h-10 sm:w-10`}
-              >
-                <ExclamationTriangleIcon
-                  className={`h-6 w-6 text-${confirmButtonColor}-600`}
-                  aria-hidden="true"
-                />
-              </div>
-              <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                <h3
-                  className="text-lg leading-6 font-medium text-gray-900"
-                  id="modal-title"
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-6 w-6"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        </button>
+
+        <h2
+          id="modal-title"
+          className="text-xl font-semibold text-gray-800 mb-4"
+        >
+          {title}
+        </h2>
+        <div className="text-gray-600 mb-6">
+          {typeof message === "string" ? <p>{message}</p> : message}
+        </div>
+        <div className="flex justify-end space-x-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className={`${baseButtonClass} ${cancelButtonClass}`}
+            disabled={isConfirming}
+          >
+            {cancelButtonText}
+          </button>
+
+          <button
+            type="button"
+            onClick={onConfirm}
+            className={`${baseButtonClass} ${confirmButtonClass}`}
+            disabled={isConfirming}
+          >
+            {isConfirming ? (
+              <span className="flex items-center justify-center">
+                <svg
+                  className="animate-spin -ml-1 mr-2 h-5 w-5"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
                 >
-                  {title}
-                </h3>
-                <div className="mt-2">
-                  <p className="text-sm text-gray-500">{message}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-            <button
-              type="button"
-              className={`w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 text-base font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm ${confirmColor}`}
-              onClick={() => {
-                onConfirm();
-                onClose(); // Close after confirm
-              }}
-            >
-              {confirmText}
-            </button>
-            <button
-              type="button"
-              className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-              onClick={onClose}
-            >
-              {cancelText}
-            </button>
-          </div>
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+                Processing...
+              </span>
+            ) : (
+              confirmButtonText
+            )}
+          </button>
         </div>
       </div>
+      {/* Add keyframes for animation in your CSS/Tailwind config if needed */}
+      {/* Example for Tailwind (in index.css or tailwind.config.js):
+                @layer utilities {
+                  @keyframes modal-enter {
+                    from { transform: scale(0.95); opacity: 0; }
+                    to { transform: scale(1); opacity: 1; }
+                  }
+                  .animate-modal-enter {
+                    animation: modal-enter 0.2s ease-out forwards;
+                  }
+                }
+            */}
     </div>
   );
 };
