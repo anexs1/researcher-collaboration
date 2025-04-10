@@ -24,7 +24,7 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
           className="text-xl md:text-2xl font-bold tracking-tight hover:text-purple-100 transition-colors"
           onClick={closeMenu}
         >
-          Research Portal {/* Simplified Name */}
+          Researcher Collaboration Portal {/* Simplified Name */}
         </Link>
 
         {/* Mobile Menu Button */}
@@ -37,7 +37,6 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
             aria-expanded={menuOpen}
           >
             <span className="sr-only">Open main menu</span>
-            {/* Icon based on menu state */}
             {menuOpen ? (
               <svg
                 className="block h-6 w-6"
@@ -80,7 +79,6 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
           } md:translate-x-0 md:flex md:items-center md:space-x-4 lg:space-x-6`}
         >
           <ul className="flex flex-col p-4 md:p-0 md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-4 lg:space-x-6 text-sm font-medium">
-            {/* === Always Visible Links === */}
             <li>
               <NavLink
                 to="/"
@@ -104,9 +102,7 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                 Explore
               </NavLink>
             </li>
-            {/* === NEW: Job Board Link (Public or Logged In) === */}
 
-            {/* === Logged In Links === */}
             {isLoggedIn && (
               <>
                 <li>

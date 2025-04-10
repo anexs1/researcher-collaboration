@@ -1,9 +1,8 @@
+// src/Page/Profile.jsx
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams, Link } from "react-router-dom";
 import axios from "axios";
 import {
-  FaBell,
-  FaEnvelope,
   FaFileUpload,
   FaGithub,
   FaLinkedin,
@@ -11,550 +10,656 @@ import {
   FaSave,
   FaEdit,
   FaSpinner,
-  FaPaperPlane,
-  FaTag,
-  FaCalendarAlt,
-  FaFlask, // Added icons
-} from "react-icons/fa";
-import Sidebar from "../Component/Sidebar"; // Verify path
-import LoadingSpinner from "../Component/Common/LoadingSpinner"; // Verify path
-import Notification from "../Component/Common/Notification"; // Verify path
-import ErrorMessage from "../Component/Common/ErrorMessage"; // Verify path
+  FaUser,
+  FaExternalLinkAlt,
+} from "react-icons/fa"; // FaUser can be used as placeholder
+import LoadingSpinner from "../Component/Common/LoadingSpinner"; // Adjust path as needed
+import Notification from "../Component/Common/Notification"; // Adjust path as needed
+import ErrorMessage from "../Component/Common/ErrorMessage"; // Adjust path as needed
 
-// API Base URL (Ensure consistent with axios instance if you create one)
+// API Base URL
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
-// Default User Data (Keep as is)
+// Default Data Structure - profilePictureUrl starts as null
 const defaultUserData = {
-  /* ... */
+  id: null,
+  username: "",
+  email: "",
+  firstName: "",
+  lastName: "",
+  bio: "",
+  profilePictureUrl: null, // <-- Set to null, no default file expected
+  socialLinks: { linkedin: "", github: "", twitter: "" },
+  interests: [],
+  institution: "",
 };
-
-// --- UPDATED Default Publication Form Data ---
-const defaultPublicationData = {
-  title: "",
-  summary: "", // Renamed from abstract
-  author: "",
-  tags: "", // Store tags as comma-separated string in form state
-  area: "",
-  publicationDate: "",
-  document_link: "",
-};
-
-// Research Areas for dropdown (match ExplorePage or fetch)
-const researchAreas = [
-  "", // Add an empty option for default/unselected
-  "Computer Science",
-  "Physics",
-  "Engineering",
-  "Biology",
-  "Health",
-  "Ethics",
-  "Other", // Add an 'Other' option
-];
 
 export default function Profile({ currentUser }) {
-  // --- Profile State (Keep as is) ---
-  const [user, setUser] = useState(currentUser);
-  const [profileFormData, setProfileFormData] = useState(defaultUserData);
+  const { userId } = useParams();
+  const navigate = useNavigate();
+
+  // State
+  const [viewedUser, setViewedUser] = useState(null);
+  const [isOwnProfile, setIsOwnProfile] = useState(false);
+  const [profileNotFound, setProfileNotFound] = useState(false);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [apiError, setApiError] = useState("");
   const [editingProfile, setEditingProfile] = useState(false);
+  const [profileFormData, setProfileFormData] = useState(defaultUserData);
   const [newProfileImage, setNewProfileImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null); // <-- Initialize as null
   const [isSavingProfile, setIsSavingProfile] = useState(false);
-  const [isLoadingProfile, setIsLoadingProfile] = useState(!currentUser);
-
-  // --- Publication Form State ---
-  // Initialize with UPDATED default data
-  const [publicationFormData, setPublicationFormData] = useState(
-    defaultPublicationData
-  );
-  const [publicationFormErrors, setPublicationFormErrors] = useState({});
-  const [isSubmittingPublication, setIsSubmittingPublication] = useState(false);
-
-  // --- Common State (Keep as is) ---
   const [notification, setNotification] = useState({
     message: "",
     type: "",
     show: false,
   });
-  const [apiError, setApiError] = useState("");
-
-  // --- Refs and Hooks (Keep as is) ---
-  const navigate = useNavigate();
   const fileInputRef = useRef(null);
 
-  // --- Notification Handler (Keep as is) ---
-  const showNotification = (message, type = "success") => {
-    /* ... */
-  };
+  // --- Callbacks & Handlers ---
+  const showNotification = useCallback((message, type = "success") => {
+    setNotification({ message, type, show: true });
+    setTimeout(
+      () => setNotification({ message: "", type: "", show: false }),
+      5000
+    );
+  }, []);
 
-  // --- Effect to Sync with currentUser Prop & Load if needed ---
-  useEffect(() => {
-    if (currentUser) {
-      setUser(currentUser);
-      const initialProfileData = {
-        // ... (keep profile data sync logic)
-      };
-      setProfileFormData(initialProfileData);
-
-      // --- Update Publication Author Default ---
-      setPublicationFormData((prev) => ({
-        ...defaultPublicationData, // Use UPDATED default data
-        author:
-          `${initialProfileData.firstName || ""} ${
-            initialProfileData.lastName || ""
-          }`.trim() ||
-          initialProfileData.username ||
-          "",
-      }));
-      // --- End Update ---
-
-      setEditingProfile(false);
-      setIsLoadingProfile(false);
-      console.log("Profile synced with currentUser prop.");
-    } else if (!isLoadingProfile) {
-      // ... (keep initial setup logic)
-      setPublicationFormData(defaultPublicationData); // Use UPDATED default data
-      // ...
-    }
-  }, [currentUser, isLoadingProfile]);
-
-  // --- Profile Handlers (Keep as is) ---
-  const handleProfileInputChange = (e) => {
-    /* ... */
-  };
-  const handleNestedProfileInputChange = (e, section) => {
-    /* ... */
-  };
-  const triggerFileInput = () => {
-    /* ... */
-  };
-  const handleImageChange = (e) => {
-    /* ... */
-  };
-  const handleProfileSave = async () => {
-    // ... (keep profile save logic) ...
-    // --- Update publication author default after saving profile ---
-    try {
-      // ... (API call simulation/actual call) ...
-      const updatedUser = { ...profileFormData }; // Assuming response contains updated user
-
-      // ... (rest of success logic) ...
-      setPublicationFormData((prev) => ({
-        ...prev,
-        author:
-          `${updatedUser.firstName || ""} ${
-            updatedUser.lastName || ""
-          }`.trim() ||
-          updatedUser.username ||
-          "",
-      }));
-    } catch (error) {
-      /* ... error handling ... */
-    }
-    // ...
-  };
-  const handleProfileCancel = () => {
-    /* ... */
-  };
-
-  // --- Publication Form Handlers (UPDATED) ---
-  const handlePublicationInputChange = useCallback(
-    (e) => {
-      const { name, value } = e.target;
-      setPublicationFormData((prev) => ({ ...prev, [name]: value }));
-      // Clear validation error for the field being changed
-      if (publicationFormErrors[name]) {
-        setPublicationFormErrors((prev) => ({ ...prev, [name]: undefined }));
+  const syncFormWithViewedUser = useCallback(
+    (userToSync) => {
+      const userData = userToSync || defaultUserData;
+      setProfileFormData({
+        username: userData.username || "",
+        email: userData.email || "",
+        firstName: userData.firstName || "",
+        lastName: userData.lastName || "",
+        bio: userData.bio || "",
+        profilePictureUrl: userData.profilePictureUrl || null, // Use null if missing
+        socialLinks: {
+          linkedin: userData.socialLinks?.linkedin || "",
+          github: userData.socialLinks?.github || "",
+          twitter: userData.socialLinks?.twitter || "",
+        },
+        interests: Array.isArray(userData.interests) ? userData.interests : [],
+        institution: userData.institution || "",
+      });
+      const newPreviewUrl = userData.profilePictureUrl || null; // Preview URL can be null
+      if (
+        imagePreview &&
+        imagePreview.startsWith("blob:") &&
+        imagePreview !== newPreviewUrl
+      ) {
+        URL.revokeObjectURL(imagePreview);
       }
+      setImagePreview(newPreviewUrl); // Update preview display (might be null)
+      setNewProfileImage(null);
     },
-    [publicationFormErrors]
-  ); // Add dependency
+    [imagePreview]
+  );
 
-  const validatePublicationForm = useCallback(() => {
-    let errors = {};
-    if (!publicationFormData.title?.trim()) errors.title = "Title is required";
-    // --- Validate summary instead of abstract ---
-    if (!publicationFormData.summary?.trim())
-      errors.summary = "Summary is required";
-    // --- End change ---
-    if (!publicationFormData.author?.trim())
-      errors.author = "Author name is required";
-    // --- Optional: Validate new fields ---
-    if (!publicationFormData.area?.trim())
-      errors.area = "Research Area is required";
-    // if (!publicationFormData.tags?.trim()) errors.tags = "At least one tag is recommended";
-    if (!publicationFormData.publicationDate)
-      errors.publicationDate = "Publication Date is required";
-    // --- End optional validation ---
-    if (!publicationFormData.document_link?.trim()) {
-      errors.document_link = "Document link is required";
-    } else {
-      try {
-        new URL(publicationFormData.document_link);
-      } catch (_) {
-        errors.document_link = "Please enter a valid URL";
-      }
+  // --- Effect to Load Profile ---
+  useEffect(() => {
+    const profileUserIdToFetch = userId;
+    const loggedInUserId = currentUser?.id;
+    const ownProfileCheck =
+      (!profileUserIdToFetch && loggedInUserId) ||
+      (profileUserIdToFetch &&
+        loggedInUserId &&
+        String(profileUserIdToFetch) === String(loggedInUserId));
+    setIsOwnProfile(ownProfileCheck);
+
+    setIsLoadingProfile(true);
+    setApiError("");
+    setProfileNotFound(false);
+    setViewedUser(null);
+    setEditingProfile(false);
+
+    let fetchUrl = "";
+    const config = { headers: {} };
+    const token = localStorage.getItem("authToken");
+    if (token) {
+      config.headers["Authorization"] = `Bearer ${token}`;
     }
-    setPublicationFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  }, [publicationFormData]);
 
-  const resetPublicationForm = useCallback(() => {
-    const currentAuthor =
-      `${profileFormData.firstName || ""} ${
-        profileFormData.lastName || ""
-      }`.trim() ||
-      profileFormData.username ||
-      "";
-    // --- Reset with UPDATED default data ---
-    setPublicationFormData({
-      ...defaultPublicationData,
-      author: currentAuthor,
-    });
-    // --- End reset ---
-    setPublicationFormErrors({});
-  }, [profileFormData]); // Depend on profileFormData for author default
-
-  const handlePublicationSubmit = async (e) => {
-    e.preventDefault();
-    if (!validatePublicationForm()) {
-      showNotification(
-        "Please fix the errors in the publication form.",
-        "error"
-      );
+    if (ownProfileCheck) {
+      if (!loggedInUserId) {
+        setIsLoadingProfile(false);
+        setApiError("Login required.");
+        return;
+      }
+      fetchUrl = `${API_BASE_URL}/api/auth/me`; // Use corrected endpoint for self
+    } else if (profileUserIdToFetch) {
+      fetchUrl = `${API_BASE_URL}/api/users/public/${profileUserIdToFetch}`; // Public endpoint
+    } else {
+      setIsLoadingProfile(false);
+      setApiError("Cannot determine profile.");
       return;
     }
-    setIsSubmittingPublication(true);
+
+    const controller = new AbortController();
+    config.signal = controller.signal;
+
+    axios
+      .get(fetchUrl, config)
+      .then((response) => {
+        const fetchedUser = ownProfileCheck
+          ? response.data?.data
+          : response.data; // Adjust based on API
+        if (!fetchedUser || typeof fetchedUser !== "object" || !fetchedUser.id)
+          throw new Error("Invalid profile data.");
+        setViewedUser(fetchedUser);
+        syncFormWithViewedUser(fetchedUser);
+      })
+      .catch((error) => {
+        if (error.name === "CanceledError") return;
+        console.error(`Error fetching profile from ${fetchUrl}:`, error);
+        if (!ownProfileCheck && error.response?.status === 404) {
+          setProfileNotFound(true);
+        } else {
+          setApiError(
+            error.response?.data?.message ||
+              error.message ||
+              "Failed to load profile."
+          );
+        }
+        setViewedUser(null);
+        syncFormWithViewedUser(null);
+      })
+      .finally(() => {
+        setIsLoadingProfile(false);
+      });
+
+    return () => controller.abort();
+  }, [userId, currentUser, syncFormWithViewedUser]);
+
+  // --- Editing Handlers ---
+  const handleEditClick = () => {
+    if (isOwnProfile) {
+      syncFormWithViewedUser(viewedUser);
+      setEditingProfile(true);
+      setApiError("");
+    }
+  };
+  const handleProfileCancel = () => {
+    if (isOwnProfile && viewedUser) {
+      syncFormWithViewedUser(viewedUser);
+      setEditingProfile(false);
+      setApiError("");
+    }
+  };
+
+  const handleProfileSave = async () => {
+    if (!isOwnProfile) return;
+    setIsSavingProfile(true);
     setApiError("");
     const token = localStorage.getItem("authToken");
     if (!token) {
-      setApiError("Authentication required. Please log in again.");
       showNotification("Authentication required.", "error");
-      setIsSubmittingPublication(false);
+      setIsSavingProfile(false);
       return;
     }
 
-    // --- Prepare Payload ---
-    // Split tags string into an array, trim whitespace, remove empty strings
-    const tagsArray = publicationFormData.tags
-      .split(",")
-      .map((tag) => tag.trim())
-      .filter((tag) => tag !== "");
-
-    const payload = {
-      title: publicationFormData.title,
-      summary: publicationFormData.summary, // Use summary
-      author: publicationFormData.author,
-      document_link: publicationFormData.document_link,
-      tags: tagsArray, // Send as array
-      area: publicationFormData.area,
-      publicationDate: publicationFormData.publicationDate,
-      // collaborationStatus defaults to 'open' on backend
-    };
-    // --- End Prepare Payload ---
+    const formDataToSubmit = new FormData();
+    Object.keys(profileFormData).forEach((key) => {
+      if (key === "profilePictureUrl") return;
+      if (key === "socialLinks") {
+        Object.keys(profileFormData.socialLinks).forEach((linkKey) =>
+          formDataToSubmit.append(
+            `socialLinks[${linkKey}]`,
+            profileFormData.socialLinks[linkKey] || ""
+          )
+        );
+      } else if (key === "interests") {
+        if (Array.isArray(profileFormData.interests)) {
+          profileFormData.interests.forEach((interest, index) =>
+            formDataToSubmit.append(`interests[${index}]`, interest)
+          );
+        }
+      } else if (
+        profileFormData[key] !== null &&
+        profileFormData[key] !== undefined
+      ) {
+        formDataToSubmit.append(key, profileFormData[key]);
+      }
+    });
+    if (newProfileImage) {
+      formDataToSubmit.append("profileImageFile", newProfileImage);
+    }
 
     try {
-      const url = `${API_BASE_URL}/api/publications`; // Ensure this endpoint is correct
-      const response = await axios.post(url, payload, {
-        // Send prepared payload
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      showNotification("Publication posted successfully!", "success");
-      resetPublicationForm();
-      navigate("/publications"); // Navigate after successful post
+      const response = await axios.put(
+        `${API_BASE_URL}/api/users/profile`,
+        formDataToSubmit,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const updatedUser = response.data?.data || response.data;
+      if (!updatedUser) throw new Error("Update response invalid.");
+      setViewedUser(updatedUser);
+      syncFormWithViewedUser(updatedUser);
+      setEditingProfile(false);
+      showNotification("Profile updated successfully!", "success");
     } catch (error) {
-      console.error("Error submitting publication:", error);
+      console.error("Error saving profile:", error);
       const errMsg =
-        error.response?.data?.message || "Failed to post publication.";
-      showNotification(errMsg, "error");
+        error.response?.data?.message || "Failed to update profile.";
       setApiError(errMsg);
+      showNotification(errMsg, "error");
     } finally {
-      setIsSubmittingPublication(false);
+      setIsSavingProfile(false);
     }
   };
 
-  // --- Loading State (Keep as is) ---
-  if (isLoadingProfile) {
-    /* ... */
-  }
+  const handleImageChange = (e) => {
+    if (!isOwnProfile || !editingProfile) return;
+    const file = e.target.files?.[0];
+    if (file) {
+      if (imagePreview && imagePreview.startsWith("blob:")) {
+        URL.revokeObjectURL(imagePreview);
+      }
+      setNewProfileImage(file);
+      setImagePreview(URL.createObjectURL(file));
+    }
+  };
+  const triggerFileInput = () => {
+    if (isOwnProfile && editingProfile) {
+      fileInputRef.current?.click();
+    }
+  };
+  const handleProfileInputChange = (e) => {
+    if (!isOwnProfile || !editingProfile) return;
+    const { name, value } = e.target;
+    setProfileFormData((prev) => ({ ...prev, [name]: value }));
+  };
+  const handleNestedProfileInputChange = (e, section) => {
+    if (!isOwnProfile || !editingProfile) return;
+    const { name, value } = e.target;
+    setProfileFormData((prev) => ({
+      ...prev,
+      [section]: { ...(prev[section] || {}), [name]: value },
+    }));
+  };
 
-  // --- Render Helper for Profile Fields (Keep as is) ---
-  const renderProfileField = (label, name, value /*...*/) => {
-    /* ... */
+  // --- Render Helper ---
+  const renderProfileField = (
+    label,
+    name,
+    displayValue,
+    type = "text",
+    isNested = false,
+    section = null,
+    placeholder = ""
+  ) => {
+    const canEditField = isOwnProfile && editingProfile;
+    const commonInputClasses =
+      "mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:bg-slate-100 disabled:cursor-not-allowed";
+    const displayClasses =
+      "mt-1 text-sm text-gray-900 py-2 min-h-[38px] break-words";
+    const inputValue = isNested
+      ? profileFormData[section]?.[name] ?? ""
+      : profileFormData[name] ?? "";
+
+    if (name === "email" && !isOwnProfile) return null; // Hide email if not own profile
+
+    return (
+      <div className="mb-4">
+        <label
+          htmlFor={canEditField ? name : undefined}
+          className="block text-sm font-medium text-gray-700 mb-0.5"
+        >
+          {label}
+        </label>
+        {canEditField ? (
+          type === "textarea" ? (
+            <textarea
+              id={name}
+              name={name}
+              rows="4"
+              value={inputValue}
+              onChange={(e) =>
+                isNested
+                  ? handleNestedProfileInputChange(e, section)
+                  : handleProfileInputChange(e)
+              }
+              placeholder={placeholder || `Enter ${label.toLowerCase()}`}
+              className={commonInputClasses}
+            />
+          ) : (
+            <input
+              type={type}
+              id={name}
+              name={name}
+              value={inputValue}
+              onChange={(e) =>
+                isNested
+                  ? handleNestedProfileInputChange(e, section)
+                  : handleProfileInputChange(e)
+              }
+              placeholder={placeholder || `Enter ${label.toLowerCase()}`}
+              className={commonInputClasses}
+              disabled={name === "username" || name === "email"}
+            />
+          )
+        ) : (
+          <p className={displayClasses}>
+            {displayValue || (
+              <span className="text-gray-400 italic">Not set</span>
+            )}
+          </p>
+        )}
+      </div>
+    );
   };
 
   // --- Main Render ---
+  if (isLoadingProfile) {
+    return (
+      <div className="flex justify-center items-center p-20">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+  if (profileNotFound) {
+    return (
+      <div className="bg-white shadow-md rounded-lg p-8 text-center max-w-lg mx-auto mt-10">
+        {" "}
+        <FaUser className="mx-auto h-16 w-16 text-gray-400 mb-4" />{" "}
+        <h2 className="text-2xl font-semibold text-gray-800">
+          Profile Not Found
+        </h2>{" "}
+        <p className="text-gray-500 mt-2 mb-6">
+          This user profile does not exist or could not be loaded.
+        </p>{" "}
+        <Link
+          to="/explore"
+          className="inline-block px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors text-sm font-medium"
+        >
+          Back to Explore
+        </Link>{" "}
+      </div>
+    );
+  }
+  if (apiError && !viewedUser) {
+    return (
+      <div className="bg-red-50 border border-red-300 text-red-800 p-6 rounded-lg shadow-md max-w-lg mx-auto mt-10 text-center">
+        {" "}
+        <h2 className="text-xl font-semibold">Error Loading Profile</h2>{" "}
+        <p className="mt-2 mb-6">{apiError}</p>{" "}
+        <Link
+          to="/explore"
+          className="inline-block px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors text-sm font-medium"
+        >
+          Back to Explore
+        </Link>{" "}
+      </div>
+    );
+  }
+  if (!viewedUser) {
+    return (
+      <div className="p-6 text-center text-gray-500">
+        Unable to display profile information.
+      </div>
+    );
+  }
+
+  // Determine initials for placeholder if needed
+  const getInitials = (firstName = "", lastName = "") =>
+    `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+  const initials = getInitials(viewedUser.firstName, viewedUser.lastName);
+
+  // Determine the source for the image display area
+  const displayImageUrl =
+    isOwnProfile &&
+    editingProfile &&
+    imagePreview &&
+    imagePreview.startsWith("blob:")
+      ? imagePreview // Use blob preview if editing own and file selected
+      : viewedUser.profilePictureUrl; // Otherwise use the URL from backend (which might be null)
+
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      <Sidebar isLoggedIn={!!user} />
-      <main className="flex-grow p-4 sm:p-6 lg:p-8">
-        {/* Header, Notifications, Errors, Profile Card (Keep as is) */}
-        {/* ... */}
-
-        {/* ====== Post Publication Form Section (UPDATED) ====== */}
-        {user && ( // Only show form if user is loaded/logged in
-          <div className="bg-white shadow-xl rounded-lg p-6 md:p-8">
-            <h2 className="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">
-              Post New Publication
-            </h2>
-            <form
-              onSubmit={handlePublicationSubmit}
-              className="space-y-4"
-              noValidate
-            >
-              {/* Title Field (Keep as is) */}
-              <div>
-                <label
-                  htmlFor="pub-title"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  Title
-                </label>
-                <input
-                  type="text"
-                  id="pub-title"
-                  name="title"
-                  value={publicationFormData.title}
-                  onChange={handlePublicationInputChange}
-                  placeholder="Publication title"
-                  required
-                  className={`mt-1 block w-full px-3 py-2 bg-white border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                    publicationFormErrors.title
-                      ? "border-red-500"
-                      : "border-gray-300"
-                  }`}
+    <>
+      {notification.show && (
+        <Notification
+          message={notification.message}
+          type={notification.type}
+          onClose={() => setNotification({ ...notification, show: false })}
+        />
+      )}
+      <div className="bg-white shadow-xl rounded-lg p-6 md:p-8 mb-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between mb-6 border-b border-gray-200 pb-6 gap-4">
+          <div className="flex items-center space-x-4 flex-grow min-w-0">
+            {/* Image Area */}
+            <div className="relative flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-full flex items-center justify-center bg-slate-200 text-slate-500 overflow-hidden border-2 border-gray-300">
+              {displayImageUrl ? (
+                <img
+                  src={displayImageUrl} // Use the determined URL (fetched or blob)
+                  alt={`${viewedUser.username || "User"}'s profile`}
+                  className="w-full h-full object-cover" // Cover the area
                 />
-                {publicationFormErrors.title && (
-                  <p className="mt-1 text-xs text-red-600">
-                    {publicationFormErrors.title}
-                  </p>
-                )}
-              </div>
-
-              {/* --- Summary Field (Replaced Abstract) --- */}
-              <div>
-                <label
-                  htmlFor="pub-summary"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  Summary
-                </label>
-                <textarea
-                  id="pub-summary"
-                  name="summary"
-                  rows="4"
-                  value={publicationFormData.summary}
-                  onChange={handlePublicationInputChange}
-                  placeholder="Brief summary of the publication"
-                  required
-                  className={`mt-1 block w-full px-3 py-2 bg-white border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                    publicationFormErrors.summary
-                      ? "border-red-500"
-                      : "border-gray-300"
-                  }`}
-                />
-                {publicationFormErrors.summary && (
-                  <p className="mt-1 text-xs text-red-600">
-                    {publicationFormErrors.summary}
-                  </p>
-                )}
-              </div>
-              {/* --- End Summary Field --- */}
-
-              {/* Author Field (Keep as is) */}
-              <div>
-                <label
-                  htmlFor="pub-author"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  Author(s)
-                </label>
-                <input
-                  type="text"
-                  id="pub-author"
-                  name="author"
-                  value={publicationFormData.author}
-                  onChange={handlePublicationInputChange}
-                  placeholder="Defaults to your name, add others if needed"
-                  required
-                  className={`mt-1 block w-full px-3 py-2 bg-white border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                    publicationFormErrors.author
-                      ? "border-red-500"
-                      : "border-gray-300"
-                  }`}
-                />
-                {publicationFormErrors.author && (
-                  <p className="mt-1 text-xs text-red-600">
-                    {publicationFormErrors.author}
-                  </p>
-                )}
-              </div>
-
-              {/* --- NEW: Tags Field --- */}
-              <div>
-                <label
-                  htmlFor="pub-tags"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  Tags (comma-separated)
-                </label>
-                <div className="relative mt-1">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    {" "}
-                    <FaTag className="h-4 w-4 text-gray-400" />{" "}
-                  </div>
-                  <input
-                    type="text"
-                    id="pub-tags"
-                    name="tags"
-                    value={publicationFormData.tags}
-                    onChange={handlePublicationInputChange}
-                    placeholder="e.g., AI, Machine Learning, NLP"
-                    className={`pl-10 block w-full px-3 py-2 bg-white border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                      publicationFormErrors.tags
-                        ? "border-red-500"
-                        : "border-gray-300"
-                    }`}
-                  />
-                </div>
-                {publicationFormErrors.tags && (
-                  <p className="mt-1 text-xs text-red-600">
-                    {publicationFormErrors.tags}
-                  </p>
-                )}
-              </div>
-              {/* --- End Tags Field --- */}
-
-              {/* --- NEW: Area Field (Dropdown) --- */}
-              <div>
-                <label
-                  htmlFor="pub-area"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  Research Area
-                </label>
-                <div className="relative mt-1">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    {" "}
-                    <FaFlask className="h-4 w-4 text-gray-400" />{" "}
-                  </div>
-                  <select
-                    id="pub-area"
-                    name="area"
-                    value={publicationFormData.area}
-                    onChange={handlePublicationInputChange}
-                    required
-                    className={`pl-10 block w-full py-2 pr-8 bg-white border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                      publicationFormErrors.area
-                        ? "border-red-500"
-                        : "border-gray-300"
-                    }`}
+              ) : // Show Initials or Icon if no image URL
+              initials ? (
+                <span className="text-3xl sm:text-4xl font-semibold">
+                  {initials}
+                </span>
+              ) : (
+                <FaUser className="w-10 h-10 sm:w-12 sm:h-12" /> // Fallback icon
+              )}
+              {/* Upload button shown only when editing own profile */}
+              {isOwnProfile && editingProfile && (
+                <>
+                  <button
+                    onClick={triggerFileInput}
+                    className="absolute bottom-0 right-0 bg-indigo-600 hover:bg-indigo-700 text-white p-1.5 rounded-full shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+                    aria-label="Upload new profile picture"
+                    title="Upload/Change profile picture"
                   >
-                    {researchAreas.map((areaOption) => (
-                      <option
-                        key={areaOption}
-                        value={areaOption}
-                        disabled={areaOption === ""}
-                      >
-                        {areaOption === "" ? "Select an area..." : areaOption}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {publicationFormErrors.area && (
-                  <p className="mt-1 text-xs text-red-600">
-                    {publicationFormErrors.area}
-                  </p>
-                )}
-              </div>
-              {/* --- End Area Field --- */}
-
-              {/* --- NEW: Publication Date Field --- */}
-              <div>
-                <label
-                  htmlFor="pub-date"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  Publication Date
-                </label>
-                <div className="relative mt-1">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     {" "}
-                    <FaCalendarAlt className="h-4 w-4 text-gray-400" />{" "}
-                  </div>
+                    <FaFileUpload className="w-4 h-4" />{" "}
+                  </button>
                   <input
-                    type="date"
-                    id="pub-date"
-                    name="publicationDate"
-                    value={publicationFormData.publicationDate}
-                    onChange={handlePublicationInputChange}
-                    required
-                    className={`pl-10 block w-full px-3 py-2 bg-white border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                      publicationFormErrors.publicationDate
-                        ? "border-red-500"
-                        : "border-gray-300"
-                    }`}
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleImageChange}
+                    accept="image/*"
+                    className="hidden"
+                    aria-hidden="true"
                   />
+                </>
+              )}
+            </div>
+            {/* Text Info */}
+            <div className="flex-grow min-w-0">
+              <h2
+                className="text-xl sm:text-2xl font-semibold text-gray-900 truncate"
+                title={
+                  `${viewedUser.firstName || ""} ${
+                    viewedUser.lastName || ""
+                  }`.trim() || viewedUser.username
+                }
+              >
+                {" "}
+                {`${viewedUser.firstName || ""} ${
+                  viewedUser.lastName || ""
+                }`.trim() || viewedUser.username}{" "}
+              </h2>
+              {isOwnProfile && (
+                <p
+                  className="text-sm text-gray-500 truncate"
+                  title={viewedUser.email}
+                >
+                  {viewedUser.email}
+                </p>
+              )}
+              <p
+                className="text-sm text-gray-600 mt-1 truncate"
+                title={viewedUser.institution}
+              >
+                {" "}
+                {viewedUser.institution || (
+                  <span className="italic text-gray-400">Not set</span>
+                )}{" "}
+              </p>
+            </div>
+          </div>
+          {/* Action Buttons */}
+          {isOwnProfile && (
+            <div className="flex-shrink-0 mt-4 sm:mt-0">
+              {" "}
+              {editingProfile ? (
+                <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                  {" "}
+                  <button
+                    onClick={handleProfileSave}
+                    disabled={isSavingProfile}
+                    className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
+                  >
+                    {" "}
+                    {isSavingProfile ? (
+                      <FaSpinner className="animate-spin -ml-1 mr-2 h-5 w-5" />
+                    ) : (
+                      <FaSave className="-ml-1 mr-2 h-5 w-5" />
+                    )}{" "}
+                    Save{" "}
+                  </button>{" "}
+                  <button
+                    onClick={handleProfileCancel}
+                    disabled={isSavingProfile}
+                    className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 w-full sm:w-auto"
+                  >
+                    {" "}
+                    Cancel{" "}
+                  </button>{" "}
                 </div>
-                {publicationFormErrors.publicationDate && (
-                  <p className="mt-1 text-xs text-red-600">
-                    {publicationFormErrors.publicationDate}
-                  </p>
-                )}
-              </div>
-              {/* --- End Publication Date Field --- */}
-
-              {/* Document Link Field (Keep as is) */}
-              <div>
-                <label
-                  htmlFor="pub-link"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  Document Link (URL)
-                </label>
-                <input
-                  type="url"
-                  id="pub-link"
-                  name="document_link"
-                  value={publicationFormData.document_link}
-                  onChange={handlePublicationInputChange}
-                  placeholder="https://example.com/paper.pdf"
-                  required
-                  className={`mt-1 block w-full px-3 py-2 bg-white border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                    publicationFormErrors.document_link
-                      ? "border-red-500"
-                      : "border-gray-300"
-                  }`}
-                />
-                {publicationFormErrors.document_link && (
-                  <p className="mt-1 text-xs text-red-600">
-                    {publicationFormErrors.document_link}
-                  </p>
-                )}
-              </div>
-
-              {/* Submit Button (Keep as is) */}
-              <div className="pt-2 flex justify-end">
+              ) : (
                 <button
-                  type="submit"
-                  disabled={isSubmittingPublication}
-                  className="inline-flex justify-center items-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                  onClick={handleEditClick}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
-                  {isSubmittingPublication ? (
-                    <FaSpinner className="animate-spin -ml-1 mr-2 h-5 w-5" />
-                  ) : (
-                    <FaPaperPlane className="-ml-1 mr-2 h-5 w-5" />
-                  )}
-                  {isSubmittingPublication
-                    ? "Submitting..."
-                    : "Post Publication"}
+                  {" "}
+                  <FaEdit className="-ml-1 mr-2 h-5 w-5" /> Edit Profile{" "}
                 </button>
-              </div>
-            </form>
+              )}{" "}
+            </div>
+          )}
+        </div>
+
+        {/* --- Details Grid --- */}
+        {isOwnProfile && apiError && editingProfile && (
+          <div className="mb-4">
+            <ErrorMessage message={apiError} onClose={() => setApiError("")} />
           </div>
         )}
-        {/* End Publication Form Section */}
-      </main>
-    </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-1">
+          {renderProfileField("Username", "username", viewedUser.username)}
+          {isOwnProfile &&
+            renderProfileField("Email", "email", viewedUser.email, "email")}
+          {renderProfileField("First Name", "firstName", viewedUser.firstName)}
+          {renderProfileField("Last Name", "lastName", viewedUser.lastName)}
+          {renderProfileField(
+            "Institution",
+            "institution",
+            viewedUser.institution
+          )}
+          <div className="md:col-span-2">
+            {renderProfileField(
+              "Bio",
+              "bio",
+              viewedUser.bio,
+              "textarea",
+              false,
+              null,
+              isOwnProfile ? "Tell us about yourself..." : ""
+            )}
+          </div>
+
+          {/* Social Links Section */}
+          {(viewedUser.socialLinks?.linkedin ||
+            viewedUser.socialLinks?.github ||
+            viewedUser.socialLinks?.twitter ||
+            (isOwnProfile && editingProfile)) && (
+            <div className="md:col-span-2 mt-6 border-t border-gray-200 pt-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-3">
+                Online Presence
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4">
+                {renderProfileField(
+                  "LinkedIn",
+                  "linkedin",
+                  viewedUser.socialLinks?.linkedin,
+                  "url",
+                  true,
+                  "socialLinks",
+                  "https://linkedin.com/in/..."
+                )}
+                {renderProfileField(
+                  "GitHub",
+                  "github",
+                  viewedUser.socialLinks?.github,
+                  "url",
+                  true,
+                  "socialLinks",
+                  "https://github.com/..."
+                )}
+                {renderProfileField(
+                  "Twitter",
+                  "twitter",
+                  viewedUser.socialLinks?.twitter,
+                  "url",
+                  true,
+                  "socialLinks",
+                  "https://twitter.com/..."
+                )}
+              </div>
+            </div>
+          )}
+          {/* Interests Section */}
+          {(viewedUser.interests?.length > 0 ||
+            (isOwnProfile && editingProfile)) && (
+            <div className="md:col-span-2 mt-6 border-t border-gray-200 pt-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-3">
+                Research Interests
+              </h3>
+              {isOwnProfile && editingProfile ? (
+                <input
+                  type="text"
+                  name="interests"
+                  value={profileFormData.interests?.join(", ") ?? ""}
+                  onChange={(e) =>
+                    setProfileFormData((prev) => ({
+                      ...prev,
+                      interests: e.target.value
+                        .split(",")
+                        .map((s) => s.trim())
+                        .filter(Boolean),
+                    }))
+                  }
+                  placeholder="e.g., AI, Neuroscience (comma-separated)"
+                  className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                />
+              ) : (
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {" "}
+                  {viewedUser.interests?.length > 0 ? (
+                    viewedUser.interests.map((interest, index) => (
+                      <span
+                        key={index}
+                        className="px-3 py-1 bg-indigo-100 text-indigo-800 text-sm font-medium rounded-full"
+                      >
+                        {interest}
+                      </span>
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-500 italic">
+                      No interests listed.
+                    </p>
+                  )}{" "}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
