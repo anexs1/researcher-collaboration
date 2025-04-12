@@ -1,32 +1,31 @@
-// File: backend/server.js (or app.js) - CORRECTED IMPORTS
-
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 
-// --- Route Imports (Corrected Paths) ---
-import authRoutes from "./routes/authRoutes.js"; // <<< REMOVED /src
-import projectRoutes from "./routes/projectRoutes.js"; // <<< REMOVED /src (Assuming same location)
-import publicationRoutes from "./routes/publicationRoutes.js"; // <<< REMOVED /src
-import collaborationRequestRoutes from "./routes/collaborationRequestRoutes.js"; // <<< REMOVED /src
-import adminRoutes from "./routes/admin.routes.js"; // <<< REMOVED /src
+// --- Route Imports ---
+import authRoutes from "./routes/authRoutes.js";
+import userRoutes from "./routes/userRoutes.js"; // Make sure this file exists and exports default
+import projectRoutes from "./routes/projectRoutes.js";
+import publicationRoutes from "./routes/publicationRoutes.js";
+import collaborationRequestRoutes from "./routes/collaborationRequestRoutes.js";
+import adminRoutes from "./routes/admin.routes.js";
 
 // --- Database Connection ---
-// Adjust path if config/db.js is not directly under backend/
 import { connectDB } from "./config/db.js";
 
 dotenv.config();
-
 const app = express();
 
-// Connect to the database
+// Connect DB
 connectDB()
   .then(() => {
-    console.log("Database connection attempt completed.");
+    console.log("Database connected.");
   })
   .catch((err) => {
-    console.error("Database connection or authentication failed:", err);
-    process.exit(1);
+    console.error("DB Connect Failed:", err);
+    process.exit(1); // Exit the process if DB connection fails
   });
 
 // Core Middleware
@@ -34,40 +33,42 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// --- Mount API Routers ---
-// Base paths remain the same
+// --- Static Folder ---
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+// *** ADJUST this path if your uploads are elsewhere ***
+app.use("/uploads", express.static(path.join(__dirname, "public/uploads")));
+
+// --- API Route Mounting ---
 app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes); // For user profile actions
 app.use("/api/publications", publicationRoutes);
-app.use("/api/myprojects", projectRoutes); // Ensure this maps correctly
+app.use("/api/projects", projectRoutes); // <<< CORRECT path for projects
 app.use("/api/collaboration-requests", collaborationRequestRoutes);
 app.use("/api/admin", adminRoutes);
 
 // Default route
 app.get("/", (req, res) => {
-  res.send("Research Collaboration Backend API is running.");
+  res.send("API is running.");
 });
 
-// Basic Error Handling Middleware
+// --- Error Handling Middleware ---
+app.use((req, res, next) => {
+  const error = new Error(`Not Found - ${req.originalUrl}`);
+  res.status(404);
+  next(error);
+});
 app.use((err, req, res, next) => {
-  console.error("Unhandled Error:", err.stack);
-  const statusCode = err.statusCode || 500;
-  const message =
-    process.env.NODE_ENV === "production"
-      ? "Internal Server Error"
-      : err.message || "Internal Server Error";
+  console.error("Error:", err.stack);
+  const statusCode =
+    res.statusCode === 200 ? err.statusCode || 500 : res.statusCode;
   res.status(statusCode).json({
     success: false,
-    message: message,
-    ...(process.env.NODE_ENV === "development" && { error: err.stack }),
+    message: process.env.NODE_ENV === "production" ? "Error" : err.message,
+    ...(process.env.NODE_ENV === "development" && { stack: err.stack }),
   });
 });
 
-// Start the server
+// Start Server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(
-    `Server running in ${
-      process.env.NODE_ENV || "development"
-    } mode on port ${PORT}`
-  );
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

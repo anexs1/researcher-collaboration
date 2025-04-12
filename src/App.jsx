@@ -10,19 +10,22 @@ import {
   Outlet,
 } from "react-router-dom";
 import axios from "axios";
-import "./index.css";
+import "./index.css"; // Ensure your global styles are imported
 
 // --- Page Imports ---
 import Home from "./Page/Home";
 import ExplorePage from "./Page/ExplorePage";
 import SignupPage from "./Page/SignupPage";
 import LoginPage from "./Page/LoginPage";
-import Profile from "./Page/Profile"; // Handles own and other profiles
+import Profile from "./Page/Profile"; // Handles own and other profiles + its own layout
 import Publication from "./Page/Publication";
 import EditPublicationPage from "./Page/EditPublicationPage";
 import MyProjects from "./Page/MyProjects";
 import Messages from "./Page/Messages";
 import PostPublicationPage from "./Page/PostPublicationPage";
+import AccountSettingsPage from "./Page/Settings/AccountSettingsPage"; // Assuming path is correct
+import UserActivityPage from "./Component/Profile/UserActivityPage"; // Assuming path is correct
+import CreateProjectPage from "./Page/CreateProjectPage"; // <-- IMPORTED
 
 // --- Component Imports ---
 import AcademicSignupForm from "./Component/AcademicSignupForm";
@@ -42,12 +45,13 @@ import AdminPublicationManagementPage from "./Page/Admin/AdminPublicationManagem
 
 // --- Layout Imports ---
 import AdminLayout from "./Layout/AdminLayout";
-import UserLayout from "./Layout/UserLayout";
+import UserLayout from "./Layout/UserLayout"; // Standard layout for non-profile pages
 
 // --- Helper Components ---
 const ProtectedRoute = ({ isLoggedIn, children }) => {
   const location = useLocation();
   if (isLoggedIn === null) {
+    // Handle loading state during auth check
     return (
       <div className="flex justify-center items-center h-screen text-lg font-medium">
         Checking authentication...
@@ -55,13 +59,16 @@ const ProtectedRoute = ({ isLoggedIn, children }) => {
     );
   }
   if (!isLoggedIn) {
+    // Redirect if not logged in
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
-  return children;
+  return children; // Render protected content
 };
+
 const AdminProtectedRoute = ({ isLoggedIn, isAdmin, children }) => {
   const location = useLocation();
   if (isLoggedIn === null || isAdmin === null) {
+    // Handle loading state
     return (
       <div className="flex justify-center items-center h-screen text-xl font-semibold">
         Verifying Admin Access...
@@ -70,11 +77,11 @@ const AdminProtectedRoute = ({ isLoggedIn, isAdmin, children }) => {
   }
   if (!isLoggedIn) {
     return <Navigate to="/login" state={{ from: location }} replace />;
-  }
+  } // Redirect if not logged in
   if (!isAdmin) {
     return <Navigate to="/profile" replace />;
-  }
-  return children;
+  } // Redirect non-admins
+  return children; // Render protected admin content
 };
 
 // --- Main App Component ---
@@ -93,8 +100,8 @@ function App() {
     setCurrentUser(null);
   }, []);
 
+  // --- Authentication Check Effect ---
   useEffect(() => {
-    // --- Authentication Logic ---
     const token = localStorage.getItem("authToken");
     const storedUser = localStorage.getItem("user");
     let initialUser = null;
@@ -102,7 +109,7 @@ function App() {
       try {
         initialUser = JSON.parse(storedUser);
       } catch (e) {
-        console.error("Failed to parse stored user:", e);
+        console.error("Parse user error:", e);
         localStorage.removeItem("user");
       }
     }
@@ -126,13 +133,12 @@ function App() {
       )
       .then((response) => {
         if (response.data?.success && response.data?.user) {
+          const fetchedUser = response.data.user;
           setIsLoggedIn(true);
-          const isAdminUser = response.data.user.role === "admin";
-          setIsAdmin(isAdminUser);
-          setCurrentUser(response.data.user);
-          localStorage.setItem("user", JSON.stringify(response.data.user));
+          setIsAdmin(fetchedUser.role === "admin");
+          setCurrentUser(fetchedUser);
+          localStorage.setItem("user", JSON.stringify(fetchedUser));
         } else {
-          console.warn("Token validation failed.");
           handleLogout();
         }
       })
@@ -145,14 +151,17 @@ function App() {
       });
   }, [handleLogout, API_BASE]);
 
+  // Loading Screen
   if (loadingAuth) {
     return (
       <div className="flex justify-center items-center h-screen text-xl font-semibold bg-gray-100">
-        Loading Application...
+        {" "}
+        Loading Application...{" "}
       </div>
     );
   }
 
+  // Render Router
   return (
     <Router>
       <AppRoutes
@@ -190,17 +199,14 @@ const AppRoutes = ({
           onLogout={handleLogout}
         />
       )}
-      {/* Main content area - UserLayout now applies padding */}
-      <div className={showNavbar ? "pt-16 md:pt-20" : ""}>
+      {/* Let layout components handle their own padding */}
+      <div className={showNavbar ? "navbar-padding-active" : ""}>
+        {" "}
+        {/* Optional class */}
         <Routes>
           {/* --- Public Routes --- */}
           <Route path="/" element={<Home />} />
-          <Route
-            path="/explore"
-            element={<ExplorePage currentUser={currentUser} />}
-          />
-
-          {/* --- Authentication Routes --- */}
+          {/* Auth routes */}
           <Route
             path="/signup"
             element={
@@ -229,23 +235,24 @@ const AppRoutes = ({
             }
           />
 
-          {/* --- Protected User Routes (Wrapped in UserLayout) --- */}
+          {/* --- Protected User Routes (Standard Layout) --- */}
           <Route
             element={
               <ProtectedRoute isLoggedIn={isLoggedIn}>
+                {/* Pass currentUser needed by Sidebar inside UserLayout */}
                 <UserLayout
                   isLoggedIn={isLoggedIn}
                   handleLogout={handleLogout}
+                  currentUser={currentUser}
                 />
               </ProtectedRoute>
             }
           >
-            {/* UPDATED Profile Route: Handles optional :userId param */}
+            {/* Routes using standard Left Sidebar + Content */}
             <Route
-              path="/profile/:userId?" // Optional userId
-              element={<Profile currentUser={currentUser} />} // Pass logged-in user info
+              path="/explore"
+              element={<ExplorePage currentUser={currentUser} />}
             />
-            {/* Other User Routes */}
             <Route
               path="/publications"
               element={<Publication currentUser={currentUser} />}
@@ -266,14 +273,51 @@ const AppRoutes = ({
               path="/messages"
               element={<Messages currentUser={currentUser} />}
             />
+            <Route
+              path="/settings/account"
+              element={<AccountSettingsPage currentUser={currentUser} />}
+            />
+            <Route
+              path="/profile/activity"
+              element={<UserActivityPage currentUser={currentUser} />}
+            />
+            {/* === ADDED Create Project Route === */}
+            <Route
+              path="/projects/new"
+              element={<CreateProjectPage currentUser={currentUser} />}
+            />
+            {/* ================================= */}
           </Route>
 
-          {/* --- Protected Admin Routes (Wrapped in AdminLayout) --- */}
+          {/* --- Protected Profile Route (Special Layout handled inside Profile.jsx) --- */}
+          <Route
+            element={
+              <ProtectedRoute isLoggedIn={isLoggedIn}>
+                {" "}
+                <Outlet />{" "}
+              </ProtectedRoute>
+            }
+          >
+            <Route
+              path="/profile/:userId?" // Matches /profile and /profile/123
+              // Pass all necessary props for Profile page's own layout (including Sidebar props)
+              element={
+                <Profile
+                  currentUser={currentUser}
+                  isLoggedIn={isLoggedIn}
+                  handleLogout={handleLogout}
+                />
+              }
+            />
+          </Route>
+
+          {/* --- Protected Admin Routes --- */}
           <Route
             path="/admin"
             element={
               <AdminProtectedRoute isLoggedIn={isLoggedIn} isAdmin={isAdmin}>
-                <AdminLayout />
+                {" "}
+                <AdminLayout />{" "}
               </AdminProtectedRoute>
             }
           >
@@ -292,18 +336,7 @@ const AppRoutes = ({
               path="*"
               element={
                 <div className="p-6 bg-white rounded shadow">
-                  <h2 className="text-xl font-semibold mb-4 text-red-600">
-                    Admin Page Not Found
-                  </h2>
-                  <p className="text-gray-700 mb-4">
-                    The requested admin page does not exist.
-                  </p>
-                  <Link
-                    to="/admin/dashboard"
-                    className="text-blue-600 hover:underline font-medium"
-                  >
-                    Go to Admin Dashboard
-                  </Link>
+                  Admin Page Not Found...
                 </div>
               }
             />
@@ -314,24 +347,24 @@ const AppRoutes = ({
             path="*"
             element={
               <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] text-center p-10">
+                {" "}
                 <h1 className="text-4xl font-bold text-gray-700 mb-4">
                   404 - Page Not Found
-                </h1>
+                </h1>{" "}
                 <p className="text-lg text-gray-500 mb-6">
-                  Sorry, the page you requested could not be found.
-                </p>
+                  Sorry, the page could not be found.
+                </p>{" "}
                 <Link
                   to="/"
                   className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
                 >
-                  Go to Homepage
-                </Link>
+                  Go Homepage
+                </Link>{" "}
               </div>
             }
           />
         </Routes>
-      </div>{" "}
-      {/* End main content wrapper */}
+      </div>
     </>
   );
 };

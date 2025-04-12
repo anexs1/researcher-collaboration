@@ -3,21 +3,22 @@ import React from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "../Component/Sidebar"; // Adjust path if needed
 
-const UserLayout = ({ isLoggedIn, handleLogout }) => {
+// *** MODIFIED: Accept currentUser prop ***
+const UserLayout = ({ isLoggedIn, handleLogout, currentUser }) => {
   return (
     <div className="flex min-h-screen bg-gray-100">
-      {" "}
-      {/* Use a background color like gray-100 */}
-      {/* Sidebar */}
-      <Sidebar isLoggedIn={isLoggedIn} handleLogout={handleLogout} />
+      {/* Pass currentUser down to Sidebar */}
+      <Sidebar
+        isLoggedIn={isLoggedIn}
+        handleLogout={handleLogout}
+        currentUser={currentUser} // <-- Pass prop
+      />
+
       {/* Main Content Area */}
-      {/* Apply padding here for consistent spacing across pages within this layout */}
       <main className="flex-grow p-4 sm:p-6 lg:p-8 overflow-auto">
-        <Outlet />{" "}
-        {/* Child route components (Profile, Publication, etc.) will render here */}
+        <Outlet />
       </main>
     </div>
   );
 };
-
 export default UserLayout;

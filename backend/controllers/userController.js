@@ -1,25 +1,17 @@
-// File: backend/controllers/userController.js
-
 import db from "../models/index.js";
-const { User /* other models if needed */ } = db;
+const { User } = db;
 import { Op } from "sequelize";
-// Import bcrypt if you need password handling (though admin shouldn't set passwords directly maybe)
-// import bcrypt from 'bcryptjs';
-
-// --- Keep any existing non-admin User functions (like get own profile) ---
-// export const getUserProfile = async (req, res) => { ... };
-// export const updateUserProfile = async (req, res) => { ... };
-// --- End Existing ---
+import asyncHandler from "express-async-handler";
 
 // --- Admin User Management Controllers ---
 
-// GET /api/admin/users - List all users for admin
-export const adminGetAllUsers = async (req, res) => {
+// GET /api/admin/users
+export const adminGetAllUsers = asyncHandler(async (req, res) => {
   try {
     const {
       search,
-      role, // Filter by role ('admin', 'user', etc.)
-      status, // Filter by status ('active', 'pending', 'suspended') - Assuming you have a status field
+      role,
+      status,
       sortBy = "createdAt",
       sortOrder = "desc",
       page = 1,
@@ -29,30 +21,34 @@ export const adminGetAllUsers = async (req, res) => {
     let whereClause = {};
     let orderClause = [];
 
-    // Filtering
     if (role) whereClause.role = role;
-    if (status) whereClause.status = status; // Add this if User model has 'status'
+    if (status) whereClause.status = status;
     if (search) {
       const searchPattern = `%${search}%`;
       whereClause[Op.or] = [
         { username: { [Op.like]: searchPattern } },
         { email: { [Op.like]: searchPattern } },
-        { name: { [Op.like]: searchPattern } }, // Assuming 'name' field exists
+        { firstName: { [Op.like]: searchPattern } },
+        { lastName: { [Op.like]: searchPattern } },
       ];
     }
 
-    // Sorting
     if (
-      ["username", "email", "name", "createdAt", "role", "status"].includes(
-        sortBy
-      )
+      [
+        "username",
+        "email",
+        "firstName",
+        "lastName",
+        "createdAt",
+        "role",
+        "status",
+      ].includes(sortBy)
     ) {
       orderClause.push([sortBy, sortOrder === "asc" ? "ASC" : "DESC"]);
     } else {
-      orderClause.push(["createdAt", "DESC"]); // Default
+      orderClause.push(["createdAt", "DESC"]);
     }
 
-    // Pagination
     const pageNum = parseInt(page, 10);
     const limitNum = parseInt(limit, 10);
     if (isNaN(pageNum) || isNaN(limitNum) || pageNum < 1 || limitNum < 1) {
@@ -62,13 +58,12 @@ export const adminGetAllUsers = async (req, res) => {
     }
     const offset = (pageNum - 1) * limitNum;
 
-    // Execution
     const { count, rows } = await User.findAndCountAll({
       where: whereClause,
       order: orderClause,
       limit: limitNum,
       offset: offset,
-      attributes: { exclude: ["password"] }, // IMPORTANT: Exclude password hash
+      attributes: { exclude: ["password"] },
       distinct: true,
     });
 
@@ -78,25 +73,19 @@ export const adminGetAllUsers = async (req, res) => {
       currentPage: pageNum,
     };
 
-    res.status(200).json({
-      success: true,
-      data: {
-        users: rows, // Send user list
-        pagination: pagination,
-      },
-    });
+    res.status(200).json({ success: true, data: { users: rows, pagination } });
   } catch (error) {
     console.error("Error fetching users for admin:", error);
     res.status(500).json({
       success: false,
-      message: "Server Error fetching users for admin",
+      message: "Server Error fetching users",
       error: error.message,
     });
   }
-};
+});
 
-// GET /api/admin/users/:id - Get single user details by ID
-export const adminGetUserById = async (req, res) => {
+// GET /api/admin/users/:id
+export const adminGetUserById = asyncHandler(async (req, res) => {
   const { id } = req.params;
   if (!id || isNaN(parseInt(id, 10))) {
     return res
@@ -105,7 +94,7 @@ export const adminGetUserById = async (req, res) => {
   }
   try {
     const user = await User.findByPk(id, {
-      attributes: { exclude: ["password"] }, // Exclude password
+      attributes: { exclude: ["password"] },
     });
     if (!user) {
       return res
@@ -121,29 +110,24 @@ export const adminGetUserById = async (req, res) => {
       error: error.message,
     });
   }
-};
+});
 
-// PUT /api/admin/users/:id/status - Update user status (example: approve, suspend)
-export const adminUpdateUserStatus = async (req, res) => {
+// PUT /api/admin/users/:id/status
+export const adminUpdateUserStatus = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { status } = req.body; // Expecting status like 'active', 'suspended', 'pending'
-
+  const { status } = req.body;
   if (!id || isNaN(parseInt(id, 10))) {
     return res
       .status(400)
       .json({ success: false, message: "Invalid user ID." });
   }
-  // Add validation for the status field if needed
-  const validStatuses = ["active", "pending", "suspended"]; // Example valid statuses
+  const validStatuses = ["approved", "pending", "rejected", "suspended"];
   if (!status || !validStatuses.includes(status)) {
     return res.status(400).json({
       success: false,
-      message: `Invalid status provided. Must be one of: ${validStatuses.join(
-        ", "
-      )}`,
+      message: `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
     });
   }
-
   try {
     const user = await User.findByPk(id);
     if (!user) {
@@ -151,14 +135,8 @@ export const adminUpdateUserStatus = async (req, res) => {
         .status(404)
         .json({ success: false, message: "User not found." });
     }
-
-    // Optional: Prevent admin from changing their own status or other critical admins?
-    // if (user.id === req.user.id) { return res.status(403)... }
-
-    user.status = status; // Assuming 'status' field exists on User model
+    user.status = status;
     await user.save();
-
-    // Return updated user (without password)
     const updatedUser = await User.findByPk(id, {
       attributes: { exclude: ["password"] },
     });
@@ -171,32 +149,28 @@ export const adminUpdateUserStatus = async (req, res) => {
     console.error("Error updating user status by admin:", error);
     res.status(500).json({
       success: false,
-      message: "Server Error updating user status",
+      message: "Server Error updating status",
       error: error.message,
     });
   }
-};
+});
 
-// PUT /api/admin/users/:id/role - Update user role
-export const adminUpdateUserRole = async (req, res) => {
+// PUT /api/admin/users/:id/role
+export const adminUpdateUserRole = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { role } = req.body; // Expecting role like 'admin', 'user'
-
+  const { role } = req.body;
   if (!id || isNaN(parseInt(id, 10))) {
     return res
       .status(400)
       .json({ success: false, message: "Invalid user ID." });
   }
-  const validRoles = ["admin", "user"]; // Define valid roles
+  const validRoles = ["admin", "user"];
   if (!role || !validRoles.includes(role)) {
     return res.status(400).json({
       success: false,
-      message: `Invalid role provided. Must be one of: ${validRoles.join(
-        ", "
-      )}`,
+      message: `Invalid role. Must be one of: ${validRoles.join(", ")}`,
     });
   }
-
   try {
     const user = await User.findByPk(id);
     if (!user) {
@@ -204,23 +178,13 @@ export const adminUpdateUserRole = async (req, res) => {
         .status(404)
         .json({ success: false, message: "User not found." });
     }
-
-    // Critical: Prevent admin from accidentally removing their own admin role?
-    // Or ensure at least one admin always exists? Add safety checks!
-    if (
-      user.id === req.user.id &&
-      req.user.role === "admin" &&
-      role !== "admin"
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: "Cannot remove your own admin role.",
-      });
+    if (user.id.toString() === req.user.id.toString() && role !== "admin") {
+      return res
+        .status(403)
+        .json({ success: false, message: "Cannot remove own admin role." });
     }
-
     user.role = role;
     await user.save();
-
     const updatedUser = await User.findByPk(id, {
       attributes: { exclude: ["password"] },
     });
@@ -233,21 +197,20 @@ export const adminUpdateUserRole = async (req, res) => {
     console.error("Error updating user role by admin:", error);
     res.status(500).json({
       success: false,
-      message: "Server Error updating user role",
+      message: "Server Error updating role",
       error: error.message,
     });
   }
-};
+});
 
-// DELETE /api/admin/users/:id - Delete a user
-export const adminDeleteUser = async (req, res) => {
+// DELETE /api/admin/users/:id
+export const adminDeleteUser = asyncHandler(async (req, res) => {
   const { id } = req.params;
   if (!id || isNaN(parseInt(id, 10))) {
     return res
       .status(400)
       .json({ success: false, message: "Invalid user ID." });
   }
-
   try {
     const user = await User.findByPk(id);
     if (!user) {
@@ -255,40 +218,150 @@ export const adminDeleteUser = async (req, res) => {
         .status(404)
         .json({ success: false, message: "User not found." });
     }
-
-    // Critical: Prevent deleting own account or other admins?
-    if (user.id === req.user.id) {
+    if (user.id.toString() === req.user.id.toString()) {
       return res
         .status(403)
-        .json({ success: false, message: "Cannot delete your own account." });
+        .json({ success: false, message: "Cannot delete own account." });
     }
-    // if (user.role === 'admin') {
-    //     return res.status(403).json({ success: false, message: "Cannot delete another admin account." });
-    // }
-
     const deletedCount = await User.destroy({ where: { id: id } });
-
     if (deletedCount > 0) {
-      res.status(200).json({
-        success: true,
-        message: "User deleted successfully by admin.",
-      });
+      res
+        .status(200)
+        .json({ success: true, message: "User deleted successfully." });
     } else {
-      // Should be caught by findByPk earlier, but good practice
       res
         .status(404)
         .json({ success: false, message: "User not found or delete failed." });
     }
   } catch (error) {
     console.error("Error deleting user by admin:", error);
-    // Handle potential foreign key constraints if needed
     res.status(500).json({
       success: false,
       message: "Failed to delete user",
       error: error.message,
     });
   }
-};
+});
 
-// Add these exports to your userController.js exports if managed manually
-// export { ..., adminGetAllUsers, adminGetUserById, adminUpdateUserStatus, adminUpdateUserRole, adminDeleteUser };
+/** Update logged-in user profile */
+export const updateMyProfile = asyncHandler(async (req, res) => {
+  const user = await User.findByPk(req.user.id);
+  if (!user) {
+    res.status(404);
+    throw new Error("User not found");
+  }
+
+  user.firstName = req.body.firstName || user.firstName;
+  user.lastName = req.body.lastName || user.lastName;
+  user.bio = req.body.bio === undefined ? user.bio : req.body.bio;
+  user.institution =
+    req.body.institution === undefined
+      ? user.institution
+      : req.body.institution;
+
+  let socialLinksChanged = false;
+  const updatedSocialLinks = { ...(user.socialLinks || {}) };
+  if (req.body["socialLinks[linkedin]"] !== undefined) {
+    updatedSocialLinks.linkedin = req.body["socialLinks[linkedin]"];
+    socialLinksChanged = true;
+  }
+  if (req.body["socialLinks[github]"] !== undefined) {
+    updatedSocialLinks.github = req.body["socialLinks[github]"];
+    socialLinksChanged = true;
+  }
+  if (req.body["socialLinks[twitter]"] !== undefined) {
+    updatedSocialLinks.twitter = req.body["socialLinks[twitter]"];
+    socialLinksChanged = true;
+  }
+  if (socialLinksChanged) {
+    user.socialLinks = updatedSocialLinks;
+    user.changed("socialLinks", true);
+  }
+
+  let interestsChanged = false;
+  const interests = [];
+  let i = 0;
+  while (req.body[`interests[${i}]`] !== undefined) {
+    interests.push(String(req.body[`interests[${i}]`]).trim());
+    i++;
+    interestsChanged = true;
+  }
+  if (interestsChanged || req.body["interests[0]"] !== undefined) {
+    user.interests = interests.filter(Boolean);
+    user.changed("interests", true);
+  }
+
+  if (req.file) {
+    const profilePicturePath = `/uploads/profiles/${req.file.filename}`;
+    user.profilePictureUrl = profilePicturePath;
+  }
+
+  const updatedUser = await user.save();
+
+  res.status(200).json({
+    id: updatedUser.id,
+    username: updatedUser.username,
+    firstName: updatedUser.firstName,
+    lastName: updatedUser.lastName,
+    bio: updatedUser.bio,
+    profilePictureUrl: updatedUser.profilePictureUrl,
+    socialLinks: updatedUser.socialLinks,
+    interests: updatedUser.interests,
+    institution: updatedUser.institution,
+    role: updatedUser.role,
+  });
+});
+
+/** Public user profile */
+export const getPublicUserProfile = asyncHandler(async (req, res) => {
+  const user = await User.findByPk(req.params.userId, {
+    attributes: [
+      "id",
+      "username",
+      "firstName",
+      "lastName",
+      "bio",
+      "profilePictureUrl",
+      "institution",
+      "socialLinks",
+      "interests",
+      "createdAt",
+    ],
+  });
+
+  if (user) {
+    res.status(200).json(user);
+  } else {
+    res.status(404);
+    throw new Error("User profile not found");
+  }
+});
+
+/** Searchable users */
+export const getSearchableUsers = asyncHandler(async (req, res) => {
+  const { search } = req.query;
+  try {
+    const whereClause = search
+      ? {
+          [Op.or]: [
+            { username: { [Op.like]: `%${search}%` } },
+            { email: { [Op.like]: `%${search}%` } },
+            { firstName: { [Op.like]: `%${search}%` } },
+            { lastName: { [Op.like]: `%${search}%` } },
+          ],
+        }
+      : {};
+
+    const users = await User.findAll({
+      where: whereClause,
+      attributes: { exclude: ["password"] },
+    });
+
+    res.status(200).json({ success: true, data: users });
+  } catch (error) {
+    console.error("Error fetching searchable users:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Server Error fetching users" });
+  }
+});

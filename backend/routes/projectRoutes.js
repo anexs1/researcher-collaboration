@@ -1,19 +1,22 @@
-// routes/projectRoutes.js
-import express from "express"; // Use standard import if not already
+import express from "express";
 import projectController from "../controllers/projectController.js";
+import { protect } from "../middleware/authMiddleware.js";
 
-const router = express.Router(); // Use express.Router()
+const router = express.Router();
 
-// GET /api/myprojects - Get all projects
-router.get("/", projectController.getProjects);
+// GET /api/projects - Get projects for the logged-in user
+router.get("/", protect, projectController.getProjects);
 
-// POST /api/myprojects - Create a new project
-router.post("/", projectController.createProject);
+// GET /api/projects/:id - Get a single project (if owner or collaborator)
+router.get("/:id", protect, projectController.getProjectById);
 
-// PUT /api/myprojects/:id - Update a project by ID
-router.put("/:id", projectController.updateProject); // Changed :requestId to :id
+// POST /api/projects - Create a new project
+router.post("/", protect, projectController.createProject);
 
-// DELETE /api/myprojects/:id - Delete a project by ID
-router.delete("/:id", projectController.deleteProject); // Changed :requestId to :id
+// PUT /api/projects/:id - Update a specific project
+router.put("/:id", protect, projectController.updateProject);
+
+// DELETE /api/projects/:id - Delete a specific project
+router.delete("/:id", protect, projectController.deleteProject);
 
 export default router;

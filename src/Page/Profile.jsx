@@ -12,16 +12,24 @@ import {
   FaSpinner,
   FaUser,
   FaExternalLinkAlt,
-} from "react-icons/fa"; // FaUser can be used as placeholder
-import LoadingSpinner from "../Component/Common/LoadingSpinner"; // Adjust path as needed
-import Notification from "../Component/Common/Notification"; // Adjust path as needed
-import ErrorMessage from "../Component/Common/ErrorMessage"; // Adjust path as needed
+} from "react-icons/fa";
+
+// Import Main Sidebar (Left)
+import Sidebar from "../Component/Sidebar"; // Adjust path
+
+// Import NEW Profile Sidebar (Right)
+import ProfileSidebar from "../Component/Profile/ProfileSidebar"; // Adjust path - Ensure this file exists and is correct
+
+// Import Common Components
+import LoadingSpinner from "../Component/Common/LoadingSpinner"; // Adjust path
+import Notification from "../Component/Common/Notification"; // Adjust path
+import ErrorMessage from "../Component/Common/ErrorMessage"; // Adjust path
 
 // API Base URL
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
-// Default Data Structure - profilePictureUrl starts as null
+// Default Data Structure
 const defaultUserData = {
   id: null,
   username: "",
@@ -29,13 +37,13 @@ const defaultUserData = {
   firstName: "",
   lastName: "",
   bio: "",
-  profilePictureUrl: null, // <-- Set to null, no default file expected
+  profilePictureUrl: null, // Start as null since no default file exists
   socialLinks: { linkedin: "", github: "", twitter: "" },
   interests: [],
   institution: "",
 };
 
-export default function Profile({ currentUser }) {
+export default function Profile({ currentUser, isLoggedIn, handleLogout }) {
   const { userId } = useParams();
   const navigate = useNavigate();
 
@@ -48,7 +56,7 @@ export default function Profile({ currentUser }) {
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileFormData, setProfileFormData] = useState(defaultUserData);
   const [newProfileImage, setNewProfileImage] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null); // <-- Initialize as null
+  const [imagePreview, setImagePreview] = useState(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [notification, setNotification] = useState({
     message: "",
@@ -75,7 +83,7 @@ export default function Profile({ currentUser }) {
         firstName: userData.firstName || "",
         lastName: userData.lastName || "",
         bio: userData.bio || "",
-        profilePictureUrl: userData.profilePictureUrl || null, // Use null if missing
+        profilePictureUrl: userData.profilePictureUrl || null,
         socialLinks: {
           linkedin: userData.socialLinks?.linkedin || "",
           github: userData.socialLinks?.github || "",
@@ -84,7 +92,7 @@ export default function Profile({ currentUser }) {
         interests: Array.isArray(userData.interests) ? userData.interests : [],
         institution: userData.institution || "",
       });
-      const newPreviewUrl = userData.profilePictureUrl || null; // Preview URL can be null
+      const newPreviewUrl = userData.profilePictureUrl || null;
       if (
         imagePreview &&
         imagePreview.startsWith("blob:") &&
@@ -92,7 +100,7 @@ export default function Profile({ currentUser }) {
       ) {
         URL.revokeObjectURL(imagePreview);
       }
-      setImagePreview(newPreviewUrl); // Update preview display (might be null)
+      setImagePreview(newPreviewUrl);
       setNewProfileImage(null);
     },
     [imagePreview]
@@ -108,44 +116,39 @@ export default function Profile({ currentUser }) {
         loggedInUserId &&
         String(profileUserIdToFetch) === String(loggedInUserId));
     setIsOwnProfile(ownProfileCheck);
-
     setIsLoadingProfile(true);
     setApiError("");
     setProfileNotFound(false);
     setViewedUser(null);
     setEditingProfile(false);
-
     let fetchUrl = "";
     const config = { headers: {} };
     const token = localStorage.getItem("authToken");
     if (token) {
       config.headers["Authorization"] = `Bearer ${token}`;
     }
-
     if (ownProfileCheck) {
       if (!loggedInUserId) {
         setIsLoadingProfile(false);
         setApiError("Login required.");
         return;
       }
-      fetchUrl = `${API_BASE_URL}/api/auth/me`; // Use corrected endpoint for self
+      fetchUrl = `${API_BASE_URL}/api/auth/me`;
     } else if (profileUserIdToFetch) {
-      fetchUrl = `${API_BASE_URL}/api/users/public/${profileUserIdToFetch}`; // Public endpoint
+      fetchUrl = `${API_BASE_URL}/api/users/public/${profileUserIdToFetch}`;
     } else {
       setIsLoadingProfile(false);
       setApiError("Cannot determine profile.");
       return;
     }
-
     const controller = new AbortController();
     config.signal = controller.signal;
-
     axios
       .get(fetchUrl, config)
       .then((response) => {
         const fetchedUser = ownProfileCheck
           ? response.data?.data
-          : response.data; // Adjust based on API
+          : response.data;
         if (!fetchedUser || typeof fetchedUser !== "object" || !fetchedUser.id)
           throw new Error("Invalid profile data.");
         setViewedUser(fetchedUser);
@@ -169,7 +172,6 @@ export default function Profile({ currentUser }) {
       .finally(() => {
         setIsLoadingProfile(false);
       });
-
     return () => controller.abort();
   }, [userId, currentUser, syncFormWithViewedUser]);
 
@@ -188,7 +190,6 @@ export default function Profile({ currentUser }) {
       setApiError("");
     }
   };
-
   const handleProfileSave = async () => {
     if (!isOwnProfile) return;
     setIsSavingProfile(true);
@@ -199,7 +200,6 @@ export default function Profile({ currentUser }) {
       setIsSavingProfile(false);
       return;
     }
-
     const formDataToSubmit = new FormData();
     Object.keys(profileFormData).forEach((key) => {
       if (key === "profilePictureUrl") return;
@@ -226,7 +226,6 @@ export default function Profile({ currentUser }) {
     if (newProfileImage) {
       formDataToSubmit.append("profileImageFile", newProfileImage);
     }
-
     try {
       const response = await axios.put(
         `${API_BASE_URL}/api/users/profile`,
@@ -249,7 +248,6 @@ export default function Profile({ currentUser }) {
       setIsSavingProfile(false);
     }
   };
-
   const handleImageChange = (e) => {
     if (!isOwnProfile || !editingProfile) return;
     const file = e.target.files?.[0];
@@ -298,17 +296,16 @@ export default function Profile({ currentUser }) {
     const inputValue = isNested
       ? profileFormData[section]?.[name] ?? ""
       : profileFormData[name] ?? "";
-
-    if (name === "email" && !isOwnProfile) return null; // Hide email if not own profile
-
+    if (name === "email" && !isOwnProfile) return null;
     return (
       <div className="mb-4">
+        {" "}
         <label
           htmlFor={canEditField ? name : undefined}
           className="block text-sm font-medium text-gray-700 mb-0.5"
         >
           {label}
-        </label>
+        </label>{" "}
         {canEditField ? (
           type === "textarea" ? (
             <textarea
@@ -346,12 +343,12 @@ export default function Profile({ currentUser }) {
               <span className="text-gray-400 italic">Not set</span>
             )}
           </p>
-        )}
+        )}{" "}
       </div>
     );
   };
 
-  // --- Main Render ---
+  // --- Loading / Error / Not Found States ---
   if (isLoadingProfile) {
     return (
       <div className="flex justify-center items-center p-20">
@@ -368,7 +365,7 @@ export default function Profile({ currentUser }) {
           Profile Not Found
         </h2>{" "}
         <p className="text-gray-500 mt-2 mb-6">
-          This user profile does not exist or could not be loaded.
+          This user profile does not exist.
         </p>{" "}
         <Link
           to="/explore"
@@ -397,269 +394,294 @@ export default function Profile({ currentUser }) {
   if (!viewedUser) {
     return (
       <div className="p-6 text-center text-gray-500">
-        Unable to display profile information.
+        Unable to display profile.
       </div>
     );
   }
 
-  // Determine initials for placeholder if needed
+  // --- Helper for Initials & Image URL ---
   const getInitials = (firstName = "", lastName = "") =>
-    `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+    `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase() || "?";
   const initials = getInitials(viewedUser.firstName, viewedUser.lastName);
-
-  // Determine the source for the image display area
   const displayImageUrl =
     isOwnProfile &&
     editingProfile &&
     imagePreview &&
     imagePreview.startsWith("blob:")
-      ? imagePreview // Use blob preview if editing own and file selected
-      : viewedUser.profilePictureUrl; // Otherwise use the URL from backend (which might be null)
+      ? imagePreview
+      : viewedUser.profilePictureUrl;
 
+  // --- Main Render with 3 Columns ---
   return (
-    <>
-      {notification.show && (
-        <Notification
-          message={notification.message}
-          type={notification.type}
-          onClose={() => setNotification({ ...notification, show: false })}
-        />
-      )}
-      <div className="bg-white shadow-xl rounded-lg p-6 md:p-8 mb-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between mb-6 border-b border-gray-200 pb-6 gap-4">
-          <div className="flex items-center space-x-4 flex-grow min-w-0">
-            {/* Image Area */}
-            <div className="relative flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-full flex items-center justify-center bg-slate-200 text-slate-500 overflow-hidden border-2 border-gray-300">
-              {displayImageUrl ? (
-                <img
-                  src={displayImageUrl} // Use the determined URL (fetched or blob)
-                  alt={`${viewedUser.username || "User"}'s profile`}
-                  className="w-full h-full object-cover" // Cover the area
-                />
-              ) : // Show Initials or Icon if no image URL
-              initials ? (
-                <span className="text-3xl sm:text-4xl font-semibold">
-                  {initials}
-                </span>
-              ) : (
-                <FaUser className="w-10 h-10 sm:w-12 sm:h-12" /> // Fallback icon
-              )}
-              {/* Upload button shown only when editing own profile */}
-              {isOwnProfile && editingProfile && (
-                <>
-                  <button
-                    onClick={triggerFileInput}
-                    className="absolute bottom-0 right-0 bg-indigo-600 hover:bg-indigo-700 text-white p-1.5 rounded-full shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
-                    aria-label="Upload new profile picture"
-                    title="Upload/Change profile picture"
-                  >
-                    {" "}
-                    <FaFileUpload className="w-4 h-4" />{" "}
-                  </button>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleImageChange}
-                    accept="image/*"
-                    className="hidden"
-                    aria-hidden="true"
-                  />
-                </>
-              )}
-            </div>
-            {/* Text Info */}
-            <div className="flex-grow min-w-0">
-              <h2
-                className="text-xl sm:text-2xl font-semibold text-gray-900 truncate"
-                title={
-                  `${viewedUser.firstName || ""} ${
-                    viewedUser.lastName || ""
-                  }`.trim() || viewedUser.username
-                }
-              >
-                {" "}
-                {`${viewedUser.firstName || ""} ${
-                  viewedUser.lastName || ""
-                }`.trim() || viewedUser.username}{" "}
-              </h2>
-              {isOwnProfile && (
-                <p
-                  className="text-sm text-gray-500 truncate"
-                  title={viewedUser.email}
-                >
-                  {viewedUser.email}
-                </p>
-              )}
-              <p
-                className="text-sm text-gray-600 mt-1 truncate"
-                title={viewedUser.institution}
-              >
-                {" "}
-                {viewedUser.institution || (
-                  <span className="italic text-gray-400">Not set</span>
-                )}{" "}
-              </p>
-            </div>
-          </div>
-          {/* Action Buttons */}
-          {isOwnProfile && (
-            <div className="flex-shrink-0 mt-4 sm:mt-0">
-              {" "}
-              {editingProfile ? (
-                <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-                  {" "}
-                  <button
-                    onClick={handleProfileSave}
-                    disabled={isSavingProfile}
-                    className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
-                  >
-                    {" "}
-                    {isSavingProfile ? (
-                      <FaSpinner className="animate-spin -ml-1 mr-2 h-5 w-5" />
-                    ) : (
-                      <FaSave className="-ml-1 mr-2 h-5 w-5" />
-                    )}{" "}
-                    Save{" "}
-                  </button>{" "}
-                  <button
-                    onClick={handleProfileCancel}
-                    disabled={isSavingProfile}
-                    className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 w-full sm:w-auto"
-                  >
-                    {" "}
-                    Cancel{" "}
-                  </button>{" "}
-                </div>
-              ) : (
-                <button
-                  onClick={handleEditClick}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  {" "}
-                  <FaEdit className="-ml-1 mr-2 h-5 w-5" /> Edit Profile{" "}
-                </button>
-              )}{" "}
-            </div>
-          )}
-        </div>
-
-        {/* --- Details Grid --- */}
-        {isOwnProfile && apiError && editingProfile && (
-          <div className="mb-4">
-            <ErrorMessage message={apiError} onClose={() => setApiError("")} />
-          </div>
+    <div className="flex min-h-screen bg-gray-100">
+      {" "}
+      {/* Outer container */}
+      {/* --- Column 1: Main Navigation Sidebar --- */}
+      <Sidebar
+        isLoggedIn={isLoggedIn}
+        handleLogout={handleLogout}
+        currentUser={currentUser}
+      />
+      {/* --- Column 2: Central Profile Content --- */}
+      <main className="flex-grow p-4 sm:p-6 lg:p-8 overflow-y-auto">
+        {notification.show && (
+          <Notification
+            message={notification.message}
+            type={notification.type}
+            onClose={() => setNotification({ ...notification, show: false })}
+          />
         )}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-1">
-          {renderProfileField("Username", "username", viewedUser.username)}
-          {isOwnProfile &&
-            renderProfileField("Email", "email", viewedUser.email, "email")}
-          {renderProfileField("First Name", "firstName", viewedUser.firstName)}
-          {renderProfileField("Last Name", "lastName", viewedUser.lastName)}
-          {renderProfileField(
-            "Institution",
-            "institution",
-            viewedUser.institution
-          )}
-          <div className="md:col-span-2">
-            {renderProfileField(
-              "Bio",
-              "bio",
-              viewedUser.bio,
-              "textarea",
-              false,
-              null,
-              isOwnProfile ? "Tell us about yourself..." : ""
+
+        <div className="bg-white shadow-xl rounded-lg p-6 md:p-8 mb-6">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between mb-6 border-b border-gray-200 pb-6 gap-4">
+            <div className="flex items-center space-x-4 flex-grow min-w-0">
+              <div className="relative flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-full flex items-center justify-center bg-slate-200 text-slate-500 overflow-hidden border-2 border-gray-300">
+                {displayImageUrl ? (
+                  <img
+                    src={displayImageUrl}
+                    alt={`${viewedUser.username || "User"}'s profile`}
+                    className="w-full h-full object-cover"
+                  />
+                ) : initials ? (
+                  <span className="text-3xl sm:text-4xl font-semibold">
+                    {initials}
+                  </span>
+                ) : (
+                  <FaUser className="w-10 h-10 sm:w-12 sm:h-12" />
+                )}
+                {isOwnProfile && editingProfile && (
+                  <>
+                    {" "}
+                    <button
+                      onClick={triggerFileInput}
+                      className="absolute bottom-0 right-0 bg-indigo-600 hover:bg-indigo-700 text-white p-1.5 rounded-full shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+                      aria-label="Upload new profile picture"
+                      title="Upload/Change profile picture"
+                    >
+                      {" "}
+                      <FaFileUpload className="w-4 h-4" />{" "}
+                    </button>{" "}
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleImageChange}
+                      accept="image/*"
+                      className="hidden"
+                      aria-hidden="true"
+                    />{" "}
+                  </>
+                )}
+              </div>
+              <div className="flex-grow min-w-0">
+                <h2
+                  className="text-xl sm:text-2xl font-semibold text-gray-900 truncate"
+                  title={
+                    `${viewedUser.firstName || ""} ${
+                      viewedUser.lastName || ""
+                    }`.trim() || viewedUser.username
+                  }
+                >
+                  {" "}
+                  {`${viewedUser.firstName || ""} ${
+                    viewedUser.lastName || ""
+                  }`.trim() || viewedUser.username}{" "}
+                </h2>
+                {isOwnProfile && (
+                  <p
+                    className="text-sm text-gray-500 truncate"
+                    title={viewedUser.email}
+                  >
+                    {viewedUser.email}
+                  </p>
+                )}
+                <p
+                  className="text-sm text-gray-600 mt-1 truncate"
+                  title={viewedUser.institution}
+                >
+                  {" "}
+                  {viewedUser.institution || (
+                    <span className="italic text-gray-400">Not set</span>
+                  )}{" "}
+                </p>
+              </div>
+            </div>
+            {/* Action Buttons */}
+            {isOwnProfile && (
+              <div className="flex-shrink-0 mt-4 sm:mt-0">
+                {" "}
+                {editingProfile ? (
+                  <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                    {" "}
+                    <button
+                      onClick={handleProfileSave}
+                      disabled={isSavingProfile}
+                      className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
+                    >
+                      {" "}
+                      {isSavingProfile ? (
+                        <FaSpinner className="animate-spin -ml-1 mr-2 h-5 w-5" />
+                      ) : (
+                        <FaSave className="-ml-1 mr-2 h-5 w-5" />
+                      )}{" "}
+                      Save{" "}
+                    </button>{" "}
+                    <button
+                      onClick={handleProfileCancel}
+                      disabled={isSavingProfile}
+                      className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 w-full sm:w-auto"
+                    >
+                      {" "}
+                      Cancel{" "}
+                    </button>{" "}
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleEditClick}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  >
+                    {" "}
+                    <FaEdit className="-ml-1 mr-2 h-5 w-5" /> Edit Profile{" "}
+                  </button>
+                )}{" "}
+              </div>
             )}
           </div>
 
-          {/* Social Links Section */}
-          {(viewedUser.socialLinks?.linkedin ||
-            viewedUser.socialLinks?.github ||
-            viewedUser.socialLinks?.twitter ||
-            (isOwnProfile && editingProfile)) && (
-            <div className="md:col-span-2 mt-6 border-t border-gray-200 pt-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-3">
-                Online Presence
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4">
-                {renderProfileField(
-                  "LinkedIn",
-                  "linkedin",
-                  viewedUser.socialLinks?.linkedin,
-                  "url",
-                  true,
-                  "socialLinks",
-                  "https://linkedin.com/in/..."
-                )}
-                {renderProfileField(
-                  "GitHub",
-                  "github",
-                  viewedUser.socialLinks?.github,
-                  "url",
-                  true,
-                  "socialLinks",
-                  "https://github.com/..."
-                )}
-                {renderProfileField(
-                  "Twitter",
-                  "twitter",
-                  viewedUser.socialLinks?.twitter,
-                  "url",
-                  true,
-                  "socialLinks",
-                  "https://twitter.com/..."
-                )}
-              </div>
+          {/* Details Grid */}
+          {isOwnProfile && apiError && editingProfile && (
+            <div className="mb-4">
+              <ErrorMessage
+                message={apiError}
+                onClose={() => setApiError("")}
+              />
             </div>
           )}
-          {/* Interests Section */}
-          {(viewedUser.interests?.length > 0 ||
-            (isOwnProfile && editingProfile)) && (
-            <div className="md:col-span-2 mt-6 border-t border-gray-200 pt-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-3">
-                Research Interests
-              </h3>
-              {isOwnProfile && editingProfile ? (
-                <input
-                  type="text"
-                  name="interests"
-                  value={profileFormData.interests?.join(", ") ?? ""}
-                  onChange={(e) =>
-                    setProfileFormData((prev) => ({
-                      ...prev,
-                      interests: e.target.value
-                        .split(",")
-                        .map((s) => s.trim())
-                        .filter(Boolean),
-                    }))
-                  }
-                  placeholder="e.g., AI, Neuroscience (comma-separated)"
-                  className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                />
-              ) : (
-                <div className="flex flex-wrap gap-2 mt-1">
-                  {" "}
-                  {viewedUser.interests?.length > 0 ? (
-                    viewedUser.interests.map((interest, index) => (
-                      <span
-                        key={index}
-                        className="px-3 py-1 bg-indigo-100 text-indigo-800 text-sm font-medium rounded-full"
-                      >
-                        {interest}
-                      </span>
-                    ))
-                  ) : (
-                    <p className="text-sm text-gray-500 italic">
-                      No interests listed.
-                    </p>
-                  )}{" "}
-                </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-1">
+            {renderProfileField("Username", "username", viewedUser.username)}
+            {isOwnProfile &&
+              renderProfileField("Email", "email", viewedUser.email, "email")}
+            {renderProfileField(
+              "First Name",
+              "firstName",
+              viewedUser.firstName
+            )}
+            {renderProfileField("Last Name", "lastName", viewedUser.lastName)}
+            {renderProfileField(
+              "Institution",
+              "institution",
+              viewedUser.institution
+            )}
+            <div className="md:col-span-2">
+              {renderProfileField(
+                "Bio",
+                "bio",
+                viewedUser.bio,
+                "textarea",
+                false,
+                null,
+                isOwnProfile ? "Tell us about yourself..." : ""
               )}
             </div>
-          )}
+
+            {/* Social Links Section */}
+            {(viewedUser.socialLinks?.linkedin ||
+              viewedUser.socialLinks?.github ||
+              viewedUser.socialLinks?.twitter ||
+              (isOwnProfile && editingProfile)) && (
+              <div className="md:col-span-2 mt-6 border-t border-gray-200 pt-6">
+                {" "}
+                <h3 className="text-lg font-medium text-gray-900 mb-3">
+                  Online Presence
+                </h3>{" "}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4">
+                  {" "}
+                  {renderProfileField(
+                    "LinkedIn",
+                    "linkedin",
+                    viewedUser.socialLinks?.linkedin,
+                    "url",
+                    true,
+                    "socialLinks",
+                    "https://linkedin.com/in/..."
+                  )}{" "}
+                  {renderProfileField(
+                    "GitHub",
+                    "github",
+                    viewedUser.socialLinks?.github,
+                    "url",
+                    true,
+                    "socialLinks",
+                    "https://github.com/..."
+                  )}{" "}
+                  {renderProfileField(
+                    "Twitter",
+                    "twitter",
+                    viewedUser.socialLinks?.twitter,
+                    "url",
+                    true,
+                    "socialLinks",
+                    "https://twitter.com/..."
+                  )}{" "}
+                </div>{" "}
+              </div>
+            )}
+            {/* Interests Section */}
+            {(viewedUser.interests?.length > 0 ||
+              (isOwnProfile && editingProfile)) && (
+              <div className="md:col-span-2 mt-6 border-t border-gray-200 pt-6">
+                {" "}
+                <h3 className="text-lg font-medium text-gray-900 mb-3">
+                  Research Interests
+                </h3>{" "}
+                {isOwnProfile && editingProfile ? (
+                  <input
+                    type="text"
+                    name="interests"
+                    value={profileFormData.interests?.join(", ") ?? ""}
+                    onChange={(e) =>
+                      setProfileFormData((prev) => ({
+                        ...prev,
+                        interests: e.target.value
+                          .split(",")
+                          .map((s) => s.trim())
+                          .filter(Boolean),
+                      }))
+                    }
+                    placeholder="e.g., AI, Neuroscience (comma-separated)"
+                    className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  />
+                ) : (
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {" "}
+                    {viewedUser.interests?.length > 0 ? (
+                      viewedUser.interests.map((interest, index) => (
+                        <span
+                          key={index}
+                          className="px-3 py-1 bg-indigo-100 text-indigo-800 text-sm font-medium rounded-full"
+                        >
+                          {interest}
+                        </span>
+                      ))
+                    ) : (
+                      <p className="text-sm text-gray-500 italic">
+                        No interests listed.
+                      </p>
+                    )}{" "}
+                  </div>
+                )}{" "}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-    </>
+      </main>
+      {/* --- Column 3: Profile-Specific Sidebar (Right) --- */}
+      {/* Render the ProfileSidebar component, passing needed props */}
+      <ProfileSidebar
+        isOwnProfile={isOwnProfile}
+        isEditing={editingProfile}
+        onEditClick={handleEditClick}
+      />
+    </div> // End Outer Flex Container
   );
 }
