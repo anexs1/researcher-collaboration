@@ -1,38 +1,80 @@
-// File: backend/controllers/adminController.js
-
 import db from "../models/index.js";
-const { User, Publication, Project } = db; // Import models you need counts for
+const { User, Publication, Project, sequelize } = db;
+import { Op } from "sequelize";
+import asyncHandler from "express-async-handler";
 
-// GET /api/admin/dashboard-stats - Get counts for the dashboard
-export const getDashboardStats = async (req, res) => {
+export const getDashboardStats = asyncHandler(async (req, res) => {
   try {
-    // Perform counts in parallel for efficiency
-    const [userCount, pendingUserCount, publicationCount, projectCount] =
-      await Promise.all([
-        User.count(),
-        User.count({ where: { status: "pending" } }), // Assumes 'status' field exists
-        Publication.count(),
-        Project?.count() || Promise.resolve(0), // Check if Project model exists before counting
-      ]);
+    const [
+      totalUsers,
+      activeUsers,
+      pendingUsers,
+      totalPublications,
+      publishedPublications,
+      totalProjects,
+      activeProjects,
+      totalAdmins,
+    ] = await Promise.all([
+      User.count(),
+      User.count({ where: { status: "approved" } }),
+      User.count({ where: { status: "pending" } }),
+      Publication.count(),
+      Publication.count({ where: { status: "published" } }),
+      Project.count(),
+      Project.count({ where: { status: "active" } }),
+      User.count({ where: { role: "admin" } }),
+    ]);
 
-    const stats = {
-      userCount: userCount,
-      pendingUserCount: pendingUserCount, // Count of users needing approval
-      publicationCount: publicationCount,
-      projectCount: projectCount, // Include if you have a Project model
-      // Add other counts as needed
-    };
+    const [recentUsers, recentPublications] = await Promise.all([
+      User.findAll({
+        attributes: ["id", "username", "email", "role", "status", "createdAt"],
+        order: [["createdAt", "DESC"]],
+        limit: 5,
+      }),
+      Publication.findAll({
+        attributes: ["id", "title", "status", "createdAt"],
+        include: [
+          {
+            model: User,
+            as: "author",
+            attributes: ["id", "username"],
+          },
+        ],
+        order: [["createdAt", "DESC"]],
+        limit: 5,
+      }),
+    ]);
 
-    res.status(200).json({ success: true, data: stats });
+    res.status(200).json({
+      success: true,
+      data: {
+        counts: {
+          users: {
+            total: totalUsers,
+            active: activeUsers,
+            pending: pendingUsers,
+            admins: totalAdmins,
+          },
+          publications: {
+            total: totalPublications,
+            published: publishedPublications,
+          },
+          projects: { total: totalProjects, active: activeProjects },
+        },
+        recentActivities: {
+          users: recentUsers,
+          publications: recentPublications,
+        },
+      },
+    });
   } catch (error) {
-    console.error("Error fetching dashboard stats:", error);
+    console.error("Dashboard error:", error);
     res.status(500).json({
       success: false,
-      message: "Server Error fetching dashboard stats",
+      message: "Failed to load dashboard data",
       error: error.message,
     });
   }
-};
+});
 
-// Add other general admin controllers here (e.g., for settings, reports) if needed
-// export const getAdminSettings = async (req, res) => { ... };
+// Export other controller functions as needed

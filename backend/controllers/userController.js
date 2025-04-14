@@ -1,5 +1,5 @@
 import db from "../models/index.js";
-const { User } = db;
+const { User, Publication, Project } = db;
 import { Op } from "sequelize";
 import asyncHandler from "express-async-handler";
 
@@ -79,6 +79,47 @@ export const adminGetAllUsers = asyncHandler(async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server Error fetching users",
+      error: error.message,
+    });
+  }
+});
+
+// GET /api/admin/users/pending
+export const adminGetPendingUsers = asyncHandler(async (req, res) => {
+  try {
+    const { page = 1, limit = 10, search } = req.query;
+    const offset = (page - 1) * limit;
+
+    const whereClause = { status: "pending" };
+    if (search) {
+      whereClause[Op.or] = [
+        { username: { [Op.like]: `%${search}%` } },
+        { email: { [Op.like]: `%${search}%` } },
+        { firstName: { [Op.like]: `%${search}%` } },
+        { lastName: { [Op.like]: `%${search}%` } },
+      ];
+    }
+
+    const { count, rows } = await User.findAndCountAll({
+      where: whereClause,
+      attributes: ["id", "username", "email", "role", "status", "createdAt"],
+      order: [["createdAt", "ASC"]],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+    });
+
+    res.status(200).json({
+      success: true,
+      count,
+      totalPages: Math.ceil(count / limit),
+      currentPage: parseInt(page),
+      data: rows,
+    });
+  } catch (error) {
+    console.error("Error fetching pending users:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch pending users",
       error: error.message,
     });
   }
@@ -365,3 +406,16 @@ export const getSearchableUsers = asyncHandler(async (req, res) => {
       .json({ success: false, message: "Server Error fetching users" });
   }
 });
+
+// Export all controller functions
+export default {
+  adminGetAllUsers,
+  adminGetPendingUsers,
+  adminGetUserById,
+  adminUpdateUserStatus,
+  adminUpdateUserRole,
+  adminDeleteUser,
+  updateMyProfile,
+  getPublicUserProfile,
+  getSearchableUsers,
+};

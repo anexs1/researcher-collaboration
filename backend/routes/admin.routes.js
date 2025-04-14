@@ -1,46 +1,29 @@
-// File: backend/routes/admin.routes.js - CORRECTED
-
 import express from "express";
-// <<< CHANGE THE IMPORT NAMES HERE >>>
-import { protect, adminOnly } from "../middleware/authMiddleware.js"; // Use the actual exported names
-
-// Import controllers
-import {
-  adminGetAllPublications,
-  adminDeletePublication,
-} from "../controllers/publicationController.js"; // Adjust path
+import { protect, adminOnly } from "../middleware/authMiddleware.js";
+import { getDashboardStats } from "../controllers/adminController.js";
 import {
   adminGetAllUsers,
+  adminGetPendingUsers,
   adminGetUserById,
   adminUpdateUserStatus,
   adminUpdateUserRole,
   adminDeleteUser,
-} from "../controllers/userController.js"; // Adjust path
-import {
-  getDashboardStats,
-  // Import other general admin controllers
-} from "../controllers/adminController.js"; // Adjust path
+} from "../controllers/userController.js";
 
 const router = express.Router();
 
-// --- Dashboard ---
-// <<< Use protect, adminOnly >>>
-router.get("/dashboard-stats", protect, adminOnly, getDashboardStats);
+// Apply protect and adminOnly middleware to all admin routes
+router.use(protect, adminOnly);
 
-// --- Publication Management ---
-// <<< Use protect, adminOnly >>>
-router.get("/publications", protect, adminOnly, adminGetAllPublications);
-router.delete("/publications/:id", protect, adminOnly, adminDeletePublication);
+// Dashboard Route
+router.get("/dashboard", getDashboardStats);
 
-// --- User Management ---
-// <<< Use protect, adminOnly >>>
-router.get("/users", protect, adminOnly, adminGetAllUsers);
-router.get("/users/:id", protect, adminOnly, adminGetUserById);
-router.put("/users/:id/status", protect, adminOnly, adminUpdateUserStatus);
-router.put("/users/:id/role", protect, adminOnly, adminUpdateUserRole);
-router.delete("/users/:id", protect, adminOnly, adminDeleteUser);
-
-// --- Add other admin routes (Settings, Reports) ---
-// router.get('/settings', protect, adminOnly, getAdminSettings);
+// User Management Routes
+router.get("/users", adminGetAllUsers);
+router.get("/users/pending", adminGetPendingUsers);
+router.get("/users/:id", adminGetUserById);
+router.patch("/users/:id/status", adminUpdateUserStatus);
+router.patch("/users/:id/role", adminUpdateUserRole);
+router.delete("/users/:id", adminDeleteUser);
 
 export default router;

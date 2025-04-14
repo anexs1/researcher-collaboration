@@ -1,0 +1,9 @@
+{
+  "siteName": "ResearchConnect ",
+  "allowPublicSignup": true,
+  "maintenanceMode": false,
+  "defaultUserRole": "user",
+  "emailNotifications": true,
+  "itemsPerPage": 10,
+  "themeColor": "#3b82f6"
+}
