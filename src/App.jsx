@@ -10,22 +10,23 @@ import {
   Outlet,
 } from "react-router-dom";
 import axios from "axios";
-import "./index.css"; // Ensure your global styles are imported
+import "./index.css";
 
 // --- Page Imports ---
 import Home from "./Page/Home";
 import ExplorePage from "./Page/ExplorePage";
 import SignupPage from "./Page/SignupPage";
 import LoginPage from "./Page/LoginPage";
-import Profile from "./Page/Profile"; // Handles own and other profiles + its own layout
+import Profile from "./Page/Profile";
 import Publication from "./Page/Publication";
 import EditPublicationPage from "./Page/EditPublicationPage";
 import MyProjects from "./Page/MyProjects";
 import Messages from "./Page/Messages";
 import PostPublicationPage from "./Page/PostPublicationPage";
-import AccountSettingsPage from "./Page/Settings/AccountSettingsPage"; // Assuming path is correct
-import UserActivityPage from "./Component/Profile/UserActivityPage"; // Assuming path is correct
-import CreateProjectPage from "./Page/CreateProjectPage"; // <-- IMPORTED
+import AccountSettingsPage from "./Page/Settings/AccountSettingsPage";
+import UserActivityPage from "./Component/Profile/UserActivityPage";
+import CreateProjectPage from "./Page/CreateProjectPage";
+import ErrorBoundary from "./Component/ErrorBoundary"; // Fixed import path
 
 // --- Component Imports ---
 import AcademicSignupForm from "./Component/AcademicSignupForm";
@@ -45,13 +46,12 @@ import AdminPublicationManagementPage from "./Page/Admin/AdminPublicationManagem
 
 // --- Layout Imports ---
 import AdminLayout from "./Layout/AdminLayout";
-import UserLayout from "./Layout/UserLayout"; // Standard layout for non-profile pages
+import UserLayout from "./Layout/UserLayout";
 
 // --- Helper Components ---
 const ProtectedRoute = ({ isLoggedIn, children }) => {
   const location = useLocation();
   if (isLoggedIn === null) {
-    // Handle loading state during auth check
     return (
       <div className="flex justify-center items-center h-screen text-lg font-medium">
         Checking authentication...
@@ -59,16 +59,14 @@ const ProtectedRoute = ({ isLoggedIn, children }) => {
     );
   }
   if (!isLoggedIn) {
-    // Redirect if not logged in
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
-  return children; // Render protected content
+  return children;
 };
 
 const AdminProtectedRoute = ({ isLoggedIn, isAdmin, children }) => {
   const location = useLocation();
   if (isLoggedIn === null || isAdmin === null) {
-    // Handle loading state
     return (
       <div className="flex justify-center items-center h-screen text-xl font-semibold">
         Verifying Admin Access...
@@ -77,11 +75,11 @@ const AdminProtectedRoute = ({ isLoggedIn, isAdmin, children }) => {
   }
   if (!isLoggedIn) {
     return <Navigate to="/login" state={{ from: location }} replace />;
-  } // Redirect if not logged in
+  }
   if (!isAdmin) {
     return <Navigate to="/profile" replace />;
-  } // Redirect non-admins
-  return children; // Render protected admin content
+  }
+  return children;
 };
 
 // --- Main App Component ---
@@ -100,7 +98,6 @@ function App() {
     setCurrentUser(null);
   }, []);
 
-  // --- Authentication Check Effect ---
   useEffect(() => {
     const token = localStorage.getItem("authToken");
     const storedUser = localStorage.getItem("user");
@@ -151,17 +148,14 @@ function App() {
       });
   }, [handleLogout, API_BASE]);
 
-  // Loading Screen
   if (loadingAuth) {
     return (
       <div className="flex justify-center items-center h-screen text-xl font-semibold bg-gray-100">
-        {" "}
-        Loading Application...{" "}
+        Loading Application...
       </div>
     );
   }
 
-  // Render Router
   return (
     <Router>
       <AppRoutes
@@ -177,7 +171,7 @@ function App() {
   );
 }
 
-// --- AppRoutes Component (Handles Navbar and Routing Structure) ---
+// --- AppRoutes Component ---
 const AppRoutes = ({
   isLoggedIn,
   isAdmin,
@@ -199,13 +193,18 @@ const AppRoutes = ({
           onLogout={handleLogout}
         />
       )}
-      {/* Let layout components handle their own padding */}
       <div className={showNavbar ? "navbar-padding-active" : ""}>
-        {" "}
-        {/* Optional class */}
         <Routes>
           {/* --- Public Routes --- */}
-          <Route path="/" element={<Home />} />
+          <Route
+            path="/"
+            element={
+              <ErrorBoundary>
+                <Home />
+              </ErrorBoundary>
+            }
+          />
+
           {/* Auth routes */}
           <Route
             path="/signup"
@@ -235,11 +234,10 @@ const AppRoutes = ({
             }
           />
 
-          {/* --- Protected User Routes (Standard Layout) --- */}
+          {/* --- Protected User Routes --- */}
           <Route
             element={
               <ProtectedRoute isLoggedIn={isLoggedIn}>
-                {/* Pass currentUser needed by Sidebar inside UserLayout */}
                 <UserLayout
                   isLoggedIn={isLoggedIn}
                   handleLogout={handleLogout}
@@ -248,7 +246,6 @@ const AppRoutes = ({
               </ProtectedRoute>
             }
           >
-            {/* Routes using standard Left Sidebar + Content */}
             <Route
               path="/explore"
               element={<ExplorePage currentUser={currentUser} />}
@@ -281,26 +278,22 @@ const AppRoutes = ({
               path="/profile/activity"
               element={<UserActivityPage currentUser={currentUser} />}
             />
-            {/* === ADDED Create Project Route === */}
             <Route
               path="/projects/new"
               element={<CreateProjectPage currentUser={currentUser} />}
             />
-            {/* ================================= */}
           </Route>
 
-          {/* --- Protected Profile Route (Special Layout handled inside Profile.jsx) --- */}
+          {/* --- Protected Profile Route --- */}
           <Route
             element={
               <ProtectedRoute isLoggedIn={isLoggedIn}>
-                {" "}
-                <Outlet />{" "}
+                <Outlet />
               </ProtectedRoute>
             }
           >
             <Route
-              path="/profile/:userId?" // Matches /profile and /profile/123
-              // Pass all necessary props for Profile page's own layout (including Sidebar props)
+              path="/profile/:userId?"
               element={
                 <Profile
                   currentUser={currentUser}
@@ -316,8 +309,7 @@ const AppRoutes = ({
             path="/admin"
             element={
               <AdminProtectedRoute isLoggedIn={isLoggedIn} isAdmin={isAdmin}>
-                {" "}
-                <AdminLayout />{" "}
+                <AdminLayout />
               </AdminProtectedRoute>
             }
           >
@@ -342,24 +334,23 @@ const AppRoutes = ({
             />
           </Route>
 
-          {/* --- General Catch-all / 404 --- */}
+          {/* --- 404 Route --- */}
           <Route
             path="*"
             element={
               <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] text-center p-10">
-                {" "}
                 <h1 className="text-4xl font-bold text-gray-700 mb-4">
                   404 - Page Not Found
-                </h1>{" "}
+                </h1>
                 <p className="text-lg text-gray-500 mb-6">
                   Sorry, the page could not be found.
-                </p>{" "}
+                </p>
                 <Link
                   to="/"
                   className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
                 >
                   Go Homepage
-                </Link>{" "}
+                </Link>
               </div>
             }
           />

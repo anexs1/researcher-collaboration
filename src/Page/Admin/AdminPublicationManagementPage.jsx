@@ -1,33 +1,29 @@
-// src/Page/Admin/AdminPublicationManagementPage.jsx
-
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
+import { debounce } from "lodash";
 import {
   FaSearch,
   FaTimes,
   FaTrashAlt,
   FaUser,
   FaCalendarAlt,
-  FaTag,
   FaFilter,
-  FaSort, // Generic sort icon
+  FaSort,
   FaSortUp,
   FaSortDown,
-  FaExternalLinkAlt, // To link to user profile maybe
-  FaEye, // To view details
+  FaExternalLinkAlt,
+  FaEye,
 } from "react-icons/fa";
 
-// Common Components (Ensure paths are correct)
+// Common Components
 import LoadingSpinner from "../../Component/Common/LoadingSpinner";
 import ErrorMessage from "../../Component/Common/ErrorMessage";
 import Notification from "../../Component/Common/Notification";
-// You might create a dedicated Pagination component or include logic here
-// import PaginationControls from '../../Component/Common/PaginationControls';
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
-const ITEMS_PER_PAGE = 15; // Or make this configurable
+const ITEMS_PER_PAGE = 15;
 
 // Helper Functions
 const getAuthHeaders = () => {
@@ -35,7 +31,6 @@ const getAuthHeaders = () => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-// Basic Date Formatting (Adjust as needed)
 const formatDate = (dateString) => {
   if (!dateString) return "N/A";
   try {
@@ -49,22 +44,10 @@ const formatDate = (dateString) => {
   }
 };
 
-// Debounce utility
-const debounce = (func, delay) => {
-  let timeoutId;
-  return (...args) => {
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => {
-      func.apply(this, args);
-    }, delay);
-  };
-};
-
-// --- Component ---
 const AdminPublicationManagementPage = () => {
   const navigate = useNavigate();
 
-  // --- State ---
+  // State
   const [publications, setPublications] = useState([]);
   const [pagination, setPagination] = useState({
     currentPage: 1,
@@ -72,25 +55,20 @@ const AdminPublicationManagementPage = () => {
     totalItems: 0,
   });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null); // General fetch/page error
+  const [error, setError] = useState(null);
   const [notification, setNotification] = useState({
     message: "",
     type: "",
     show: false,
   });
-  const [deletingId, setDeletingId] = useState(null); // Track which item is being deleted
+  const [deletingId, setDeletingId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filters, setFilters] = useState({ status: "" });
+  const [sortBy, setSortBy] = useState("createdAt");
+  const [sortOrder, setSortOrder] = useState("desc");
 
-  // Search, Filter, Sort State
-  const [searchQuery, setSearchQuery] = useState(""); // Input value
-  const [searchTerm, setSearchTerm] = useState(""); // Debounced value for API call
-  const [filters, setFilters] = useState({
-    status: "", // Example: '', 'open', 'closed', 'in_progress'
-    // Add other filters like 'area' if needed
-  });
-  const [sortBy, setSortBy] = useState("createdAt"); // Default sort column
-  const [sortOrder, setSortOrder] = useState("desc"); // Default sort order
-
-  // --- Notification Handler ---
+  // Notification Handler
   const showNotification = useCallback((message, type = "success") => {
     setNotification({ message, type, show: true });
     setTimeout(
@@ -99,7 +77,7 @@ const AdminPublicationManagementPage = () => {
     );
   }, []);
 
-  // --- Data Fetching ---
+  // Data Fetching
   const fetchPublications = useCallback(
     async (
       page = 1,
@@ -109,18 +87,17 @@ const AdminPublicationManagementPage = () => {
       currentOrder = sortOrder
     ) => {
       setLoading(true);
-      setError(null); // Clear previous errors on new fetch
+      setError(null);
 
-      // Construct query parameters
       const params = new URLSearchParams({
         page: page,
         limit: ITEMS_PER_PAGE,
         sortBy: currentSort,
         sortOrder: currentOrder,
       });
+
       if (search) params.append("search", search);
       if (currentFilters.status) params.append("status", currentFilters.status);
-      // Append other filters if added
 
       try {
         const url = `${API_BASE_URL}/api/admin/publications?${params.toString()}`;
@@ -147,28 +124,35 @@ const AdminPublicationManagementPage = () => {
           err.message ||
           "Could not load publications.";
         setError(errMsg);
-        setPublications([]); // Clear data on error
-        setPagination({ currentPage: 1, totalPages: 1, totalItems: 0 }); // Reset pagination
+        setPublications([]);
+        setPagination({ currentPage: 1, totalPages: 1, totalItems: 0 });
+
         if (err.response?.status === 401 || err.response?.status === 403) {
           showNotification(
             "Session expired or unauthorized. Please log in.",
             "error"
           );
-          // Consider redirecting to login
-          // setTimeout(() => navigate('/login'), 2000);
         }
       } finally {
         setLoading(false);
       }
     },
-    [searchTerm, filters, sortBy, sortOrder, navigate, showNotification]
-  ); // Include dependencies that trigger re-fetch
+    [searchTerm, filters, sortBy, sortOrder, showNotification]
+  );
 
-  // Debounced search term update
-  const debouncedSetSearchTerm = useCallback(debounce(setSearchTerm, 500), []);
+  // Debounced search
+  const debouncedSetSearchTerm = useMemo(
+    () =>
+      debounce((term) => {
+        setSearchTerm(term);
+        if (pagination.currentPage !== 1) {
+          setPagination((prev) => ({ ...prev, currentPage: 1 }));
+        }
+      }, 500),
+    [pagination.currentPage]
+  );
 
   useEffect(() => {
-    // Fetch when page loads or critical parameters change
     fetchPublications(
       pagination.currentPage,
       searchTerm,
@@ -176,9 +160,6 @@ const AdminPublicationManagementPage = () => {
       sortBy,
       sortOrder
     );
-    // IMPORTANT: Do NOT include pagination.currentPage in the dependency array
-    // if fetchPublications itself updates it based on API response.
-    // Only include things that SHOULD trigger a new API call from the user's perspective.
   }, [
     fetchPublications,
     pagination.currentPage,
@@ -186,18 +167,20 @@ const AdminPublicationManagementPage = () => {
     filters,
     sortBy,
     sortOrder,
-  ]); // Correct dependencies
+  ]);
 
-  // --- Handlers ---
+  // Clean up debounce on unmount
+  useEffect(() => {
+    return () => {
+      debouncedSetSearchTerm.cancel();
+    };
+  }, [debouncedSetSearchTerm]);
 
+  // Handlers
   const handleSearchChange = (e) => {
     const value = e.target.value;
     setSearchQuery(value);
     debouncedSetSearchTerm(value);
-    // Reset to page 1 when search changes
-    if (pagination.currentPage !== 1) {
-      setPagination((prev) => ({ ...prev, currentPage: 1 }));
-    }
   };
 
   const handleClearSearch = () => {
@@ -211,7 +194,6 @@ const AdminPublicationManagementPage = () => {
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     setFilters((prev) => ({ ...prev, [name]: value }));
-    // Reset to page 1 when filters change
     if (pagination.currentPage !== 1) {
       setPagination((prev) => ({ ...prev, currentPage: 1 }));
     }
@@ -221,7 +203,6 @@ const AdminPublicationManagementPage = () => {
     const newOrder = sortBy === column && sortOrder === "asc" ? "desc" : "asc";
     setSortBy(column);
     setSortOrder(newOrder);
-    // Reset to page 1 when sort changes
     if (pagination.currentPage !== 1) {
       setPagination((prev) => ({ ...prev, currentPage: 1 }));
     }
@@ -233,16 +214,13 @@ const AdminPublicationManagementPage = () => {
       newPage <= pagination.totalPages &&
       newPage !== pagination.currentPage
     ) {
-      // Set the desired page, useEffect will trigger fetchPublications
       setPagination((prev) => ({ ...prev, currentPage: newPage }));
     }
   };
 
   const handleDelete = async (id, title) => {
     if (
-      !window.confirm(
-        `Are you sure you want to permanently delete the publication "${title}"? This action cannot be undone.`
-      )
+      !window.confirm(`Are you sure you want to permanently delete "${title}"?`)
     ) {
       return;
     }
@@ -254,7 +232,6 @@ const AdminPublicationManagementPage = () => {
         `Publication "${title}" deleted successfully.`,
         "success"
       );
-      // Refetch data for the current page after deletion
       fetchPublications(
         pagination.currentPage,
         searchTerm,
@@ -269,17 +246,14 @@ const AdminPublicationManagementPage = () => {
         err.message ||
         "Could not delete publication.";
       showNotification(errMsg, "error");
-      setError(errMsg); // Optionally show persistent error too
     } finally {
       setDeletingId(null);
     }
   };
 
-  // --- Render Sort Icons ---
   const renderSortIcon = (column) => {
-    if (sortBy !== column) {
+    if (sortBy !== column)
       return <FaSort className="inline-block ml-1 text-gray-400" />;
-    }
     return sortOrder === "asc" ? (
       <FaSortUp className="inline-block ml-1 text-blue-600" />
     ) : (
@@ -287,14 +261,13 @@ const AdminPublicationManagementPage = () => {
     );
   };
 
-  // --- Render ---
   return (
     <div className="p-4 sm:p-6 space-y-6">
       <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">
         Manage Publications
       </h1>
 
-      {/* Notification Area */}
+      {/* Notification */}
       <div className="fixed top-20 right-5 z-50 w-full max-w-sm">
         <Notification
           message={notification.message}
@@ -304,12 +277,12 @@ const AdminPublicationManagementPage = () => {
         />
       </div>
 
-      {/* Display general errors */}
+      {/* Error Message */}
       {error && <ErrorMessage message={error} onClose={() => setError(null)} />}
 
-      {/* Controls: Search and Filters */}
+      {/* Search and Filters */}
       <div className="bg-white p-4 rounded-lg shadow border border-gray-200 flex flex-col md:flex-row gap-4">
-        {/* Search */}
+        {/* Search Input */}
         <div className="relative flex-grow">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <FaSearch className="h-4 w-4 text-gray-400" />
@@ -331,6 +304,7 @@ const AdminPublicationManagementPage = () => {
             </button>
           )}
         </div>
+
         {/* Status Filter */}
         <div className="flex items-center gap-2 flex-shrink-0">
           <FaFilter
@@ -342,7 +316,6 @@ const AdminPublicationManagementPage = () => {
             value={filters.status}
             onChange={handleFilterChange}
             className="py-2 pl-3 pr-8 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm appearance-none"
-            aria-label="Filter by collaboration status"
           >
             <option value="">All Statuses</option>
             <option value="open">Open</option>
@@ -352,25 +325,21 @@ const AdminPublicationManagementPage = () => {
         </div>
       </div>
 
-      {/* Publication Table Area */}
+      {/* Publications Table */}
       <div className="bg-white rounded-lg shadow border border-gray-200 overflow-x-auto">
         {loading && publications.length === 0 ? (
-          // Initial Load Skeleton (Optional: more detailed skeleton)
           <div className="p-6 text-center">
             <LoadingSpinner size="lg" />
             <p className="mt-2 text-gray-500">Loading publications...</p>
           </div>
         ) : !loading && publications.length === 0 ? (
-          // Empty State
           <div className="p-6 text-center text-gray-500">
             No publications found matching your criteria.
           </div>
         ) : (
-          // Table
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                {/* Add more columns as needed */}
                 <th
                   scope="col"
                   className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
@@ -381,11 +350,9 @@ const AdminPublicationManagementPage = () => {
                 <th
                   scope="col"
                   className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                  onClick={() => handleSort("user.name")}
+                  onClick={() => handleSort("user.username")}
                 >
-                  {" "}
-                  {/* Adjust field name based on API */}
-                  Author {renderSortIcon("user.name")}
+                  Author {renderSortIcon("user.username")}
                 </th>
                 <th
                   scope="col"
@@ -411,7 +378,7 @@ const AdminPublicationManagementPage = () => {
             </thead>
             <tbody
               className={`bg-white divide-y divide-gray-200 ${
-                loading ? "opacity-50 transition-opacity" : ""
+                loading ? "opacity-50" : ""
               }`}
             >
               {publications.map((pub) => (
@@ -423,13 +390,10 @@ const AdminPublicationManagementPage = () => {
                     >
                       {pub.title || "N/A"}
                     </div>
-                    {/* Optional: Show tags or area */}
-                    {/* <div className="text-xs text-gray-500">{pub.area || ''}</div> */}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    {/* Adjust according to your user data structure */}
                     <div className="text-sm text-gray-900">
-                      {pub.user?.name || pub.author || "Unknown"}
+                      {pub.user?.username || pub.author || "Unknown"}
                     </div>
                     <div className="text-xs text-gray-500">
                       {pub.user?.email || ""}
@@ -439,7 +403,6 @@ const AdminPublicationManagementPage = () => {
                     {formatDate(pub.publicationDate || pub.createdAt)}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    {/* Add status badge styling if desired */}
                     <span
                       className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                         pub.collaborationStatus === "open"
@@ -455,22 +418,22 @@ const AdminPublicationManagementPage = () => {
                     </span>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm font-medium space-x-2">
-                    {/* Action Buttons */}
                     <button
-                      onClick={() => navigate(`/publications/edit/${pub.id}`)} // Example: Link to standard edit page (maybe disable for admin?)
+                      onClick={() => navigate(`/publications/edit/${pub.id}`)}
                       title="View/Edit Publication Details"
-                      className="text-indigo-600 hover:text-indigo-900 disabled:opacity-50 disabled:cursor-not-allowed p-1"
-                      // disabled={true} // Example: Maybe admin can't edit content directly here
+                      className="text-indigo-600 hover:text-indigo-900 p-1"
                     >
                       <FaEye className="h-4 w-4" />
                     </button>
-                    <Link
-                      to={`/admin/users/${pub.user?.id}`} // Example: Link to the user's admin page
-                      title={`View User: ${pub.user?.name || ""}`}
-                      className="text-blue-600 hover:text-blue-800 p-1"
-                    >
-                      <FaUser className="h-4 w-4" />
-                    </Link>
+                    {pub.user?.id && (
+                      <Link
+                        to={`/admin/users/${pub.user.id}`}
+                        title={`View User: ${pub.user.username || ""}`}
+                        className="text-blue-600 hover:text-blue-800 p-1"
+                      >
+                        <FaUser className="h-4 w-4" />
+                      </Link>
+                    )}
                     <button
                       onClick={() => handleDelete(pub.id, pub.title)}
                       disabled={deletingId === pub.id}
@@ -491,14 +454,14 @@ const AdminPublicationManagementPage = () => {
         )}
       </div>
 
-      {/* Pagination Controls */}
+      {/* Pagination */}
       {!loading && publications.length > 0 && pagination.totalPages > 1 && (
         <div className="flex items-center justify-between pt-4">
           <span className="text-sm text-gray-700">
             Showing{" "}
             <span className="font-medium">
               {(pagination.currentPage - 1) * ITEMS_PER_PAGE + 1}
-            </span>
+            </span>{" "}
             to{" "}
             <span className="font-medium">
               {Math.min(
@@ -517,8 +480,6 @@ const AdminPublicationManagementPage = () => {
             >
               Previous
             </button>
-            {/* Optional: Add page number display/input */}
-            {/* <span className="px-3 py-1.5 border-t border-b border-gray-300 bg-white text-sm">Page {pagination.currentPage} of {pagination.totalPages}</span> */}
             <button
               onClick={() => handlePageChange(pagination.currentPage + 1)}
               disabled={

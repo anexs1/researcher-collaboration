@@ -1,233 +1,268 @@
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
-import AdminPageHeader from "../../Component/Admin/AdminPageHeader"; // Correct path
+import AdminPageHeader from "../../Component/Admin/AdminPageHeader";
 import LoadingSpinner from "../../Component/Common/LoadingSpinner";
 import ErrorMessage from "../../Component/Common/ErrorMessage";
-import Notification from "../../Component/Common/Notification"; // Create or import this
+import Notification from "../../Component/Common/Notification";
+import useConfirm from "../../hooks/useConfirm";
 
 const AdminSettingsPage = () => {
-  const [settings, setSettings] = useState({});
-  const [initialSettings, setInitialSettings] = useState({}); // To track changes
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-  const [notification, setNotification] = useState({
-    message: "",
-    type: "",
-    show: false,
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
+  const [state, setState] = useState({
+    settings: {
+      siteName: "",
+      allowPublicSignup: false,
+      maintenanceMode: false,
+      defaultUserRole: "user",
+      emailNotifications: true,
+      itemsPerPage: 10,
+      themeColor: "#3b82f6",
+    },
+    initialSettings: {},
+    loading: true,
+    saving: false,
+    error: null,
+    notification: { message: "", type: "", show: false },
+    activeTab: "general",
   });
 
-  const fetchSettings = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const { confirm, ConfirmDialog } = useConfirm();
+
+  const apiCall = async (method, endpoint, data = null) => {
     const token = localStorage.getItem("authToken");
-    if (!token) {
-      setError("Authentication required.");
-      setLoading(false);
-      return;
-    }
+    if (!token) throw new Error("Authentication required");
 
     try {
-      const response = await axios.get("/api/admin/settings", {
-        // Verify endpoint
-        headers: { Authorization: `Bearer ${token}` },
+      const response = await axios({
+        method,
+        url: `${API_URL}${endpoint}`,
+        data,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
       });
-      const fetchedSettings = response.data.data || {};
-      setSettings(fetchedSettings);
-      setInitialSettings(fetchedSettings); // Store initial state
+      return response.data;
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to load settings.");
-    } finally {
-      setLoading(false);
+      console.error(`API Error [${method} ${endpoint}]:`, {
+        message: err.message,
+        response: err.response?.data,
+        config: err.config,
+      });
+      throw err;
     }
-  }, []);
+  };
+
+  const fetchSettings = useCallback(async () => {
+    setState((prev) => ({ ...prev, loading: true, error: null }));
+    try {
+      const data = await apiCall("get", "/admin/settings");
+      setState((prev) => ({
+        ...prev,
+        settings: data,
+        initialSettings: JSON.parse(JSON.stringify(data)),
+        loading: false,
+      }));
+    } catch (err) {
+      setState((prev) => ({
+        ...prev,
+        error: err.response?.data?.message || "Failed to load settings",
+        loading: false,
+      }));
+    }
+  }, [API_URL]);
 
   useEffect(() => {
     fetchSettings();
   }, [fetchSettings]);
 
-  const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setSettings((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
-  };
-
   const showNotification = (message, type = "success") => {
-    // Default to success
-    setNotification({ message, type, show: true });
-    // Auto-hide after 4 seconds
+    setState((prev) => ({
+      ...prev,
+      notification: { message, type, show: true },
+    }));
     setTimeout(
-      () => setNotification((prev) => ({ ...prev, show: false })),
+      () =>
+        setState((prev) => ({
+          ...prev,
+          notification: { ...prev.notification, show: false },
+        })),
       4000
     );
   };
 
+  const handleInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setState((prev) => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        [name]: type === "checkbox" ? checked : value,
+      },
+    }));
+  };
+
   const handleSaveSettings = async (e) => {
     e.preventDefault();
-    setSaving(true);
-    setError(null); // Clear previous errors on save attempt
-    setNotification((prev) => ({ ...prev, show: false })); // Hide previous notification
-
-    const token = localStorage.getItem("authToken");
-    if (!token) {
-      setError("Authentication required.");
-      setSaving(false);
-      return;
-    }
-
-    // Find changed settings (optional, depends on API)
-    const changedSettings = {};
-    for (const key in settings) {
-      if (settings[key] !== initialSettings[key]) {
-        changedSettings[key] = settings[key];
-      }
-    }
-    if (Object.keys(changedSettings).length === 0) {
-      showNotification("No changes to save.", "info");
-      setSaving(false);
-      return;
-    }
 
     try {
-      // *** Replace with your ACTUAL API endpoint ***
-      // Send only changed settings if API supports partial updates, otherwise send all 'settings'
-      const response = await axios.put("/api/admin/settings", changedSettings, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setInitialSettings(settings); // Update initial settings upon successful save
-      showNotification("Settings saved successfully!", "success");
+      const shouldProceed = await confirm(
+        "Save Settings",
+        "Are you sure you want to save these changes?"
+      );
+      if (!shouldProceed) return;
+
+      setState((prev) => ({ ...prev, saving: true, error: null }));
+
+      const changedSettings = Object.keys(state.settings).reduce((acc, key) => {
+        if (
+          JSON.stringify(state.settings[key]) !==
+          JSON.stringify(state.initialSettings[key])
+        ) {
+          acc[key] = state.settings[key];
+        }
+        return acc;
+      }, {});
+
+      if (Object.keys(changedSettings).length === 0) {
+        showNotification("No changes to save", "info");
+        return;
+      }
+
+      await apiCall("put", "/admin/settings", changedSettings);
+
+      setState((prev) => ({
+        ...prev,
+        initialSettings: JSON.parse(JSON.stringify(prev.settings)),
+        saving: false,
+      }));
+      showNotification("Settings saved successfully!");
+
+      if (changedSettings.themeColor) {
+        document.documentElement.style.setProperty(
+          "--primary-color",
+          changedSettings.themeColor
+        );
+      }
     } catch (err) {
-      const errMsg = err.response?.data?.message || "Failed to save settings.";
-      setError(errMsg); // Keep error persistent until resolved or next save attempt
-      showNotification(errMsg, "error");
-    } finally {
-      setSaving(false);
+      setState((prev) => ({ ...prev, saving: false }));
+      showNotification(
+        err.response?.data?.message || "Failed to save settings",
+        "error"
+      );
     }
   };
 
-  // Determine if form has changes
   const hasChanges =
-    JSON.stringify(settings) !== JSON.stringify(initialSettings);
-
+    JSON.stringify(state.settings) !== JSON.stringify(state.initialSettings);
   const breadcrumbs = [{ label: "Settings", link: "/admin/settings" }];
+  const tabs = [
+    { id: "general", label: "General" },
+    { id: "appearance", label: "Appearance" },
+    { id: "users", label: "User Management" },
+    { id: "email", label: "Email Settings" },
+  ];
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8 bg-gray-50 min-h-screen">
+      <ConfirmDialog />
       <AdminPageHeader title="System Settings" breadcrumbs={breadcrumbs} />
 
-      {/* Persistent error display */}
-      {error && <ErrorMessage message={error} onClose={() => setError(null)} />}
+      {state.error && (
+        <ErrorMessage
+          message={state.error}
+          onClose={() => setState((prev) => ({ ...prev, error: null }))}
+        />
+      )}
 
-      {/* Floating Notification */}
       <Notification
-        message={notification.message}
-        type={notification.type}
-        show={notification.show}
-        onClose={() => setNotification((prev) => ({ ...prev, show: false }))}
+        message={state.notification.message}
+        type={state.notification.type}
+        show={state.notification.show}
+        onClose={() =>
+          setState((prev) => ({
+            ...prev,
+            notification: { ...prev.notification, show: false },
+          }))
+        }
       />
 
-      {loading ? (
+      {state.loading ? (
         <div className="flex justify-center py-10">
           <LoadingSpinner />
         </div>
       ) : (
         <form onSubmit={handleSaveSettings}>
-          <fieldset className="bg-white p-6 rounded-lg shadow space-y-6 divide-y divide-gray-200">
-            <legend className="text-lg font-medium text-gray-900 mb-4">
-              General
-            </legend>
+          {/* Tab Navigation */}
+          <div className="border-b border-gray-200">
+            <nav className="-mb-px flex space-x-8">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() =>
+                    setState((prev) => ({ ...prev, activeTab: tab.id }))
+                  }
+                  className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
+                    state.activeTab === tab.id
+                      ? "border-indigo-500 text-indigo-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+          </div>
 
-            {/* Site Name Setting */}
-            <div className="pt-6">
-              <label
-                htmlFor="siteName"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Site Name
-              </label>
-              <input
-                type="text"
-                id="siteName"
-                name="siteName"
-                value={settings.siteName || ""}
-                onChange={handleInputChange}
-                className="mt-1 block w-full max-w-lg rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:bg-gray-100"
-                disabled={saving}
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                The public name of the application.
-              </p>
-            </div>
+          <div className="bg-white p-6 rounded-lg shadow space-y-6">
+            {state.activeTab === "general" && (
+              <div className="space-y-6">
+                <div>
+                  <label
+                    htmlFor="siteName"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Site Name
+                  </label>
+                  <input
+                    type="text"
+                    id="siteName"
+                    name="siteName"
+                    value={state.settings.siteName}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full max-w-lg rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    disabled={state.saving}
+                  />
+                </div>
+                {/* Add more fields as needed */}
+              </div>
+            )}
+          </div>
 
-            {/* Signup Setting */}
-            <div className="pt-6">
-              <label htmlFor="allowPublicSignup" className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="allowPublicSignup"
-                  name="allowPublicSignup"
-                  checked={settings.allowPublicSignup || false}
-                  onChange={handleInputChange}
-                  className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-2 disabled:bg-gray-100"
-                  disabled={saving}
-                />
-                <span className="text-sm font-medium text-gray-700">
-                  Allow Public Signup
-                </span>
-              </label>
-              <p className="mt-1 text-xs text-gray-500">
-                Enable or disable new user registration.
-              </p>
-            </div>
-
-            {/* Add more setting fields based on your backend, potentially grouped */}
-            {/* Example: Email Settings Section
-             <div className="pt-6">
-                 <h3 className="text-md font-medium text-gray-800">Email Configuration</h3>
-                  ... email setting fields ...
-             </div>
-             */}
-          </fieldset>
-
-          {/* Save Button Area */}
-          <div className="pt-5 mt-6 border-t border-gray-200">
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={saving || !hasChanges} // Disable if saving or no changes
-                className="inline-flex justify-center py-2 px-6 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {saving ? (
-                  <>
-                    <svg
-                      className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                    Saving...
-                  </>
-                ) : (
-                  "Save Changes"
-                )}
-              </button>
-            </div>
+          {/* Action Buttons */}
+          <div className="pt-5 mt-6 border-t border-gray-200 flex justify-between">
+            <button
+              type="button"
+              onClick={() =>
+                setState((prev) => ({
+                  ...prev,
+                  settings: JSON.parse(JSON.stringify(prev.initialSettings)),
+                }))
+              }
+              disabled={state.saving || !hasChanges}
+              className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+            >
+              Discard Changes
+            </button>
+            <button
+              type="submit"
+              disabled={state.saving || !hasChanges}
+              className="inline-flex justify-center py-2 px-6 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {state.saving ? "Saving..." : "Save Changes"}
+            </button>
           </div>
         </form>
       )}

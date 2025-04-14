@@ -121,7 +121,7 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                       `${linkStyle} ${isActive ? activeLinkStyle : ""}`
                     }
                   >
-                    My Publications
+                    Publications
                   </NavLink>
                 </li>
                 <li>

@@ -15,9 +15,9 @@ import {
 const menuItems = [
   { path: "/profile", label: "Profile", Icon: FaUser },
   { path: "/explore", label: "Explore", Icon: FaBook },
-  { path: "/publications", label: "My Publications", Icon: FaBook },
-  { path: "/publications/new", label: "Post Publication", Icon: FaPlusSquare },
-  { path: "/my-projects", label: "My Projects", Icon: FaFolderOpen },
+  { path: "/publications", label: "Publications", Icon: FaBook },
+  { path: "/publications/new", label: "Post", Icon: FaPlusSquare },
+  { path: "/my-projects", label: "Projects", Icon: FaFolderOpen },
   { path: "/projects/new", label: "Create Project", Icon: FaPlus },
 ];
 // ********************************************************************

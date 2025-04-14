@@ -64,13 +64,16 @@ const AdminPendingUsersPage = () => {
       }
 
       try {
-        const url = `${API_BASE_URL}/api/auth/admin/users/pending`;
+        const url = `${API_BASE_URL}/api/admin/users?status=pending`;
         const response = await axios.get(url, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        if (response.data?.success && Array.isArray(response.data.data)) {
-          setPendingUsers(response.data.data);
+        if (
+          response.data?.success &&
+          Array.isArray(response.data.data?.users)
+        ) {
+          setPendingUsers(response.data.data.users);
         } else {
           console.warn(
             "Unexpected data structure for pending users:",
