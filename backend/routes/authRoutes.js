@@ -2,28 +2,31 @@
 
 import express from "express";
 import {
-  registerUser, // Handles POST /signup
-  loginUser, // Handles POST /login
-  loginAdminUser, // Handles POST /admin-login
-  getMe, // Handles GET /me (for fetching logged-in user's profile)
-  // REMOVE getAllUsers, getPendingUsers, updateUserStatus FROM HERE
-} from "../controllers/authController.js"; // Verify path
+  registerUser,
+  loginUser,
+  loginAdminUser,
+  getMe,
+} from "../controllers/authController.js";
 
-// Only import 'protect' if needed for routes defined *in this file* (like /me)
-import { protect } from "../middleware/authMiddleware.js"; // Verify path
-// <<< REMOVE adminOnly import from this file >>>
+import { protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
 // --- Public Auth Routes ---
-router.post("/signup", registerUser); // User registration (creates pending usually)
-router.post("/login", loginUser); // Regular user login
-router.post("/admin-login", loginAdminUser); // Specific endpoint for admin login
+router.post("/signup", registerUser);
+router.post("/login", loginUser);
+router.post("/admin-login", loginAdminUser);
 
-// --- Protected User Route ---
-// Route to get the profile of the currently logged-in user
+// --- Protected Routes ---
 router.get("/me", protect, getMe);
 
-// <<< REMOVE THE '/admin/*' routes from this file >>>
+// ✅ Token validation endpoint
+router.get("/validate", protect, (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Token is valid",
+    user: req.user,
+  });
+});
 
 export default router;

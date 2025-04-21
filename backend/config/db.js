@@ -1,5 +1,6 @@
 import { Sequelize } from "sequelize";
 import dotenv from "dotenv";
+import { setupAssociations } from "./associations.js";
 
 // Load environment variables
 dotenv.config();

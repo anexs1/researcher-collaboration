@@ -1,34 +1,42 @@
+// models/index.js
 import sequelize from "../config/db.js";
+import { DataTypes } from "sequelize";
 
-// Import all models
-import User from "./User.js";
-import Publication from "./publication.js";
-import CollaborationRequest from "./CollaborationRequest.js";
-import ProjectModel from "./projectModel.js"; // ✅ ADD THIS LINE
+// Import all model factory functions
+import UserModel from "./user.js";
+import PublicationModel from "./Publication.js";
+import CollaborationRequestModel from "./CollaborationRequest.js";
+import ProjectModel from "./ProjectModel.js";
+import MemberModel from "./Member.js";
 
-// Initialize models that use sequelize function style
-const Project = ProjectModel(sequelize); // ✅ INIT THE MODEL
+// Initialize Sequelize models
+const User = UserModel(sequelize, DataTypes);
+const Publication = PublicationModel(sequelize, DataTypes);
+const CollaborationRequest = CollaborationRequestModel(sequelize, DataTypes);
+const Project = ProjectModel(sequelize, DataTypes);
+const Member = MemberModel(sequelize, DataTypes);
 
-// Now, all your models should be inside the `models` object
 const models = {
   User,
   Publication,
   CollaborationRequest,
-  Project, // ✅ ADD THIS TO THE MODELS OBJECT
-  // Add other models as needed
+  Project,
+  Member,
 };
 
-// --- Crucial Association Setup ---
+// --- Association Setup ---
 console.log("Setting up model associations...");
-Object.values(models).forEach((model) => {
-  if (model.associate) {
-    console.log(` - Calling associate for ${model.name}`);
-    model.associate(models); // Pass the full models object for associations
-  }
-});
+
+// Associations for User, Project, Publication, etc.
+User.associate(models);
+Project.associate(models);
+Publication.associate(models);
+Member.associate(models);
+CollaborationRequest.associate(models);
+
 console.log("Model associations setup complete.");
 
-// Export db with all models
+// Export models and sequelize instance
 const db = {
   ...models,
   sequelize,

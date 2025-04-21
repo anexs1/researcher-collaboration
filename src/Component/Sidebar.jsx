@@ -11,7 +11,6 @@ import {
   FaPlusSquare,
 } from "react-icons/fa";
 
-// ***** menuItems MUST be defined OUTSIDE the component function *****
 const menuItems = [
   { path: "/profile", label: "Profile", Icon: FaUser },
   { path: "/explore", label: "Explore", Icon: FaBook },
@@ -20,9 +19,7 @@ const menuItems = [
   { path: "/my-projects", label: "Projects", Icon: FaFolderOpen },
   { path: "/projects/new", label: "Create Project", Icon: FaPlus },
 ];
-// ********************************************************************
 
-// --- Styling Classes ---
 const commonLinkClasses =
   "flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 ease-in-out group";
 const activeLinkClasses =
@@ -33,10 +30,7 @@ const iconClasses =
   "mr-3 h-5 w-5 flex-shrink-0 text-gray-400 group-hover:text-gray-600 transition-colors";
 const activeIconClasses = "text-indigo-600";
 
-// --- Sidebar Component ---
-// Props: isLoggedIn, handleLogout, currentUser
 function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
-  // Helper functions (getInitials) and derived constants (userInitials, etc.)
   const getInitials = (firstName = "", lastName = "") =>
     `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase() || "?";
   const userInitials = currentUser
@@ -56,7 +50,6 @@ function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
       {isLoggedIn && currentUser && (
         <div className="p-4 border-b border-gray-200">
           <Link to="/profile" className="block group text-center">
-            {/* Profile Picture or Placeholder */}
             <div className="w-20 h-20 rounded-full mx-auto mb-3 flex items-center justify-center bg-gradient-to-br from-indigo-200 to-purple-200 text-indigo-700 overflow-hidden border-2 border-white shadow-md group-hover:scale-105 transform transition-transform duration-200">
               {profilePictureUrl ? (
                 <img
@@ -97,9 +90,8 @@ function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
           Navigation
         </p>
         <ul>
-          {/* *** Make sure you are using menuItems (correct variable name) here *** */}
           {menuItems.map(({ path, label, Icon }) => (
-            <li key={label} className="mb-1">
+            <li key={path} className="mb-1">
               <NavLink
                 to={path}
                 className={({ isActive }) =>
@@ -109,27 +101,24 @@ function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
                 }
                 end
               >
-                {/* Icon Rendering */}
                 {({ isActive }) => (
-                  <Icon
-                    className={`${iconClasses} ${
-                      isActive ? activeIconClasses : ""
-                    }`}
-                    aria-hidden="true"
-                  />
+                  <>
+                    <Icon
+                      className={`${iconClasses} ${
+                        isActive ? activeIconClasses : ""
+                      }`}
+                      aria-hidden="true"
+                    />
+                    <span className="ml-1">{label}</span>
+                  </>
                 )}
-                <span className="ml-1">{label}</span>
               </NavLink>
             </li>
           ))}
-          {/* *** End Map *** */}
         </ul>
       </nav>
 
       {/* Settings Section */}
-
-      {/* Footer Section (Logout) */}
-
       {isLoggedIn && (
         <div className="mt-auto p-3 border-t border-gray-200">
           {handleLogout && (
@@ -149,4 +138,5 @@ function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
     </div>
   );
 }
+
 export default Sidebar;

@@ -1,8 +1,12 @@
-// src/controllers/authController.js
-import User from "../models/user.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import asyncHandler from "express-async-handler";
+// controllers/authController.js
+import db from "../models/index.js"; // Import the entire db object
+
+const { User } = db; // Destructure User from db
+
+// Your existing logic here
 
 // Token generation helper (no changes needed)
 const generateToken = (user) => {
@@ -177,7 +181,7 @@ export const getAllUsers = asyncHandler(async (req, res) => {
       "status" /* other fields */,
     ],
     order: [["createdAt", "DESC"]],
-    // Consider adding where clause if needed, e.g., where: { status: 'approved'}
+    // Consider adding where clause if needed, e.g., where: { status: 'approved' }
   });
   res.status(200).json({ success: true, count: users.length, data: users });
 });

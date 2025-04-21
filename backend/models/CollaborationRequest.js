@@ -1,76 +1,79 @@
-// models/CollaborationRequest.js
+// models/collaboration_request.js
 import { DataTypes } from "sequelize";
-import sequelize from "../config/db.js";
 
-const CollaborationRequest = sequelize.define(
-  "CollaborationRequest", // Model name
-  {
-    id: {
-      type: DataTypes.INTEGER,
-      autoIncrement: true,
-      primaryKey: true,
-    },
-    publicationId: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      references: {
-        model: "publications", // Table name for Publication
-        key: "id",
+const CollaborationRequestModel = (sequelize) => {
+  const CollaborationRequest = sequelize.define(
+    "CollaborationRequest",
+    {
+      id: {
+        type: DataTypes.INTEGER,
+        primaryKey: true,
+        autoIncrement: true,
       },
-      onUpdate: "CASCADE",
-      onDelete: "CASCADE", // If pub deleted, delete requests
-    },
-    senderId: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      references: {
-        model: "users", // Table name for User
-        key: "id",
+      senderId: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        references: {
+          model: "users",
+          key: "id",
+        },
+        onUpdate: "CASCADE",
+        onDelete: "CASCADE",
       },
-      onUpdate: "CASCADE",
-      onDelete: "CASCADE", // If sender deleted, delete requests
-    },
-    receiverId: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      references: {
-        model: "users", // Table name for User
-        key: "id",
+      receiverId: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        references: {
+          model: "users",
+          key: "id",
+        },
+        onUpdate: "CASCADE",
+        onDelete: "CASCADE",
       },
-      onUpdate: "CASCADE",
-      onDelete: "CASCADE", // If receiver deleted, delete requests
+      publicationId: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        references: {
+          model: "publications",
+          key: "id",
+        },
+        onUpdate: "CASCADE",
+        onDelete: "CASCADE",
+      },
+      message: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      status: {
+        type: DataTypes.ENUM("pending", "approved", "rejected"),
+        allowNull: false,
+        defaultValue: "pending",
+      },
     },
-    status: {
-      type: DataTypes.ENUM("pending", "accepted", "rejected", "cancelled"),
-      defaultValue: "pending",
-      allowNull: false,
-    },
-    message: {
-      // Optional message from sender
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
-  },
-  {
-    tableName: "collaboration_requests", // Choose your table name
-    timestamps: true, // Enable createdAt and updatedAt
-  }
-);
+    {
+      timestamps: true,
+      tableName: "collaboration_requests",
+    }
+  );
 
-// Define Associations
-CollaborationRequest.associate = (models) => {
-  CollaborationRequest.belongsTo(models.Publication, {
-    foreignKey: "publicationId",
-    as: "publication",
-  });
-  CollaborationRequest.belongsTo(models.User, {
-    foreignKey: "senderId",
-    as: "sender",
-  });
-  CollaborationRequest.belongsTo(models.User, {
-    foreignKey: "receiverId",
-    as: "receiver",
-  });
+  CollaborationRequest.associate = (models) => {
+    CollaborationRequest.belongsTo(models.User, {
+      foreignKey: "senderId",
+      as: "sender",
+    });
+
+    CollaborationRequest.belongsTo(models.User, {
+      foreignKey: "receiverId",
+      as: "receiver",
+    });
+
+    CollaborationRequest.belongsTo(models.Publication, {
+      foreignKey: "publicationId",
+      as: "publication",
+    });
+  };
+
+  return CollaborationRequest;
 };
 
-export default CollaborationRequest;
+export default CollaborationRequestModel;
