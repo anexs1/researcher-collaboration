@@ -1,9 +1,9 @@
-// src/Component/Navbar.jsx
 import React, { useState } from "react";
 import { Link, NavLink } from "react-router-dom";
-import ProfileMenu from "./ProfileMenu"; // Make sure this component exists and is working
+import ProfileMenu from "./ProfileMenu";
 
-const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
+const Navbar = ({ isLoggedIn, currentUser }) => {
+  // Removed onLogout prop
   const [menuOpen, setMenuOpen] = useState(false);
   const closeMenu = () => setMenuOpen(false);
 
@@ -23,14 +23,46 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
           Researcher Collaboration Portal
         </Link>
 
-        {/* Mobile Menu Button (optional to implement later) */}
-        <div className="md:hidden">{/* Menu button logic */}</div>
+        {/* Mobile Menu Button */}
+        <button
+          className="md:hidden p-2 rounded-md text-white hover:bg-pink-700 focus:outline-none"
+          onClick={() => setMenuOpen(!menuOpen)}
+        >
+          {menuOpen ? (
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          ) : (
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 6h16M4 12h16M4 18h16"
+              />
+            </svg>
+          )}
+        </button>
 
         <nav
           className={`absolute md:relative top-full left-0 right-0 w-full md:w-auto bg-gradient-to-r from-purple-600 to-pink-600 md:bg-none md:top-auto transition-transform duration-300 ease-in-out ${
             menuOpen ? "translate-x-0" : "-translate-x-full"
           } md:translate-x-0 md:flex md:items-center md:space-x-4 lg:space-x-6`}
-          id="mobile-menu"
         >
           <ul className="flex flex-col p-4 md:p-0 md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-4 lg:space-x-6 text-sm font-medium">
             <li>
@@ -69,7 +101,6 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                     Projects
                   </NavLink>
                 </li>
-
                 <li>
                   <NavLink
                     to="/messages"
@@ -84,15 +115,12 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
               </>
             )}
 
-            {/* Profile Dropdown Menu */}
+            {/* Profile Dropdown Menu - without any logout functionality */}
             <li className="relative pt-2 md:pt-0 md:ml-4">
               <ProfileMenu
                 isLoggedIn={isLoggedIn}
                 currentUser={currentUser}
-                onLogout={() => {
-                  closeMenu();
-                  onLogout();
-                }}
+                // No onLogout prop passed at all
               />
             </li>
           </ul>

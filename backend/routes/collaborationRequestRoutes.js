@@ -1,29 +1,55 @@
-// routes/collaborationRequestRoutes.js
+// backend/routes/collaborationRequestRoutes.js
 import express from "express";
-import * as requestController from "../controllers/collaborationRequestController.js";
-import { protect } from "../middleware/authMiddleware.js"; // Your auth middleware
+// Use named imports for clarity
+import {
+  sendRequest,
+  getReceivedRequests,
+  getSentRequests,
+  respondToRequest, // Single function handles accept/reject based on body
+  cancelRequest,
+} from "../controllers/collaborationRequestController.js";
+import { protect } from "../middleware/authMiddleware.js";
+// Remove unused imports if validation/rate limiting not implemented yet
+// import { validateRequest } from "../middleware/validationMiddleware.js";
+// import rateLimiter from "../middleware/rateLimiter.js";
 
 const router = express.Router();
 
-// Apply auth middleware to all request-related routes
+// Apply auth middleware to all request routes
 router.use(protect);
 
-// POST /api/collaboration-requests -> Send a new request
-router.post("/", requestController.sendRequest);
+// Apply rate limiting (optional) - ensure middleware exists
+// router.use(rateLimiter);
 
-// GET /api/collaboration-requests/received -> Get requests received by current user
-router.get("/received", requestController.getReceivedRequests);
+// POST /api/collaboration-requests - Create a new request to join
+router.post(
+  "/",
+  // Add validation middleware if implemented:
+  // validateRequest({ projectId: { isRequired: true, isNumeric: true }, message: { maxLength: 500 } }),
+  sendRequest // Use the correct controller function name
+);
 
-// GET /api/collaboration-requests/sent -> Get requests sent by current user
-router.get("/sent", requestController.getSentRequests);
+// GET /api/collaboration-requests/received - Get pending requests received by logged-in user
+router.get("/received", getReceivedRequests);
 
-// PATCH /api/collaboration-requests/:requestId/accept -> Receiver accepts
-router.patch("/:requestId/accept", requestController.acceptRequest);
+// GET /api/collaboration-requests/sent - Get requests sent by the logged-in user
+router.get("/sent", getSentRequests);
 
-// PATCH /api/collaboration-requests/:requestId/reject -> Receiver rejects
-router.patch("/:requestId/reject", requestController.rejectRequest);
+// PATCH /api/collaboration-requests/:requestId/respond - Respond (approve/reject)
+router.patch(
+  "/:requestId/respond",
+  // Add validation middleware if implemented:
+  // validateRequest({ requestId: { isRequired: true, isNumeric: true }, status: { isRequired: true, isIn: ['approved', 'rejected']} }),
+  respondToRequest // Use the single respond function
+);
 
-// PATCH /api/collaboration-requests/:requestId/cancel -> Sender cancels
-router.patch("/:requestId/cancel", requestController.cancelRequest);
+// DELETE /api/collaboration-requests/:requestId/cancel - Cancel a SENT request (by requester)
+// Using DELETE might be more semantically correct than PATCH for cancellation
+router.delete(
+  "/:requestId/cancel",
+  // Add validation middleware if implemented:
+  // validateRequest({ requestId: { isRequired: true, isNumeric: true } }),
+  cancelRequest
+);
 
 export default router;

@@ -1,21 +1,18 @@
-// src/Page/Admin/AdminPendingUsersPage.jsx
 import React, { useEffect, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom"; // <-- Import useNavigate
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import LoadingSpinner from "../../Component/Common/LoadingSpinner";
 import ErrorMessage from "../../Component/Common/ErrorMessage";
 import AdminPageHeader from "../../Component/Admin/AdminPageHeader";
 import Notification from "../../Component/Common/Notification";
-import ConfirmationModal from "../../Component/Common/ConfirmationModal"; // <-- Import ConfirmationModal
+import ConfirmationModal from "../../Component/Common/ConfirmationModal";
 import {
   CheckCircleIcon,
   XCircleIcon,
   ArrowPathIcon,
-  EyeIcon, // <-- Import EyeIcon for view details
-  ExclamationTriangleIcon, // Could be used in error messages
+  EyeIcon,
 } from "@heroicons/react/24/outline";
 
-// Define base URL (better than repeating localhost)
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
@@ -23,22 +20,20 @@ const AdminPendingUsersPage = () => {
   const [pendingUsers, setPendingUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
-  const [actionLoading, setActionLoading] = useState(null); // User ID being actioned
+  const [actionLoading, setActionLoading] = useState(null);
   const [notification, setNotification] = useState({
     message: "",
     type: "",
     show: false,
   });
   const [confirmModal, setConfirmModal] = useState({
-    // State for confirmation modal
     isOpen: false,
     userId: null,
     username: "",
-    action: null, // 'approve' or 'reject'
+    action: null,
   });
-  const navigate = useNavigate(); // <-- Initialize useNavigate
+  const navigate = useNavigate();
 
-  // --- Notification Handler ---
   const showNotification = (message, type = "success") => {
     setNotification({ message, type, show: true });
     setTimeout(
@@ -47,325 +42,248 @@ const AdminPendingUsersPage = () => {
     );
   };
 
-  // --- Fetch Pending Users ---
   const fetchPendingUsers = useCallback(
-    async (showLoadingIndicator = true) => {
-      if (showLoadingIndicator) setIsLoading(true);
-      setError(""); // Clear previous errors on fetch
-      // Optionally clear users only if using main loader, otherwise data remains during refresh
-      // if (showLoadingIndicator) setPendingUsers([]);
+    async (showLoading = true) => {
+      if (showLoading) setIsLoading(true);
+      setError("");
 
+      try {
+        const token = localStorage.getItem("authToken");
+        if (!token) {
+          setError("Authentication required");
+          navigate("/login");
+          return;
+        }
+
+        const response = await axios.get(
+          `${API_BASE_URL}/api/admin/users?status=pending`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            timeout: 10000,
+          }
+        );
+
+        if (response.data?.success) {
+          setPendingUsers(response.data.data?.users || []);
+        } else {
+          throw new Error(response.data?.message || "Invalid response format");
+        }
+      } catch (err) {
+        const errorMsg =
+          err.response?.data?.message ||
+          err.message ||
+          "Failed to fetch pending users";
+        setError(errorMsg);
+
+        if (err.response?.status === 401 || err.response?.status === 403) {
+          showNotification("Session expired. Please login again.", "error");
+          setTimeout(() => navigate("/login"), 2000);
+        }
+      } finally {
+        if (showLoading) setIsLoading(false);
+      }
+    },
+    [navigate]
+  );
+
+  useEffect(() => {
+    fetchPendingUsers();
+  }, [fetchPendingUsers]);
+
+  const handleUserAction = async (userId, action, username) => {
+    setActionLoading(userId);
+
+    try {
       const token = localStorage.getItem("authToken");
       if (!token) {
-        setError("Authentication required. Please log in.");
-        setIsLoading(false);
-        // Consider redirecting: navigate('/login');
+        showNotification("Authentication required", "error");
         return;
       }
 
-      try {
-        const url = `${API_BASE_URL}/api/admin/users?status=pending`;
-        const response = await axios.get(url, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (
-          response.data?.success &&
-          Array.isArray(response.data.data?.users)
-        ) {
-          setPendingUsers(response.data.data.users);
-        } else {
-          console.warn(
-            "Unexpected data structure for pending users:",
-            response.data
-          );
-          setPendingUsers([]); // Set empty on unexpected data
-          // Optionally set an error message here if response.data indicates failure
-          if (!response.data?.success) {
-            setError(
-              response.data?.message ||
-                "Failed to fetch users: API indicated failure."
-            );
-          }
-        }
-      } catch (err) {
-        console.error("Error fetching pending users:", err);
-        let detailedError = "Failed to fetch pending users.";
-        if (err.response) {
-          detailedError = `Error ${err.response.status}: ${
-            err.response.data?.message || "Server error"
-          }`;
-          if (err.response.status === 401 || err.response.status === 403) {
-            detailedError += " Please check your login session.";
-            // Maybe force logout or redirect here
-          }
-        } else if (err.request) {
-          detailedError = "Network Error: Could not reach the server.";
-        } else {
-          detailedError = `Client Error: ${err.message}`;
-        }
-        setError(detailedError);
-        setPendingUsers([]); // Clear users on error
-      } finally {
-        if (showLoadingIndicator) setIsLoading(false);
-      }
-    },
-    [
-      /* navigate */
-    ]
-  ); // navigate dependency removed if not used directly inside
-
-  useEffect(() => {
-    fetchPendingUsers(true);
-  }, [fetchPendingUsers]);
-
-  // --- Request Action (Opens Confirmation Modal for Reject) ---
-  const requestAction = (userId, username, action) => {
-    if (action === "reject") {
-      setConfirmModal({
-        isOpen: true,
-        userId,
-        username,
-        action: "reject",
-      });
-    } else if (action === "approve") {
-      // Approve directly (or add confirmation if desired)
-      handlePerformAction(userId, "approved", username);
-    } else {
-      console.error("Unknown action requested:", action);
-    }
-  };
-
-  // --- Perform Actual API Call ---
-  const handlePerformAction = async (userId, newStatus, username) => {
-    setActionLoading(userId); // Indicate loading for this specific user row
-    setError(""); // Clear previous general errors
-
-    const token = localStorage.getItem("authToken");
-    if (!token) {
-      showNotification("Authentication required.", "error");
-      setActionLoading(null);
-      return;
-    }
-
-    try {
-      const url = `${API_BASE_URL}/api/auth/admin/users/${userId}/status`;
-      await axios.patch(
-        url,
-        { status: newStatus }, // Send status in request body
+      const response = await axios.patch(
+        `${API_BASE_URL}/api/admin/users/${userId}/status`,
+        { status: action === "approve" ? "approved" : "rejected" },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      // Success: remove user from local pending list
-      setPendingUsers((current) => current.filter((u) => u.id !== userId));
-      showNotification(`User "${username}" has been ${newStatus}.`, "success");
+      if (response.data.success) {
+        setPendingUsers((prev) => prev.filter((user) => user.id !== userId));
+        showNotification(
+          `User ${username} ${
+            action === "approve" ? "approved" : "rejected"
+          } successfully`,
+          "success"
+        );
+      } else {
+        throw new Error(response.data.message || "Action failed");
+      }
     } catch (err) {
-      console.error(
-        `Error updating status to ${newStatus} for user ${userId}:`,
-        err
-      );
-      const errMsg =
-        err.response?.data?.message ||
-        `Failed to ${newStatus} user "${username}".`;
-      setError(errMsg); // Show error near top
-      showNotification(errMsg, "error"); // Show detailed error in notification
+      const errorMsg =
+        err.response?.data?.message || `Failed to ${action} user`;
+      showNotification(errorMsg, "error");
     } finally {
-      setActionLoading(null); // Stop loading indicator for the row
+      setActionLoading(null);
     }
   };
 
-  // --- Handle User Detail Navigation ---
-  const handleViewDetails = (userId) => {
-    // Navigate to a detail page (this route needs to be set up in App.js)
-    navigate(`/admin/users/${userId}/details`);
-    // Or open a modal with details if preferred (more complex state management)
+  const requestConfirmation = (userId, username, action) => {
+    setConfirmModal({
+      isOpen: true,
+      userId,
+      username,
+      action,
+    });
   };
 
-  // --- Refresh ---
   const handleRefresh = () => {
-    // Fetch without the main loading spinner, maybe just spin the refresh icon
-    fetchPendingUsers(false); // Pass false to avoid full page loader
-    showNotification("Refreshing list...", "info");
+    fetchPendingUsers(false);
+    showNotification("List refreshed", "info");
   };
 
   const breadcrumbs = [
-    { label: "Admin", link: "/admin" }, // Example breadcrumb
+    { label: "Admin", link: "/admin" },
     { label: "Pending Approvals", link: "/admin/pending-users" },
   ];
 
-  // --- Render ---
   return (
-    // Removed min-h-screen and bg-gray-50 if AdminLayout handles it
     <div className="space-y-6">
       <AdminPageHeader title="Pending User Approvals" breadcrumbs={breadcrumbs}>
         <button
           onClick={handleRefresh}
-          disabled={isLoading || !!actionLoading} // Disable if any action is loading
-          className="p-2 rounded-full text-gray-500 hover:bg-gray-200 hover:text-gray-700 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Refresh Pending List"
+          disabled={isLoading}
+          className="p-2 rounded-full text-gray-500 hover:bg-gray-200 transition"
+          title="Refresh"
         >
-          {/* Show spinner on refresh button itself if not using full page loader */}
-          <ArrowPathIcon className="h-6 w-6" />
+          <ArrowPathIcon
+            className={`h-5 w-5 ${isLoading ? "animate-spin" : ""}`}
+          />
         </button>
       </AdminPageHeader>
 
       <Notification
-        message={notification.message}
-        type={notification.type}
-        show={notification.show}
+        {...notification}
         onClose={() => setNotification((prev) => ({ ...prev, show: false }))}
       />
 
-      {/* Main loading spinner */}
-      {isLoading && (
+      {isLoading ? (
         <div className="flex justify-center py-10">
           <LoadingSpinner size="lg" />
         </div>
-      )}
-
-      {/* General Error Display */}
-      {!isLoading && error && (
-        <div className="mt-4">
-          <ErrorMessage message={error} onClose={() => setError("")} />
-        </div>
-      )}
-
-      {/* No Pending Users Message */}
-      {!isLoading && !error && pendingUsers.length === 0 && (
-        <div className="bg-white rounded-xl shadow p-6 text-center text-gray-500">
+      ) : error ? (
+        <ErrorMessage message={error} onClose={() => setError("")} />
+      ) : pendingUsers.length === 0 ? (
+        <div className="bg-white rounded-lg shadow p-6 text-center">
           <CheckCircleIcon className="mx-auto h-12 w-12 text-green-400" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900">All Clear!</h3>
-          <p className="mt-1 text-sm text-gray-500">
-            There are no users currently pending approval.
-          </p>
+          <h3 className="mt-2 text-lg font-medium">No pending users</h3>
+          <p className="mt-1 text-gray-500">All users have been processed</p>
         </div>
-      )}
-
-      {/* Pending Users Table */}
-      {!isLoading && !error && pendingUsers.length > 0 && (
-        <div className="bg-white rounded-xl shadow-md overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              {" "}
-              {/* Changed head background */}
-              <tr>
-                {/* Table Headers */}
-                <th
-                  scope="col"
-                  className="px-4 py-3 text-left text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider"
-                >
-                  Username
-                </th>
-                <th
-                  scope="col"
-                  className="px-4 py-3 text-left text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider"
-                >
-                  Email
-                </th>
-                <th
-                  scope="col"
-                  className="px-4 py-3 text-left text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider"
-                >
-                  Role
-                </th>
-                <th
-                  scope="col"
-                  className="px-4 py-3 text-left text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider"
-                >
-                  Registered
-                </th>
-                <th
-                  scope="col"
-                  className="px-4 py-3 text-center text-xs sm:text-sm font-semibold text-gray-600 uppercase tracking-wider"
-                >
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
-              {pendingUsers.map((user) => (
-                <tr
-                  key={user.id}
-                  className="hover:bg-gray-50 transition-colors duration-150"
-                >
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-800 font-medium">
-                    {user.username}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
-                    {user.email}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 capitalize">
-                    {user.role}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
-                    {user.createdAt
-                      ? new Date(user.createdAt).toLocaleDateString()
-                      : "-"}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
-                    <div className="flex items-center justify-center space-x-1.5">
-                      {" "}
-                      {/* Reduced space */}
-                      {/* View Details Button */}
-                      <button
-                        onClick={() => handleViewDetails(user.id)}
-                        disabled={actionLoading === user.id}
-                        className="p-1.5 rounded text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title={`View details for ${user.username}`}
-                      >
-                        <EyeIcon className="h-5 w-5" aria-hidden="true" />
-                      </button>
-                      {/* Approve Button */}
-                      <button
-                        onClick={() =>
-                          requestAction(user.id, user.username, "approve")
-                        }
-                        disabled={actionLoading === user.id}
-                        className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-green-500 disabled:opacity-50 disabled:cursor-wait"
-                        title={`Approve ${user.username}`}
-                      >
-                        <CheckCircleIcon
-                          className="h-4 w-4"
-                          aria-hidden="true"
-                        />
-                        {/* <span className="hidden sm:inline ml-1">Approve</span> */}
-                      </button>
-                      {/* Reject Button (now opens modal) */}
-                      <button
-                        onClick={() =>
-                          requestAction(user.id, user.username, "reject")
-                        }
-                        disabled={actionLoading === user.id}
-                        className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-red-500 disabled:opacity-50 disabled:cursor-wait"
-                        title={`Reject ${user.username}`}
-                      >
-                        <XCircleIcon className="h-4 w-4" aria-hidden="true" />
-                        {/* <span className="hidden sm:inline ml-1">Reject</span> */}
-                      </button>
-                    </div>
-                  </td>
+      ) : (
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    User
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Email
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Role
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Registered
+                  </th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {pendingUsers.map((user) => (
+                  <tr key={user.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900 pointer-events-none">
+                      {user.username}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-500 pointer-events-none">
+                      {user.email}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-500 capitalize pointer-events-none">
+                      {user.role}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-500 pointer-events-none">
+                      {new Date(user.createdAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <div className="flex justify-center space-x-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/admin/users/${user.id}`);
+                          }}
+                          className="p-1.5 rounded-full text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+                          title="View details"
+                        >
+                          <EyeIcon className="h-5 w-5" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            requestConfirmation(
+                              user.id,
+                              user.username,
+                              "approve"
+                            );
+                          }}
+                          disabled={actionLoading === user.id}
+                          className="p-1.5 rounded-full text-green-600 hover:bg-green-50 hover:text-green-700 transition-colors disabled:opacity-50"
+                          title="Approve"
+                        >
+                          <CheckCircleIcon className="h-5 w-5" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            requestConfirmation(
+                              user.id,
+                              user.username,
+                              "reject"
+                            );
+                          }}
+                          disabled={actionLoading === user.id}
+                          className="p-1.5 rounded-full text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors disabled:opacity-50"
+                          title="Reject"
+                        >
+                          <XCircleIcon className="h-5 w-5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
-      {/* Confirmation Modal Render */}
       <ConfirmationModal
         isOpen={confirmModal.isOpen}
         onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
-        onConfirm={() =>
-          handlePerformAction(
+        onConfirm={() => {
+          handleUserAction(
             confirmModal.userId,
-            "rejected",
+            confirmModal.action,
             confirmModal.username
-          )
-        }
-        title="Confirm Rejection"
-        message={`Are you sure you want to reject the user "${confirmModal.username}"? This action cannot be easily undone.`}
-        confirmText="Reject User"
-        confirmButtonColor="red"
+          );
+          setConfirmModal({ ...confirmModal, isOpen: false });
+        }}
+        title={`Confirm ${
+          confirmModal.action === "approve" ? "Approval" : "Rejection"
+        }`}
+        message={`Are you sure you want to ${confirmModal.action} ${confirmModal.username}?`}
+        confirmText={confirmModal.action === "approve" ? "Approve" : "Reject"}
+        confirmButtonColor={confirmModal.action === "approve" ? "green" : "red"}
       />
     </div>
   );

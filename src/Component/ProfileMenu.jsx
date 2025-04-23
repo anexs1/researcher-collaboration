@@ -18,9 +18,6 @@ const ProfileMenu = ({ isLoggedIn, onLogout }) => {
               <li>
                 <Link to="/profile">Profile</Link>
               </li>
-              <li>
-                <button onClick={onLogout}>Logout</button>
-              </li>
             </ul>
           )}
         </>
