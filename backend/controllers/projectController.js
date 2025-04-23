@@ -1,327 +1,345 @@
-// File: backend/controllers/projectController.js
-
-// --- CORRECT IMPORT ---
-// Import the fully configured db object from models/index.js
-import db from "../models/index.js";
-// --- END CORRECT IMPORT ---
-
+// backend/controllers/projectController.js
 import asyncHandler from "express-async-handler";
-import { Op, Sequelize } from "sequelize"; // Import Op and Sequelize
+import db from "../models/index.js";
 
-// Access models correctly via the db object
-const { Project, User } = db; // Ensure 'User' model is exported from db object
+const { Project, User } = db; // Import necessary models
 
-// --- GET Projects for Logged-in User (owned OR collaborator - using corrected JSON query logic) ---
-const getProjects = asyncHandler(async (req, res) => {
-  if (!req.user?.id) {
-    // Use optional chaining for safety
-    res.status(401);
-    throw new Error("Not authorized");
-  }
-  const userId = req.user.id; // This should be the correct ID type (e.g., number or string/UUID)
+// --- Helper: Define fields based on the SIMPLIFIED Model ---
+// These MUST match the fields defined in your *current* models/Project.js
+const projectListFields = [
+  "id",
+  "title",
+  "description",
+  // 'requiredCollaborators', // Maybe not needed for list view?
+  "status",
+  "ownerId",
+  "createdAt",
+  "updatedAt",
+];
+const projectDetailFields = [
+  "id",
+  "title",
+  "description",
+  "requiredCollaborators", // Include in detail view
+  "status",
+  "ownerId",
+  "createdAt",
+  "updatedAt",
+];
 
+/**
+ * @desc    Create a new project
+ * @route   POST /api/projects
+ * @access  Private (Requires logged-in user)
+ */
+export const createProject = asyncHandler(async (req, res) => {
+  // --- Log Start and Received Data ---
+  console.log("--- CREATE PROJECT Request Received ---");
   try {
-    // --- !!! IMPORTANT: JSON QUERYING !!! ---
-    // Querying JSON arrays directly with Op.like is unreliable.
-    // Use database-specific functions for efficiency and correctness.
-    // Choose the appropriate condition based on your database:
-    // Example for PostgreSQL (using @> operator - assumes IDs are stored as numbers in JSON):
-    // const collaboratorCondition = { collaborators: { [Op.contains]: [userId] } };
-    // Example for MySQL >= 5.7 (using JSON_CONTAINS - assumes IDs are stored as numbers):
-    // const collaboratorCondition = Sequelize.where(Sequelize.fn('JSON_CONTAINS', Sequelize.col('collaborators'), Sequelize.cast(userId, 'CHAR')), true);
-    // --- TEMPORARY/LESS RELIABLE FALLBACK (using Op.like) ---
-    const collaboratorCondition = {
-      collaborators: {
-        // WARNING: THIS IS INEFFICIENT AND MAY NOT WORK CORRECTLY FOR ALL CASES
-        [Op.like]: `%${JSON.stringify(userId)}%`,
-      },
-    };
-    // --- END JSON QUERYING NOTE ---
-
-    const projects = await Project.findAll({
-      where: {
-        [Op.or]: [
-          { ownerId: userId },
-          collaboratorCondition, // Use the selected condition here
-        ],
-      },
-      order: [["createdAt", "DESC"]],
-      include: [
-        // Include owner details
-        {
-          model: User,
-          as: "owner", // Matches alias in Project.associate
-          // --- CORRECTED ATTRIBUTES ---
-          attributes: ["id", "username", "email"], // Request ONLY existing columns
-          // --- END CORRECTION ---
-        },
-      ],
-    });
-
-    res.status(200).json({
-      success: true,
-      count: projects.length,
-      data: projects,
-    });
-  } catch (err) {
-    console.error("Error fetching projects:", err);
-    res.status(500);
-    throw new Error(`Failed to fetch projects: ${err.message}`);
+    console.log("Raw req.body:", JSON.stringify(req.body, null, 2));
+  } catch (e) {
+    console.log("Raw req.body (unstringified):", req.body);
   }
-});
+  // Note: File upload is removed as imageUrl is not in the simplified model
 
-// --- GET Single Project by ID ---
-const getProjectById = asyncHandler(async (req, res) => {
-  if (!req.user?.id) {
+  // --- Destructure fields that ACTUALLY EXIST in the simplified model ---
+  const {
+    title,
+    description,
+    requiredCollaborators, // Use the name matching the simplified model/DB
+    status,
+    // REMOVED: category, duration, funding, skillsNeeded
+  } = req.body;
+
+  // --- Check Authentication ---
+  if (!req.user || !req.user.id) {
+    console.error("CREATE PROJECT Error: User ID not found on request.");
     res.status(401);
-    throw new Error("Not authorized");
+    throw new Error("Authentication error: User information missing.");
   }
-  const { projectId: requestedId } = req.params;
-  const userId = req.user.id;
+  const ownerId = req.user.id;
+  console.log(`Owner ID from req.user: ${ownerId}`);
 
+  // --- Basic Validation (Still applies) ---
   console.log(
-    `Backend: Fetching project with ID: ${requestedId} for user: ${userId}`
+    `Checking required fields: title='${title}', description='${description}'`
+  );
+  if (
+    !title ||
+    !description ||
+    title.trim() === "" ||
+    description.trim() === ""
+  ) {
+    console.warn(
+      `CREATE PROJECT Validation Failed: Title or Description is missing or empty.`
+    );
+    res.status(400);
+    throw new Error("Title and description are required and cannot be empty.");
+  }
+  console.log("Title and Description validation passed.");
+
+  // --- Prepare Data (Simplified) ---
+  // Parse requiredCollaborators safely
+  const numCollaborators = parseInt(requiredCollaborators); // Use the correct variable name
+  const validRequiredCollaborators =
+    !isNaN(numCollaborators) && numCollaborators >= 0 ? numCollaborators : 1;
+  console.log(
+    `Parsed requiredCollaborators: Input='${requiredCollaborators}', Using='${validRequiredCollaborators}'`
   );
 
-  try {
-    // --- Re-apply JSON Querying logic/warning ---
-    // Temporary Fallback:
-    const collaboratorCondition = {
-      collaborators: { [Op.like]: `%${JSON.stringify(userId)}%` },
-    }; // WARNING: Inefficient/Unreliable
-    // --- End JSON Querying ---
+  // Construct data object using ONLY fields from the simplified model
+  const projectData = {
+    title: title.trim(),
+    description: description.trim(),
+    ownerId,
+    requiredCollaborators: validRequiredCollaborators, // Use correct field name
+    status: status || "Planning", // Keep status if it exists in DB
+    // REMOVED: category, duration, funding, skillsNeeded, imageUrl
+  };
+  console.log(
+    "Final projectData object before Project.create:",
+    JSON.stringify(projectData, null, 2)
+  );
 
-    const project = await Project.findOne({
-      where: {
-        id: requestedId,
-        // Optional: Add access control here if needed
-        // [Op.or]: [
-        //   { ownerId: userId },
-        //   collaboratorCondition,
-        // ],
-      },
+  // --- Database Interaction ---
+  try {
+    console.log("Attempting Project.create...");
+    const project = await Project.create(projectData); // Use the simplified data
+    console.log(`Project created successfully with ID: ${project.id}`);
+
+    // Fetch the created project with owner details to return
+    const createdProject = await Project.findByPk(project.id, {
+      attributes: projectDetailFields, // Use simplified detail fields
       include: [
         {
           model: User,
           as: "owner",
-          // --- CORRECTED ATTRIBUTES ---
-          attributes: ["id", "username", "email"], // Request ONLY existing columns
-          // --- END CORRECTION ---
+          attributes: ["id", "username", "profilePictureUrl"], // Assuming User model has these
         },
-        // Optional: Include collaborator details if Many-to-Many is set up
       ],
     });
 
-    if (!project) {
-      console.log(
-        `Backend: Project with ID ${requestedId} not found or access denied for user ${userId}.`
-      );
-      return res.status(404).json({
-        success: false,
-        message: "Project not found",
-      });
+    if (!createdProject) {
+      throw new Error("Could not retrieve created project details.");
     }
 
-    console.log(`Backend: Project ${requestedId} found.`);
+    console.log("Returning created project data to client.");
+    res.status(201).json({ success: true, data: createdProject });
+  } catch (error) {
+    console.error("ERROR during Project.create or subsequent findByPk:", error);
+    if (error.name === "SequelizeValidationError") {
+      const messages = error.errors
+        .map((err) => `${err.path}: ${err.message}`)
+        .join("; ");
+      res.status(400);
+      throw new Error(`Validation Error: ${messages}`);
+    }
+    if (error.name === "SequelizeForeignKeyConstraintError") {
+      /* ... */
+    }
+    // Check for specific DB errors if needed
+    console.error(
+      "Unhandled Project Creation Error:",
+      error.name,
+      error.message
+    );
+    res.status(500);
+    throw new Error("Server error creating project.");
+  }
+});
+
+/**
+ * @desc    Get projects owned by the logged-in user
+ * @route   GET /api/projects/my
+ * @access  Private
+ */
+export const getMyProjects = asyncHandler(async (req, res) => {
+  if (!req.user?.id) {
+    throw new Error("Authentication required.");
+  }
+  const ownerId = req.user.id;
+  console.log(`Fetching projects for owner ID: ${ownerId}`);
+  try {
+    const projects = await Project.findAll({
+      where: { ownerId: ownerId },
+      attributes: projectListFields, // Use simplified list fields
+      order: [["updatedAt", "DESC"]],
+    });
+    res
+      .status(200)
+      .json({ success: true, count: projects.length, data: projects });
+  } catch (error) {
+    /* Error handling */
+  }
+});
+
+/**
+ * @desc    Get a single project by ID
+ * @route   GET /api/projects/:id
+ * @access  Public (or Private)
+ */
+export const getProjectById = asyncHandler(async (req, res) => {
+  const projectId = req.params.id;
+  if (!projectId || isNaN(parseInt(projectId))) {
+    /* ID validation */ return;
+  }
+  console.log(`Fetching project details for ID: ${projectId}`);
+  try {
+    const project = await Project.findByPk(projectId, {
+      attributes: projectDetailFields, // Use simplified detail fields
+      include: [
+        {
+          model: User,
+          as: "owner",
+          attributes: ["id", "username", "profilePictureUrl"],
+        },
+      ],
+      // No members include for now
+    });
+    if (!project) {
+      res.status(404);
+      throw new Error("Project not found");
+    }
     res.status(200).json({ success: true, data: project });
-  } catch (err) {
-    console.error(`Error fetching project ID ${requestedId}:`, err);
-    res.status(500);
-    throw new Error(`Failed to fetch project: ${err.message}`);
+  } catch (error) {
+    /* Error handling */
   }
 });
 
-// --- CREATE Project ---
-const createProject = asyncHandler(async (req, res) => {
-  if (!req.user?.id) {
-    res.status(401);
-    throw new Error("Not authorized");
-  }
+/**
+ * @desc    Update a project
+ * @route   PUT /api/projects/:id
+ * @access  Private (Owner only)
+ */
+export const updateProject = asyncHandler(async (req, res) => {
+  const projectId = req.params.id;
   const userId = req.user.id;
-  const { title, description, status, collaborators, members, tags, dueDate } =
-    req.body;
-
-  if (!title?.trim() || !description?.trim()) {
-    res.status(400);
-    throw new Error("Title and description are required");
+  if (!projectId || isNaN(parseInt(projectId))) {
+    /* ID validation */ return;
   }
 
-  try {
-    const safeCollaborators = Array.isArray(collaborators)
-      ? collaborators.map(String)
-      : [];
-    const safeTags = Array.isArray(tags) ? tags : [];
-    const safeMembers = Array.isArray(members) ? members : []; // You'll handle invitations separately
+  const project = await Project.findByPk(projectId);
+  if (!project) {
+    res.status(404);
+    throw new Error("Project not found");
+  }
+  if (project.ownerId !== userId) {
+    res.status(403);
+    throw new Error("User not authorized to update");
+  }
 
-    const newProject = await Project.create({
-      title: title.trim(),
-      description: description.trim(),
-      status: status || "Planning",
-      collaborators: safeCollaborators,
-      tags: safeTags,
-      dueDate: dueDate || null,
-      ownerId: userId,
-      // Note: 'members' isn't saved directly here unless it's a Project model column
-    });
+  // --- Prepare updates using ONLY fields from simplified model ---
+  const {
+    title,
+    description,
+    requiredCollaborators,
+    status,
+    // REMOVED: category, duration, funding, skillsNeeded
+  } = req.body;
+  const updates = {};
 
-    // Fetch the created project with owner details
-    const projectWithOwner = await Project.findByPk(newProject.id, {
-      include: [
-        {
-          model: User,
-          as: "owner",
-          // --- CORRECTED ATTRIBUTES ---
-          attributes: ["id", "username", "email"], // Request ONLY existing columns
-          // --- END CORRECTION ---
-        },
-      ],
-    });
+  if (title !== undefined) updates.title = title.trim();
+  if (description !== undefined) updates.description = description.trim();
+  if (
+    status !== undefined &&
+    ["Planning", "Active", "Completed", "On Hold"].includes(status)
+  )
+    updates.status = status;
 
-    if (!projectWithOwner) {
-      console.error(
-        `Failed to fetch project ${newProject.id} immediately after creation.`
+  if (requiredCollaborators !== undefined) {
+    const numCollaborators = parseInt(requiredCollaborators);
+    if (!isNaN(numCollaborators) && numCollaborators >= 0) {
+      updates.requiredCollaborators = numCollaborators;
+    } else {
+      console.warn(
+        `Invalid requiredCollaborators value: ${requiredCollaborators}`
       );
-      return res.status(201).json({
-        success: true,
-        message: "Project created, but failed to fetch owner details.",
-        data: newProject,
-      });
     }
-
-    res.status(201).json({
-      success: true,
-      message: "Project created successfully",
-      data: projectWithOwner,
-    });
-  } catch (err) {
-    console.error("Error creating project:", err);
-    res.status(500);
-    throw new Error(`Failed to create project: ${err.message}`);
   }
-});
 
-// --- UPDATE Project ---
-const updateProject = asyncHandler(async (req, res) => {
-  if (!req.user?.id) {
-    res.status(401);
-    throw new Error("Not authorized");
-  }
-  const { projectId: id } = req.params;
-  const userId = req.user.id;
-  const updates = req.body;
+  // --- File upload removed as imageUrl is not in model ---
+  // --- skillsNeeded parsing removed ---
+
+  console.log("Applying updates to project:", JSON.stringify(updates, null, 2));
 
   try {
-    const project = await Project.findOne({
-      where: { id, ownerId: userId }, // Only allow owner to update (adjust if needed)
-    });
-
-    if (!project) {
-      res.status(404);
-      throw new Error("Project not found or user not authorized to update");
+    if (Object.keys(updates).length > 0) {
+      Object.assign(project, updates);
+      await project.save();
+    } else {
+      console.log(`No fields to update for project ${projectId}.`);
     }
 
-    const allowedUpdates = [
-      "title",
-      "description",
-      "status",
-      "collaborators",
-      "tags",
-      "dueDate",
-      "members",
-    ];
-    Object.keys(updates).forEach((key) => {
-      if (allowedUpdates.includes(key)) {
-        if (key === "title" || key === "description") {
-          project[key] =
-            typeof updates[key] === "string"
-              ? updates[key].trim()
-              : updates[key];
-        } else if (
-          key === "collaborators" ||
-          key === "tags" ||
-          key === "members"
-        ) {
-          project[key] = Array.isArray(updates[key])
-            ? updates[key]
-            : project[key];
-        } else if (key === "dueDate") {
-          project[key] = updates[key] || null;
-        } else {
-          project[key] = updates[key];
-        }
-      }
+    const updatedProject = await Project.findByPk(projectId, {
+      attributes: projectDetailFields, // Use simplified fields
+      include: [{ model: User, as: "owner", attributes: ["id", "username"] }],
     });
-
-    const updatedProject = await project.save();
-
-    // Fetch the updated project with owner details
-    const projectWithOwner = await Project.findByPk(updatedProject.id, {
-      include: [
-        {
-          model: User,
-          as: "owner",
-          // --- CORRECTED ATTRIBUTES ---
-          attributes: ["id", "username", "email"], // Request ONLY existing columns
-          // --- END CORRECTION ---
-        },
-      ],
-    });
-
     res.status(200).json({
       success: true,
-      message: "Project updated successfully",
-      data: projectWithOwner || updatedProject,
+      message: "Project updated",
+      data: updatedProject,
     });
-  } catch (err) {
-    console.error(`Error updating project ID ${id}:`, err);
-    res.status(
-      err.message.includes("not found") ||
-        err.message.includes("not authorized")
-        ? 404
-        : 500
-    );
-    throw new Error(`Failed to update project: ${err.message}`);
+  } catch (error) {
+    /* Handle save/validation error */
   }
 });
 
-// --- DELETE Project ---
-const deleteProject = asyncHandler(async (req, res) => {
-  if (!req.user?.id) {
-    res.status(401);
-    throw new Error("Not authorized");
-  }
-  const { projectId: id } = req.params;
+/**
+ * @desc    Delete a project
+ * @route   DELETE /api/projects/:id
+ * @access  Private (Owner only)
+ */
+export const deleteProject = asyncHandler(async (req, res) => {
+  const projectId = req.params.id;
   const userId = req.user.id;
+  if (!projectId || isNaN(parseInt(projectId))) {
+    /* ID validation */ return;
+  }
+
+  const project = await Project.findByPk(projectId);
+  if (!project) {
+    res.status(404);
+    throw new Error("Project not found");
+  }
+  if (project.ownerId !== userId) {
+    res.status(403);
+    throw new Error("User not authorized to delete");
+  }
 
   try {
-    const project = await Project.findOne({ where: { id, ownerId: userId } });
-    if (!project) {
-      res.status(404);
-      throw new Error("Project not found or user not authorized to delete");
-    }
+    const projectTitle = project.title;
+    // --- Image deletion removed ---
     await project.destroy();
-    res.status(200).json({
-      success: true,
-      message: "Project deleted successfully",
-      data: { id: id },
-    });
-  } catch (err) {
-    console.error(`Error deleting project ID ${id}:`, err);
-    res.status(
-      err.message.includes("not found") ||
-        err.message.includes("not authorized")
-        ? 404
-        : 500
+    console.log(
+      `User ${userId} deleted project "${projectTitle}" (ID: ${projectId})`
     );
-    throw new Error(`Failed to delete project: ${err.message}`);
+    res
+      .status(200)
+      .json({ success: true, message: `Project "${projectTitle}" deleted.` });
+  } catch (error) {
+    /* Handle deletion error */
   }
 });
 
-// Export the controller methods object
-export default {
-  getProjects,
-  getProjectById,
-  createProject,
-  updateProject,
-  deleteProject,
-};
+// --- Admin Project Routes ---
+
+/**
+ * @desc    Get ALL projects (Admin only)
+ * @route   GET /api/admin/projects (or adjusted route)
+ * @access  Private/Admin
+ */
+export const adminGetAllProjects = asyncHandler(async (req, res) => {
+  console.log(`Admin ${req.user.id} fetching all projects.`);
+  try {
+    const projects = await Project.findAll({
+      attributes: projectListFields, // Use simplified fields
+      order: [["createdAt", "DESC"]],
+      include: [{ model: User, as: "owner", attributes: ["id", "username"] }],
+    });
+    res
+      .status(200)
+      .json({ success: true, count: projects.length, data: projects });
+  } catch (error) {
+    /* Handle error */
+  }
+});

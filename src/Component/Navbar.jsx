@@ -60,18 +60,7 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
               <>
                 <li>
                   <NavLink
-                    to="/announcements"
-                    onClick={closeMenu}
-                    className={({ isActive }) =>
-                      `${linkStyle} ${isActive ? activeLinkStyle : ""}`
-                    }
-                  >
-                    Announcements
-                  </NavLink>
-                </li>
-                <li>
-                  <NavLink
-                    to="/my-projects"
+                    to="/projects"
                     onClick={closeMenu}
                     className={({ isActive }) =>
                       `${linkStyle} ${isActive ? activeLinkStyle : ""}`
@@ -80,17 +69,7 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                     Projects
                   </NavLink>
                 </li>
-                <li>
-                  <NavLink
-                    to="/publications"
-                    onClick={closeMenu}
-                    className={({ isActive }) =>
-                      `${linkStyle} ${isActive ? activeLinkStyle : ""}`
-                    }
-                  >
-                    Publications
-                  </NavLink>
-                </li>
+
                 <li>
                   <NavLink
                     to="/messages"
@@ -100,50 +79,6 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                     }
                   >
                     Messages
-                  </NavLink>
-                </li>
-                <li>
-                  <NavLink
-                    to="/activity"
-                    onClick={closeMenu}
-                    className={({ isActive }) =>
-                      `${linkStyle} ${isActive ? activeLinkStyle : ""}`
-                    }
-                  >
-                    Activity
-                  </NavLink>
-                </li>
-                <li>
-                  <NavLink
-                    to="/dashboard"
-                    onClick={closeMenu}
-                    className={({ isActive }) =>
-                      `${linkStyle} ${isActive ? activeLinkStyle : ""}`
-                    }
-                  >
-                    Dashboard
-                  </NavLink>
-                </li>
-                <li>
-                  <NavLink
-                    to="/projects/new"
-                    onClick={closeMenu}
-                    className={({ isActive }) =>
-                      `${linkStyle} ${isActive ? activeLinkStyle : ""}`
-                    }
-                  >
-                    Create Project
-                  </NavLink>
-                </li>
-                <li>
-                  <NavLink
-                    to="/settings"
-                    onClick={closeMenu}
-                    className={({ isActive }) =>
-                      `${linkStyle} ${isActive ? activeLinkStyle : ""}`
-                    }
-                  >
-                    Settings
                   </NavLink>
                 </li>
               </>

@@ -1,8 +1,7 @@
-// Message.jsx
 import React from "react";
 import { format } from "date-fns";
 import PropTypes from "prop-types";
-import UserAvatar from "../Component/Common/UserAvatar"; // Adjust path as needed
+import UserAvatar from "../Common/UserAvatar"; // ✅ Adjusted relative path
 
 const Message = ({
   message,
@@ -12,10 +11,12 @@ const Message = ({
   showUsername = true,
   showTimestamp = true,
 }) => {
-  // Safe formatting of timestamp
+  // Format the timestamp safely
   let formattedTime = "";
   try {
-    formattedTime = format(new Date(message?.timestamp), "HH:mm");
+    if (message?.timestamp) {
+      formattedTime = format(new Date(message.timestamp), "HH:mm");
+    }
   } catch (error) {
     console.error("Invalid timestamp:", message?.timestamp, error);
   }
@@ -36,31 +37,31 @@ const Message = ({
     <div
       className={`flex mb-3 ${isCurrentUser ? "justify-end" : "justify-start"}`}
     >
-      {/* Sender Avatar */}
+      {/* Avatar (left side) */}
       {!isCurrentUser && showAvatar && (
         <div className="mr-2 self-end">
           <UserAvatar user={user} className="w-8 h-8" size="sm" />
         </div>
       )}
 
-      {/* Message Bubble */}
+      {/* Message bubble */}
       <div
         className={`max-w-xs md:max-w-md lg:max-w-lg xl:max-w-xl ${
           isCurrentUser ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-800"
         } rounded-lg p-3 shadow-sm`}
       >
-        {/* Sender Name */}
+        {/* Username (if not current user) */}
         {!isCurrentUser && showUsername && user?.username && (
           <div className="font-semibold text-xs mb-1">{user.username}</div>
         )}
 
-        {/* Message Content */}
+        {/* Message content */}
         <div className="text-sm break-words">
           {message?.content || "No message content"}
         </div>
 
         {/* Timestamp */}
-        {showTimestamp && (
+        {showTimestamp && formattedTime && (
           <div
             className={`text-xs mt-1 text-right ${
               isCurrentUser ? "text-blue-100" : "text-gray-500"
@@ -71,7 +72,7 @@ const Message = ({
         )}
       </div>
 
-      {/* Current User Avatar */}
+      {/* Avatar (right side for current user) */}
       {isCurrentUser && showAvatar && (
         <div className="ml-2 self-end">
           <UserAvatar user={user} className="w-8 h-8" size="sm" />

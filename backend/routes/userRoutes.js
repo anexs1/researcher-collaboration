@@ -1,24 +1,23 @@
-// File: backend/routes/userRoutes.js
-
+// backend/routes/userRoutes.js
 import express from "express";
+import { protect } from "../middleware/authMiddleware.js"; // Assuming protect is needed
+
+// **** CORRECT THE IMPORT NAME HERE ****
 import {
-  updateMyProfile,
-  getPublicUserProfile,
-  getSearchableUsers, // <-- IMPORT NEW CONTROLLER FUNCTION
-} from "../controllers/userController.js"; // Adjust path if needed
-import { protect } from "../middleware/authMiddleware.js";
+  getUserPublicProfile, // Changed from getPublicUserProfile
+  updateUserProfile,
+  // ... other imports from userController ...
+} from "../controllers/userController.js";
 
 const router = express.Router();
 
-// --- User Profile Routes ---
-router.put("/profile", protect, updateMyProfile);
-router.get("/public/:userId", getPublicUserProfile);
+// --- Public Routes ---
+// **** USE THE CORRECT FUNCTION NAME HERE ****
+router.get("/public/:userId", getUserPublicProfile); // Route to get public profile
 
-// --- ADD THIS ROUTE for Collaborator Search/Dropdown ---
-// @desc    Get a list of users for collaborator selection (e.g., dropdown/search)
-// @route   GET /api/users/searchable
-// @access  Private (usually only logged-in users can see others to collaborate)
-router.get("/searchable", protect, getSearchableUsers);
-// --- END ADD ---
+// --- Protected Routes ---
+router.put("/profile", protect, updateUserProfile); // Route to update OWN profile
+
+// Add other user-related routes here
 
 export default router;

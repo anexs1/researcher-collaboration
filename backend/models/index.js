@@ -6,9 +6,8 @@ import { DataTypes } from "sequelize";
 import UserModel from "./user.js";
 import PublicationModel from "./Publication.js";
 import CollaborationRequestModel from "./CollaborationRequest.js";
-import ProjectModel from "./ProjectModel.js";
 import MemberModel from "./Member.js";
-
+import ProjectModel from "./project.js";
 // Initialize Sequelize models
 const User = UserModel(sequelize, DataTypes);
 const Publication = PublicationModel(sequelize, DataTypes);
