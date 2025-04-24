@@ -3,16 +3,21 @@ import express from "express";
 import { protect } from "../middleware/authMiddleware.js"; // Import your authentication middleware
 import {
   createPublication,
-  // getAllPublications, // Can remove if not used, or keep for potential future use
-  getMyPublications, // <-- CORRECTED IMPORT NAME
+  getMyPublications,
   getPublicationById,
   updatePublication,
   deletePublication,
   getExplorePublications, // Public explore endpoint
-  // Import bookmark/clone controllers if they exist
+  // Import bookmark/clone controllers if they exist and you implement them
   // updateBookmarkStatus,
   // clonePublication,
 } from "../controllers/publicationController.js";
+
+// *** Import comment controller functions ***
+import {
+  getCommentsForPublication,
+  createComment,
+} from "../controllers/commentController.js";
 
 // Optional: Import admin-specific middleware if needed
 // import { adminOnly } from '../middleware/authMiddleware.js';
@@ -21,27 +26,27 @@ const router = express.Router();
 
 // --- Public Routes ---
 // These generally do not need the 'protect' middleware
-router.get("/explore", getExplorePublications); // Public explore/search endpoint (e.g., /api/publications/explore)
-router.get("/:id", getPublicationById); // Public view for a single publication by ID (e.g., /api/publications/123)
+router.get("/explore", getExplorePublications); // GET /api/publications/explore
+router.get("/:id", getPublicationById); // GET /api/publications/:id
 
 // --- Protected Routes (Require Authentication via 'protect' middleware) ---
 
-router.post("/", protect, createPublication); // CREATE a new publication (POST /api/publications)
-
-// ** CORRECTED ROUTE for fetching OWN publications **
+router.post("/", protect, createPublication); // POST /api/publications
 router.get("/my-publications", protect, getMyPublications); // GET /api/publications/my-publications
+router.put("/:id", protect, updatePublication); // PUT /api/publications/:id
+router.delete("/:id", protect, deletePublication); // DELETE /api/publications/:id
 
-router.put("/:id", protect, updatePublication); // UPDATE a specific publication (PUT /api/publications/123)
-router.delete("/:id", protect, deletePublication); // DELETE a specific publication (DELETE /api/publications/123)
+// --- ** NESTED COMMENT ROUTES for a specific Publication ** ---
+
+// GET /api/publications/:publicationId/comments (Fetch comments for a publication)
+// This can be public or protected depending on your needs
+router.get("/:publicationId/comments", getCommentsForPublication);
+
+// POST /api/publications/:publicationId/comments (Requires login to post)
+router.post("/:publicationId/comments", protect, createComment);
 
 // --- Optional Protected Routes ---
-// router.patch('/:id/bookmark', protect, updateBookmarkStatus); // Example: PATCH /api/publications/123/bookmark
-// router.post('/:id/clone', protect, clonePublication);       // Example: POST /api/publications/123/clone
-
-// --- Note on Admin Routes ---
-// Admin-specific routes (like deleting *any* publication) are usually better
-// placed in adminRoutes.js and mounted under /api/admin prefix for clarity.
-// Example if kept here:
-// router.delete('/admin/:id', protect, adminOnly, adminDeletePublication); // Requires adminOnly middleware
+// router.patch('/:id/bookmark', protect, updateBookmarkStatus); // PATCH /api/publications/:id/bookmark
+// router.post('/:id/clone', protect, clonePublication);       // POST /api/publications/:id/clone
 
 export default router;

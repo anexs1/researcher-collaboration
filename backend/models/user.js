@@ -128,6 +128,10 @@ const UserModel = (sequelize) => {
       foreignKey: "requesterId",
       as: "sentRequests",
     });
+    User.hasMany(models.Comment, {
+      foreignKey: "userId",
+      as: "comments", // Alias for fetching comments written by a user
+    });
     // Add other associations if needed
   };
 
