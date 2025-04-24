@@ -1,23 +1,39 @@
 // backend/routes/userRoutes.js
 import express from "express";
-import { protect } from "../middleware/authMiddleware.js"; // Assuming protect is needed
+import { protect } from "../middleware/authMiddleware.js"; // Your auth middleware
 
-// **** CORRECT THE IMPORT NAME HERE ****
+// Correctly import all needed functions from userController
 import {
-  getUserPublicProfile, // Changed from getPublicUserProfile
+  getUserPublicProfile, // Corrected name
   updateUserProfile,
-  // ... other imports from userController ...
+  updateUserEmail, // <-- Import new function
+  updateUserPassword, // <-- Import new function
+  // Import admin functions if they belong here, otherwise they should be in adminRoutes.js
 } from "../controllers/userController.js";
+
+// Optional: Import upload middleware if used for profile picture in updateUserProfile
+// import { profileUpload } from '../middleware/uploadMiddleware.js';
 
 const router = express.Router();
 
 // --- Public Routes ---
-// **** USE THE CORRECT FUNCTION NAME HERE ****
 router.get("/public/:userId", getUserPublicProfile); // Route to get public profile
 
-// --- Protected Routes ---
-router.put("/profile", protect, updateUserProfile); // Route to update OWN profile
+// --- Protected 'Me' Routes (Operations on the logged-in user's own data) ---
+router.put(
+  "/profile",
+  protect,
+  // profileUpload.single('profileImage'), // Add upload middleware here if used
+  updateUserProfile
+); // Route to update OWN profile (general data)
 
-// Add other user-related routes here
+router.put("/me/email", protect, updateUserEmail); // Route to update OWN email (requires password verification)
+
+router.put("/me/password", protect, updateUserPassword); // Route to update OWN password (requires current password verification)
+
+// --- NOTE ---
+// Admin routes (like managing ANY user) should typically be in a separate
+// file (e.g., adminRoutes.js) and mounted under an /api/admin prefix
+// in your main server file (server.js or app.js).
 
 export default router;

@@ -1,84 +1,121 @@
+// backend/controllers/authController.js
+
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import asyncHandler from "express-async-handler";
-// controllers/authController.js
-import db from "../models/index.js"; // Import the entire db object
+import db from "../models/index.js"; // Import the database object
 
-const { User } = db; // Destructure User from db
+const { User } = db; // Destructure the User model
 
-// Your existing logic here
-
-// Token generation helper (no changes needed)
+// Helper function to generate JWT
 const generateToken = (user) => {
-  const secret = process.env.JWT_SECRET || "fallback_secret_key_for_dev_only"; // Ensure fallback for safety
+  const secret = process.env.JWT_SECRET || "fallback_secret_key_for_dev_only"; // Use environment variable with fallback
+  // Include role in the token payload for easy access control
   return jwt.sign({ id: user.id, role: user.role }, secret, {
-    expiresIn: process.env.JWT_EXPIRATION || "7d",
+    expiresIn: process.env.JWT_EXPIRATION || "7d", // Use environment variable with fallback
   });
 };
 
-// --- EDITED User Registration ---
-// Creates user as 'pending', does NOT return token
+// --- User Registration ---
+// Creates user as 'pending', requires admin approval
 export const registerUser = asyncHandler(async (req, res) => {
   const { username, email, password, role, ...otherData } = req.body;
 
   console.log("Registration attempt:", { username, email, role });
 
+  // Prevent self-assigning admin role during public registration
   if (role && role.toLowerCase() === "admin") {
-    res.status(403);
-    throw new Error("Admin registration via API is not permitted.");
+    res.status(403).json({
+      success: false,
+      message: "Admin registration via API is not permitted.",
+    });
+    return;
   }
+  // Basic validation
   if (!username || !email || !password) {
-    res.status(400);
-    throw new Error("Username, email, and password are required");
+    res.status(400).json({
+      success: false,
+      message: "Username, email, and password are required",
+    });
+    return;
   }
-  const existingUser = await User.findOne({ where: { email } });
+
+  // Check if email already exists (case-insensitive)
+  const existingUser = await User.findOne({
+    where: { email: email.toLowerCase() },
+  });
   if (existingUser) {
-    res.status(400);
-    throw new Error("Email already in use");
+    res.status(400).json({ success: false, message: "Email already in use" });
+    return;
   }
 
-  // Create User - status defaults to 'pending' via model
-  const user = await User.create({
-    username,
-    email,
-    password,
-    role: role || "user",
-    ...otherData, // Save other signup form data
-  });
+  try {
+    // Create User - status defaults to 'pending' via model
+    const user = await User.create({
+      username,
+      email: email.toLowerCase(), // Store consistently
+      password, // Hashing happens in the model's beforeSave hook
+      role: role || "user", // Default to 'user' if not provided
+      ...otherData, // Save other relevant signup form data (make sure keys match model fields)
+    });
 
-  console.log(
-    `New user registered (pending approval): ID=${user.id}, Email=${email}`
-  );
+    console.log(
+      `New user registered (pending approval): ID=${user.id}, Email=${user.email}`
+    );
 
-  // Send Success Response (No Token)
-  res.status(201).json({
-    success: true,
-    message: "Registration successful! Your account is pending admin approval.",
-  });
+    // Send Success Response (No Token - requires approval)
+    res.status(201).json({
+      success: true,
+      message:
+        "Registration successful! Your account is pending admin approval.",
+      // Do NOT return user data or token here
+    });
+  } catch (error) {
+    console.error("Registration error:", error);
+    if (error.name === "SequelizeValidationError") {
+      res.status(400).json({
+        success: false,
+        message: error.errors ? error.errors[0].message : "Validation Error",
+      });
+    } else {
+      res
+        .status(500)
+        .json({ success: false, message: "Server error during registration." });
+    }
+  }
 });
 
-// --- EDITED User Login ---
-// Checks status IS 'approved' before returning token
+// --- User Login ---
+// Authenticates, checks if status is 'approved', returns token and user data
 export const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
-    res.status(400);
-    throw new Error("Email and password required");
+    res
+      .status(400)
+      .json({ success: false, message: "Email and password required" });
+    return;
   }
 
-  const user = await User.findOne({ where: { email } });
-  if (!user || !(await user.comparePassword(password))) {
-    res.status(401);
-    throw new Error("Invalid credentials"); // Use 401 for failed login attempts
+  // Fetch user using the 'withPassword' scope to include the password hash
+  const user = await User.scope("withPassword").findOne({
+    where: { email: email.toLowerCase() },
+  });
+
+  // Check if user exists and if the password matches using the correct model method
+  // --- CORRECTED METHOD NAME ---
+  if (!user || !(await user.matchPassword(password))) {
+    // Use matchPassword
+    res
+      .status(401)
+      .json({ success: false, message: "Invalid email or password" }); // Generic error
+    return;
   }
 
-  // ---> Check Approval Status <---
+  // Check Approval Status - User must be 'approved' to log in
   if (user.status !== "approved") {
     let statusMessage = "Login failed. Account not active.";
-    switch (
-      user.status // Provide specific feedback
-    ) {
+    switch (user.status) {
       case "pending":
         statusMessage = "Account is pending admin approval.";
         break;
@@ -90,62 +127,90 @@ export const loginUser = asyncHandler(async (req, res) => {
         break;
     }
     console.warn(`Login blocked for user ${email}. Status: ${user.status}`);
-    res.status(403); // 403 Forbidden - Authenticated but not authorized to proceed
-    throw new Error(statusMessage);
+    res.status(403).json({ success: false, message: statusMessage }); // 403 Forbidden
+    return;
   }
-  // ---> End Status Check <---
 
-  // If approved, proceed
+  // If credentials are valid and status is approved, generate token
   const token = generateToken(user);
   console.log(
     `User login successful: ID=${user.id}, Role=${user.role}, Status=${user.status}`
   );
 
+  // Return token and public user data (password excluded by default scope)
   res.json({
     success: true,
     token,
     user: {
       id: user.id,
       username: user.username,
-      email: user.email,
+      email: user.email, // Consider if email should always be returned
       role: user.role,
+      status: user.status,
+      // Add other non-sensitive fields the frontend might need immediately
+      university: user.university,
+      department: user.department,
+      companyName: user.companyName,
+      jobTitle: user.jobTitle,
+      medicalSpecialty: user.medicalSpecialty,
+      hospitalName: user.hospitalName,
+      bio: user.bio,
+      profilePictureUrl: user.profilePictureUrl,
+      // etc. based on your `publicUserFields` concept
     },
   });
 });
 
 // --- Admin login ---
-// Checks role IS 'admin', DOES NOT check status
+// Authenticates, checks if role is 'admin', DOES NOT check status
 export const loginAdminUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
-    res.status(400);
-    throw new Error("Email and password required");
+    res
+      .status(400)
+      .json({ success: false, message: "Email and password required" });
+    return;
   }
 
-  const user = await User.findOne({ where: { email } });
-  if (!user || !(await user.comparePassword(password))) {
-    res.status(401);
-    throw new Error("Invalid credentials"); // Use 401
+  // Fetch user using the 'withPassword' scope
+  const user = await User.scope("withPassword").findOne({
+    where: { email: email.toLowerCase() },
+  });
+
+  // Check credentials using the correct model method
+  // --- CORRECTED METHOD NAME ---
+  if (!user || !(await user.matchPassword(password))) {
+    // Use matchPassword
+    res
+      .status(401)
+      .json({ success: false, message: "Invalid email or password" }); // Generic error
+    return;
   }
 
   // Check if the user HAS the 'admin' role
   if (user.role !== "admin") {
-    res.status(403);
-    throw new Error("Access denied. Admins only.");
+    console.warn(
+      `Non-admin login attempt blocked for ${email} on admin endpoint.`
+    );
+    res.status(403).json({
+      success: false,
+      message: "Access denied. Not an administrator.",
+    });
+    return;
   }
 
-  // --- No status check here for admin login endpoint ---
-  // Admins can log in regardless of status via this specific route,
-  // assuming their role is 'admin' and password is correct.
-  // Database record should still ideally be 'approved'.
+  // Admins bypass status check *on this specific endpoint*
+  // (Their status should ideally still be 'approved' in the DB for consistency)
 
+  const token = generateToken(user);
   console.log(`Admin login successful: ID=${user.id}, Email=${email}`);
   res.status(200).json({
     success: true,
     message: "Admin login successful",
-    token: generateToken(user),
+    token: token,
     user: {
+      // Return relevant admin user data
       id: user.id,
       username: user.username,
       email: user.email,
@@ -155,22 +220,41 @@ export const loginAdminUser = asyncHandler(async (req, res) => {
 });
 
 // --- Get logged-in user profile ---
-// (Might add status check here later if needed)
+// Uses the user data attached by the 'protect' middleware
 export const getMe = asyncHandler(async (req, res) => {
+  // req.user is populated by 'protect' middleware after verifying token
+  // It should already use the default scope (excluding password)
   if (!req.user) {
-    res.status(404);
-    throw new Error("User not found (from token)");
+    // This case implies the 'protect' middleware failed or didn't attach the user
+    res.status(401).json({
+      success: false,
+      message: "Not authorized or user data missing.",
+    });
+    return;
   }
-  // Optional: Check status even for logged-in user on profile fetch
-  // if (req.user.status !== 'approved') {
-  //     res.status(403); throw new Error("Account is not currently active.");
+
+  // Optional: You could re-fetch from DB if you need the absolute latest data
+  // const freshUser = await User.findByPk(req.user.id);
+  // if (!freshUser) {
+  //   res.status(404).json({ success: false, message: "User not found." });
+  //   return;
   // }
-  res.json({ success: true, data: req.user }); // req.user excludes password from middleware
+  // res.json({ success: true, data: freshUser });
+
+  // Usually, returning req.user is sufficient
+  res.json({ success: true, data: req.user });
 });
 
-// --- Get all users (Admin-only) ---
-// Includes status field
+// --- Admin User Management Controllers ---
+// Note: These ideally belong in a separate adminController.js and adminRoutes.js
+
+/**
+ * @desc    Get all users (Admin only)
+ * @route   GET /api/admin/users (Example Route - adjust actual route)
+ * @access  Private/Admin
+ */
 export const getAllUsers = asyncHandler(async (req, res) => {
+  // Example attributes - adjust based on what admin needs
   const users = await User.findAll({
     attributes: [
       "id",
@@ -178,26 +262,45 @@ export const getAllUsers = asyncHandler(async (req, res) => {
       "email",
       "role",
       "createdAt",
-      "status" /* other fields */,
+      "updatedAt",
+      "status",
+      "university",
+      "department",
+      "companyName",
+      "jobTitle",
+      "medicalSpecialty",
+      "hospitalName",
     ],
     order: [["createdAt", "DESC"]],
-    // Consider adding where clause if needed, e.g., where: { status: 'approved' }
+    // Consider adding pagination here for large user bases
   });
   res.status(200).json({ success: true, count: users.length, data: users });
 });
 
-// --- NEW CONTROLLERS for Admin Approval ---
-
 /**
- * @desc    Get users pending approval
- * @route   GET /api/auth/admin/users/pending
+ * @desc    Get users pending approval (Admin only)
+ * @route   GET /api/admin/users/pending (Example Route - adjust actual route)
  * @access  Private/Admin
  */
 export const getPendingUsers = asyncHandler(async (req, res) => {
   const pendingUsers = await User.findAll({
     where: { status: "pending" },
-    attributes: ["id", "username", "email", "role", "createdAt", "status"],
-    order: [["createdAt", "ASC"]],
+    // Select fields relevant for the approval decision
+    attributes: [
+      "id",
+      "username",
+      "email",
+      "role",
+      "createdAt",
+      "status",
+      "university",
+      "department",
+      "companyName",
+      "jobTitle",
+      "medicalSpecialty",
+      "hospitalName",
+    ],
+    order: [["createdAt", "ASC"]], // Show oldest first
   });
   res
     .status(200)
@@ -205,53 +308,71 @@ export const getPendingUsers = asyncHandler(async (req, res) => {
 });
 
 /**
- * @desc    Update user status (approve/reject/suspend)
- * @route   PATCH /api/auth/admin/users/:userId/status
+ * @desc    Update user status (approve/reject/suspend) (Admin only)
+ * @route   PATCH /api/admin/users/:userId/status (Example Route - adjust actual route)
  * @access  Private/Admin
  */
 export const updateUserStatus = asyncHandler(async (req, res) => {
   const { status } = req.body;
-  const { userId } = req.params; // Get userId from route parameters
+  const { userId } = req.params;
 
-  const allowedStatuses = ["approved", "rejected", "suspended", "pending"];
+  const allowedStatuses = ["approved", "rejected", "suspended", "pending"]; // Include 'pending' if admins can revert
   if (!status || !allowedStatuses.includes(status)) {
-    res.status(400);
-    throw new Error(
-      `Invalid status. Must be one of: ${allowedStatuses.join(", ")}`
-    );
+    res.status(400).json({
+      success: false,
+      message: `Invalid status. Must be one of: ${allowedStatuses.join(", ")}`,
+    });
+    return;
+  }
+  if (!userId || isNaN(parseInt(userId))) {
+    res.status(400).json({
+      success: false,
+      message: "Valid User ID parameter is required.",
+    });
+    return;
   }
 
   const user = await User.findByPk(userId);
   if (!user) {
-    res.status(404);
-    throw new Error("User not found");
+    res.status(404).json({ success: false, message: "User not found" });
+    return;
   }
 
-  // Prevent admin changing own status via this route
+  // Prevent admin changing own status via this route for safety
   if (user.id.toString() === req.user.id.toString()) {
-    // Ensure type comparison if needed
-    res.status(400);
-    throw new Error("Admins cannot change their own status via this endpoint.");
+    res.status(400).json({
+      success: false,
+      message: "Admins cannot change their own status via this endpoint.",
+    });
+    return;
   }
 
   // Update status and save
-  user.status = status;
-  await user.save();
+  try {
+    user.status = status;
+    await user.save();
 
-  console.log(
-    `Admin ${req.user.email} updated status of user ${user.email} (ID: ${userId}) to ${status}`
-  );
-  // TODO: Add email notification logic here if desired
+    console.log(
+      `Admin ${req.user.email} updated status of user ${user.email} (ID: ${userId}) to ${status}`
+    );
+    // TODO: Add email notification logic here (e.g., send approval/rejection email)
 
-  res.status(200).json({
-    success: true,
-    message: `User "${user.username}" status updated to ${status}.`,
-    data: {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-      status: user.status,
-    },
-  });
+    // Return limited data of the updated user
+    res.status(200).json({
+      success: true,
+      message: `User "${user.username}" status updated to ${status}.`,
+      data: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+      },
+    });
+  } catch (error) {
+    console.error(`Admin Error Updating Status for ${userId}:`, error);
+    res
+      .status(500)
+      .json({ success: false, message: "Server error updating status." });
+  }
 });

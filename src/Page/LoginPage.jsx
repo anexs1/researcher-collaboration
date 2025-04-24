@@ -1,3 +1,5 @@
+// src/Page/LoginPage.jsx
+
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -10,12 +12,8 @@ import {
   ArrowRightIcon,
 } from "@heroicons/react/24/outline";
 
-const LoginPage = ({
-  setIsLoggedIn,
-  setIsAdmin,
-  setCurrentUser,
-  isForAdmin = false,
-}) => {
+// Receive the 'login' function from useAuth (via App.jsx)
+const LoginPage = ({ login, isForAdmin = false }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -25,7 +23,7 @@ const LoginPage = ({
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setError("");
+    setError(""); // Clear previous errors
     setLoading(true);
 
     const loginEndpoint = isForAdmin
@@ -34,43 +32,69 @@ const LoginPage = ({
     const API_BASE =
       import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
+    // --- ADDED CONSOLE LOG FOR DEBUGGING ---
+    console.log(`Attempting login to ${loginEndpoint} with:`, {
+      email: email,
+      password: password,
+    }); // Log credentials being sent
+    // --- END ADDED CONSOLE LOG ---
+
     try {
       const response = await axios.post(`${API_BASE}${loginEndpoint}`, {
-        email,
-        password,
+        email, // Send current email state
+        password, // Send current password state
       });
-      setLoading(false);
 
+      // NOTE: No need to setLoading(false) here if navigating away on success
+
+      // Check for successful response structure from backend
       if (
         response.data?.success &&
         response.data?.token &&
-        response.data?.user
+        response.data?.user &&
+        response.data?.user?.id
       ) {
-        localStorage.setItem("authToken", response.data.token);
-        localStorage.setItem("user", JSON.stringify(response.data.user));
+        console.log("Login API call successful:", response.data); // Log successful response
+        // Call the centralized login function (updates state & localStorage)
+        login(response.data.user, response.data.token);
 
+        // Navigate after login state is processed
         const isAdminUser = response.data.user.role === "admin";
-        setIsLoggedIn(true);
-        setIsAdmin(isAdminUser);
-        setCurrentUser(response.data.user);
-
-        navigate(isAdminUser ? "/admin" : "/profile", { replace: true });
+        const destination = isAdminUser ? "/admin" : "/profile";
+        console.log(`Login success. Navigating to ${destination}`);
+        navigate(destination, { replace: true });
       } else {
-        setError(
+        // Handle cases where API gives 2xx status but response format is wrong
+        setLoading(false); // Stop loading indicator
+        const errMsg =
           response.data?.message ||
-            "Login failed. Invalid response from server."
+          "Login successful but received unexpected data from server.";
+        console.error(
+          "Login success response missing data or success=false:",
+          response.data
         );
+        setError(errMsg);
       }
     } catch (err) {
-      setLoading(false);
-      setError(
-        err.response?.data?.message ||
-          "Login failed. Please check credentials or network."
-      );
-      console.error("Login API error:", err.response?.data || err.message);
+      setLoading(false); // Stop loading indicator on error
+      // Extract error message from backend response if available
+      const errorMessage =
+        err.response?.data?.message || // Use backend message first
+        err.message || // Fallback to axios/network error message
+        "Login failed. An unknown error occurred."; // Default fallback
+      setError(errorMessage); // Display error to the user
+      // --- IMPROVED ERROR LOGGING ---
+      console.error("Login API Error:", {
+        message: err.message, // General error (e.g., Network Error, Request failed...)
+        statusCode: err.response?.status, // HTTP status (401, 400, 500 etc.)
+        responseData: err.response?.data, // Actual JSON error body from backend
+        requestData: { email: email }, // Log email sent (avoid logging password here ideally)
+      });
+      // --- END IMPROVED ERROR LOGGING ---
     }
   };
 
+  // --- JSX (No structural changes needed) ---
   return (
     <motion.div
       className="min-h-screen flex items-center justify-center bg-gray-50"
@@ -96,33 +120,41 @@ const LoginPage = ({
             </p>
           </div>
 
+          {/* Error Display Area */}
           {error && (
             <motion.div
-              className="mb-6 p-3 bg-red-50 text-red-600 rounded-lg flex items-center justify-between"
+              className="mb-6 p-3 bg-red-100 border border-red-300 text-red-700 rounded-lg flex items-center justify-between text-sm" // Adjusted styling
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
+              role="alert" // Accessibility improvement
             >
-              <span className="text-sm">{error}</span>
+              <span>{error}</span>
               <button
-                onClick={() => setError("")}
-                className="text-red-600 hover:text-red-800"
+                onClick={() => setError("")} // Clear error on click
+                className="ml-2 text-red-700 hover:text-red-900 font-semibold"
+                aria-label="Close error message"
               >
-                ✕
+                ✕ {/* Cross symbol */}
               </button>
             </motion.div>
           )}
 
+          {/* Login Form */}
           <form onSubmit={handleLogin} className="space-y-5">
+            {/* Email Input */}
             <div className="space-y-1">
               <label
                 htmlFor="email"
-                className="text-sm font-medium text-gray-700"
+                className="block text-sm font-medium text-gray-700"
               >
                 Email address
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <EnvelopeIcon className="h-5 w-5 text-gray-400" />
+                  <EnvelopeIcon
+                    className="h-5 w-5 text-gray-400"
+                    aria-hidden="true"
+                  />
                 </div>
                 <input
                   id="email"
@@ -133,22 +165,26 @@ const LoginPage = ({
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={loading}
-                  className="block w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
+                  className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none disabled:bg-gray-100 disabled:cursor-not-allowed sm:text-sm" // Adjusted styling
                   placeholder="you@example.com"
                 />
               </div>
             </div>
 
+            {/* Password Input */}
             <div className="space-y-1">
               <label
                 htmlFor="password"
-                className="text-sm font-medium text-gray-700"
+                className="block text-sm font-medium text-gray-700"
               >
                 Password
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <LockClosedIcon className="h-5 w-5 text-gray-400" />
+                  <LockClosedIcon
+                    className="h-5 w-5 text-gray-400"
+                    aria-hidden="true"
+                  />
                 </div>
                 <input
                   id="password"
@@ -159,28 +195,30 @@ const LoginPage = ({
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={loading}
-                  className="block w-full pl-10 pr-10 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
+                  className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none disabled:bg-gray-100 disabled:cursor-not-allowed sm:text-sm" // Adjusted styling
                   placeholder="••••••••"
                 />
                 <button
                   type="button"
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-blue-600" // Adjusted styling
                   onClick={() => setShowPassword(!showPassword)}
                   tabIndex={-1}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
-                    <EyeSlashIcon className="h-5 w-5 text-gray-500 hover:text-blue-600" />
+                    <EyeSlashIcon className="h-5 w-5" aria-hidden="true" />
                   ) : (
-                    <EyeIcon className="h-5 w-5 text-gray-500 hover:text-blue-600" />
+                    <EyeIcon className="h-5 w-5" aria-hidden="true" />
                   )}
                 </button>
               </div>
             </div>
 
+            {/* Forgot Password Link */}
             {!isForAdmin && (
               <div className="flex items-center justify-end">
                 <Link
-                  to="/forgot-password"
+                  to="/forgot-password" // Ensure this route exists
                   className="text-sm font-medium text-blue-600 hover:text-blue-500"
                 >
                   Forgot password?
@@ -188,19 +226,23 @@ const LoginPage = ({
               </div>
             )}
 
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex justify-center items-center gap-2 py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition duration-200 disabled:opacity-70"
+              className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150 ease-in-out disabled:opacity-70 disabled:cursor-not-allowed" // Adjusted styling
             >
               {loading ? (
                 <>
+                  {/* Loading Spinner SVG */}
                   <svg
-                    className="animate-spin h-5 w-5 text-white"
+                    className="animate-spin -ml-1 mr-2 h-5 w-5 text-white"
                     xmlns="http://www.w3.org/2000/svg"
                     fill="none"
                     viewBox="0 0 24 24"
+                    aria-hidden="true"
                   >
+                    {" "}
                     <circle
                       className="opacity-25"
                       cx="12"
@@ -208,24 +250,28 @@ const LoginPage = ({
                       r="10"
                       stroke="currentColor"
                       strokeWidth="4"
-                    ></circle>
+                    ></circle>{" "}
                     <path
                       className="opacity-75"
                       fill="currentColor"
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
+                    ></path>{" "}
                   </svg>
                   Signing in...
                 </>
               ) : (
                 <>
-                  Sign in <ArrowRightIcon className="h-4 w-4" />
+                  Sign in
+                  <ArrowRightIcon className="ml-1 h-4 w-4" aria-hidden="true" />
                 </>
               )}
             </button>
           </form>
 
-          <div className="mt-6 text-center text-sm text-gray-500">
+          {/* Signup/Switch Link */}
+          <div className="mt-6 text-center text-sm text-gray-600">
+            {" "}
+            {/* Adjusted styling */}
             {!isForAdmin ? (
               <>
                 Don't have an account?{" "}

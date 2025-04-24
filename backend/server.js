@@ -19,6 +19,8 @@ import authRoutes from "./routes/authRoutes.js"; // Adjust path
 import userRoutes from "./routes/userRoutes.js"; // Adjust path
 import projectRoutes from "./routes/projectRoutes.js"; // Adjust path
 import memberRoutes from "./routes/members.js"; // Adjust path
+import publicationRoutes from "./routes/publicationRoutes.js"; // <-- IMPORT Publication routes
+
 import collaborationRequestRoutes from "./routes/collaborationRequestRoutes.js"; // Adjust path
 import adminRoutes from "./routes/admin.routes.js"; // Adjust path
 import researchRoutes from "./routes/researchRoutes.js"; // Adjust path
@@ -122,6 +124,8 @@ const startServer = async () => {
     app.use("/api/admin", adminRoutes);
     app.use("/api/research", researchRoutes);
     app.use("/api/chat", chatRoutes);
+    app.use("/api/publications", publicationRoutes); // <-- MOUNT Publication routes
+
     console.log("✅ API routes mounted.");
 
     // --- Root Route / Health Check ---
