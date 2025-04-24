@@ -1,9 +1,11 @@
 // backend/controllers/collaborationRequestController.js
 import asyncHandler from "express-async-handler";
-import db from "../models/index.js";
-// Make sure all models used are imported correctly via db
-const { CollaborationRequest, Project, User, sequelize } = db; // Added sequelize for transaction
-// backend/controllers/collaborationRequestController.js
+import db from "../models/index.js"; // Ensure this path is correct for your structure
+
+// Import all necessary models
+const { CollaborationRequest, Project, User, Member, sequelize } = db;
+
+// --- Controller to send a request ---
 export const sendRequest = asyncHandler(async (req, res) => {
   const transaction = await sequelize.transaction(); // Start transaction
   console.log("--- SEND COLLABORATION REQUEST ---");
@@ -13,107 +15,126 @@ export const sendRequest = asyncHandler(async (req, res) => {
     const { projectId, message } = req.body;
     const requesterId = req.user?.id; // From protect middleware
 
-    // Potential Failure 1: Auth/User missing
-    if (!requesterId) throw new Error("Authentication required.");
-    // Potential Failure 2: projectId missing/invalid
-    if (!projectId || isNaN(parseInt(projectId)))
+    // --- Basic Input Validation ---
+    if (!requesterId) {
+      res.status(401); // Unauthorized
+      throw new Error("Authentication required.");
+    }
+    if (!projectId || isNaN(parseInt(projectId))) {
+      res.status(400); // Bad Request
       throw new Error("Valid Project ID is required.");
+    }
 
-    // Potential Failure 3: Project.findByPk fails (DB error)
+    // --- Check Project Existence ---
     const project = await Project.findByPk(projectId, { transaction });
     if (!project) {
       await transaction.rollback();
-      res.status(404);
+      res.status(404); // Not Found
       throw new Error("Project not found.");
     }
-    const recipientId = project.ownerId; // Owner ID
-    console.log(
-      `Project found (ID: ${projectId}), Owner ID (Recipient): ${recipientId}`
-    );
+    const recipientId = project.ownerId;
+    console.log(`Project found (ID: ${projectId}), Owner ID: ${recipientId}`);
 
-    // Potential Failure 4: Logic error (requesting own project)
+    // --- Business Logic Checks ---
     if (requesterId === recipientId) {
       await transaction.rollback();
-      res.status(400);
+      res.status(400); // Bad Request
       throw new Error("You cannot request to join your own project.");
     }
 
-    // Potential Failure 5: Member check fails (DB error, if implemented)
-    // const existingMember = await Member.findOne(...)
-    console.log("Checked for existing membership (placeholder).");
-
-    // Potential Failure 6: CollaborationRequest.findOne fails (DB error)
-    const existingRequest = await CollaborationRequest.findOne({
+    // Check if user is already a member using correct DB column names
+    const isAlreadyMember = await Member.findOne({
       where: {
-        projectId: projectId,
-        requesterId: requesterId,
+        user_id: requesterId, // <<< FIX: Use database column name user_id
+        project_id: projectId, // <<< FIX: Use database column name project_id
+      },
+      transaction,
+    });
+    if (isAlreadyMember) {
+      await transaction.rollback();
+      res.status(400); // Bad Request
+      throw new Error("You are already a member of this project.");
+    }
+    console.log("Checked for existing membership: Not a member.");
+
+    // Check for existing PENDING request
+    const existingPendingRequest = await CollaborationRequest.findOne({
+      where: {
+        projectId: projectId, // Use model attribute name here (Sequelize maps it)
+        requesterId: requesterId, // Use model attribute name here
         status: "pending",
       },
       transaction,
     });
-    if (existingRequest) {
+    if (existingPendingRequest) {
       await transaction.rollback();
-      res.status(400);
-      /* Message */ return;
+      res.status(400).json({
+        success: false,
+        message: "You already have a pending request for this project.",
+      });
+      return; // Exit early
     }
-    console.log("Checked for existing pending request.");
+    console.log("Checked for existing pending request: None found.");
 
-    // Potential Failure 7: CollaborationRequest.create fails (DB error, validation, constraint)
-    // This is where the 'recipientId' error likely happened before if model was wrong
+    // --- Create the Request ---
     const request = await CollaborationRequest.create(
       {
         projectId: projectId,
         requesterId: requesterId,
-        requestMessage: message || null, // Use correct field name
+        requestMessage: message || null,
         status: "pending",
       },
       { transaction }
     );
     console.log(`CollaborationRequest created with ID: ${request.id}`);
 
-    // Potential Failure 8: Transaction commit fails (DB error)
+    // --- Commit Transaction ---
     await transaction.commit();
-    console.log("Transaction committed.");
+    console.log("Send request transaction committed successfully.");
 
-    // Success
+    // Success Response
     res.status(201).json({
-      /* ... */
+      success: true,
+      message: "Collaboration request sent successfully.",
+      data: request, // Return the created request
     });
   } catch (error) {
-    // Catch ANY error from the try block
-    await transaction.rollback(); // Rollback on ANY error
-    console.error("Error sending collaboration request:", error); // Log the actual error
+    // --- Error Handling & Rollback ---
+    if (transaction && !transaction.finished) {
+      await transaction.rollback();
+      console.log("Transaction rolled back due to error in sendRequest.");
+    }
+    console.error("Error sending collaboration request:", error);
 
-    // Determine status code and message based on error type
-    let statusCode = 500; // Default to 500
-    let message = "Server error sending request.";
+    // Determine status code and message
+    let statusCode = res.statusCode >= 400 ? res.statusCode : 500; // Use status set in try block if available
+    let message = error.message || "Server error sending request.";
 
     if (error.name === "SequelizeUniqueConstraintError") {
       statusCode = 400;
-      message = "A request for this project already exists.";
+      message =
+        "A request for this project already exists or you are already a member.";
     } else if (error.name === "SequelizeValidationError") {
       statusCode = 400;
       message = `Validation Error: ${error.errors
         .map((e) => e.message)
         .join(", ")}`;
-    } else if (error.message === "Project not found.") {
-      statusCode = 404;
-      message = error.message;
-    } else if (
-      error.message === "You cannot request to join your own project."
-    ) {
-      statusCode = 400;
-      message = error.message;
-    } else if (error.message === "Valid Project ID is required.") {
-      statusCode = 400;
-      message = error.message;
-    } else if (error.message === "Authentication required.") {
-      statusCode = 401;
-      message = error.message;
     }
-    // Add more specific error checks if needed
+    // Specific messages from try block take precedence
+    else if (error.message === "Project not found.") statusCode = 404;
+    else if (error.message === "You cannot request to join your own project.")
+      statusCode = 400;
+    else if (error.message === "Valid Project ID is required.")
+      statusCode = 400;
+    else if (error.message === "Authentication required.") statusCode = 401;
+    else if (error.message === "You are already a member of this project.")
+      statusCode = 400;
 
-    res.status(statusCode).json({ success: false, message: message });
+    // Send error response if headers not already sent
+    if (!res.headersSent) {
+      res.status(statusCode);
+    }
+    res.json({ success: false, message: message });
   }
 });
 
@@ -121,44 +142,47 @@ export const sendRequest = asyncHandler(async (req, res) => {
 export const getReceivedRequests = asyncHandler(async (req, res) => {
   console.log("--- GET RECEIVED COLLABORATION REQUESTS ---");
   try {
-    const userId = req.user.id; // Logged-in user (potential project owner)
+    const userId = req.user?.id;
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Authentication required." });
+    }
 
-    // Find all projects owned by this user
+    // Find projects owned by the user
     const projectsOwned = await Project.findAll({
       where: { ownerId: userId },
-      attributes: ["id"], // Only need project IDs
+      attributes: ["id"],
+      raw: true,
     });
 
     if (!projectsOwned || projectsOwned.length === 0) {
-      console.log(
-        `User ${userId} owns no projects. No received requests possible.`
-      );
-      return res.status(200).json({ success: true, data: [] }); // Return empty array
+      console.log(`User ${userId} owns no projects.`);
+      return res.status(200).json({ success: true, data: [] });
     }
 
     const projectIdsOwned = projectsOwned.map((p) => p.id);
     console.log(`User ${userId} owns project IDs:`, projectIdsOwned);
 
-    // Find pending requests where the project ID is one owned by the user
+    // Find PENDING requests for those projects
     const requests = await CollaborationRequest.findAll({
       where: {
-        projectId: projectIdsOwned, // Request must be for a project owned by the user
-        status: "pending", // Only show pending requests
+        projectId: projectIdsOwned,
+        status: "pending",
       },
       include: [
-        // Include details about the requester and the project
         {
           model: User,
-          as: "requester", // Alias defined in CollaborationRequest model
-          attributes: ["id", "username", "email", "profilePictureUrl"], // Select relevant fields
+          as: "requester",
+          attributes: ["id", "username", "email", "profilePictureUrl"],
         },
         {
           model: Project,
-          as: "project", // Alias defined in CollaborationRequest model
-          attributes: ["id", "title"], // Select relevant fields
+          as: "project",
+          attributes: ["id", "title"],
         },
       ],
-      order: [["createdAt", "DESC"]], // Show newest requests first
+      order: [["createdAt", "DESC"]],
     });
 
     console.log(
@@ -167,9 +191,10 @@ export const getReceivedRequests = asyncHandler(async (req, res) => {
     res.status(200).json({ success: true, data: requests });
   } catch (error) {
     console.error("Error fetching received requests:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "Failed to fetch received requests" });
+    res.status(500).json({
+      success: false,
+      message: "Server error fetching received requests",
+    });
   }
 });
 
@@ -177,26 +202,30 @@ export const getReceivedRequests = asyncHandler(async (req, res) => {
 export const getSentRequests = asyncHandler(async (req, res) => {
   console.log("--- GET SENT COLLABORATION REQUESTS ---");
   try {
-    const userId = req.user.id; // Logged-in user (requester)
+    const userId = req.user?.id;
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Authentication required." });
+    }
 
     const requests = await CollaborationRequest.findAll({
-      where: { requesterId: userId }, // Find requests where the logged-in user is the requester
+      where: { requesterId: userId },
       include: [
         {
           model: Project,
-          as: "project", // Alias for the associated project
-          attributes: ["id", "title"], // Get project title
+          as: "project",
+          attributes: ["id", "title"],
           include: [
-            // Nested include to get the project owner's info
             {
               model: User,
-              as: "owner", // Alias for the project's owner
-              attributes: ["id", "username"], // Get owner's username
+              as: "owner",
+              attributes: ["id", "username"],
             },
           ],
         },
       ],
-      order: [["createdAt", "DESC"]], // Show newest requests first
+      order: [["createdAt", "DESC"]],
     });
 
     console.log(`Found ${requests.length} sent requests for user ${userId}.`);
@@ -205,20 +234,24 @@ export const getSentRequests = asyncHandler(async (req, res) => {
     console.error("Error fetching sent requests:", error);
     res
       .status(500)
-      .json({ success: false, message: "Failed to fetch sent requests" });
+      .json({ success: false, message: "Server error fetching sent requests" });
   }
 });
 
 // --- Controller to respond (approve/reject) to a request ---
 export const respondToRequest = asyncHandler(async (req, res) => {
-  const { requestId } = req.params; // Get request ID from URL: /api/collaboration-requests/:requestId/respond
-  const { status, responseMessage } = req.body; // Expect 'approved' or 'rejected', and optional message
-  const userId = req.user.id; // Logged-in user must be the project owner
+  const { requestId } = req.params;
+  const { status } = req.body; // Expect 'approved' or 'rejected'
+  const userId = req.user?.id; // Logged-in user (must be owner)
 
   console.log(`--- RESPOND TO COLLABORATION REQUEST ${requestId} ---`);
   console.log(`Action: ${status}, Responder ID: ${userId}`);
 
-  // Validate input status
+  // Validate input
+  if (!userId) {
+    res.status(401);
+    throw new Error("Authentication required.");
+  }
   if (!["approved", "rejected"].includes(status)) {
     res.status(400);
     throw new Error(
@@ -230,100 +263,152 @@ export const respondToRequest = asyncHandler(async (req, res) => {
     throw new Error("Valid request ID parameter is required.");
   }
 
-  // Use a transaction for atomicity (update request + potentially add member)
+  // Use a transaction for atomicity
   const transaction = await sequelize.transaction();
   try {
-    // Find the request, including the associated project to check ownership
+    // Find the request, include project details needed for logic and verification
     const request = await CollaborationRequest.findByPk(requestId, {
-      include: [{ model: Project, as: "project", attributes: ["ownerId"] }], // Need ownerId
+      include: [
+        {
+          model: Project,
+          as: "project",
+          attributes: ["id", "ownerId", "requiredCollaborators", "status"], // Fields needed
+        },
+      ],
       transaction,
+      lock: transaction.LOCK.UPDATE, // Lock request row during transaction
     });
 
     if (!request) {
-      await transaction.rollback();
       res.status(404);
       throw new Error("Collaboration request not found.");
     }
     console.log(`Request found. Project Owner ID: ${request.project?.ownerId}`);
 
-    // Verify the logged-in user owns the project associated with the request
+    // Verify ownership
     if (!request.project || request.project.ownerId !== userId) {
       await transaction.rollback();
-      res.status(403);
+      res.status(403); // Forbidden
       throw new Error("You are not authorized to respond to this request.");
     }
 
-    // Check if the request is still pending
+    // Check if already processed
     if (request.status !== "pending") {
       await transaction.rollback();
-      res.status(400);
+      res.status(400); // Bad Request
       throw new Error(`This request has already been ${request.status}.`);
     }
 
-    // Update the request status and optional response message
+    // Update request status and timestamp
     request.status = status;
-    // Only update these if the columns exist in your DB/Model:
-    if (responseMessage && CollaborationRequest.rawAttributes.responseMessage) {
-      request.responseMessage = responseMessage;
-    }
     if (CollaborationRequest.rawAttributes.respondedAt) {
       request.respondedAt = new Date();
     }
     await request.save({ transaction });
     console.log(`Request ${requestId} status updated to ${status}.`);
 
-    // If approved, add the user as a project member
-    // !!! IMPORTANT: Requires a 'Member' model and appropriate associations !!!
+    // --- If approved: Add member AND update project ---
     if (status === "approved") {
+      const projectId = request.projectId;
+      const requesterIdToAdd = request.requesterId;
+
       console.log(
-        `Attempting to add user ${request.requesterId} as member to project ${request.projectId}.`
+        `Attempting to add user ${requesterIdToAdd} as member to project ${projectId}.`
       );
       try {
-        // Check if member already exists (belt-and-suspenders)
+        // Check if already a member using correct DB column names
         const existingMember = await Member.findOne({
-          where: { userId: request.requesterId, projectId: request.projectId },
+          where: {
+            user_id: requesterIdToAdd, // Use database column name
+            project_id: projectId, // Use database column name
+          },
           transaction,
         });
+
+        let memberAddedOrExisted = false;
         if (!existingMember) {
           await Member.create(
+            // Use model attribute names (camelCase) for create, Sequelize maps them
             {
-              userId: request.requesterId,
-              projectId: request.projectId,
-              role: "member", // Or another default/configurable role
+              userId: requesterIdToAdd,
+              projectId: projectId,
+              role: "member",
+              status: "active",
             },
             { transaction }
           );
           console.log(
-            `User ${request.requesterId} added successfully to project ${request.projectId}.`
+            `User ${requesterIdToAdd} added successfully as member to project ${projectId}.`
           );
+          memberAddedOrExisted = true;
         } else {
           console.log(
-            `User ${request.requesterId} is already a member of project ${request.projectId}.`
+            `User ${requesterIdToAdd} is already a member of project ${projectId}.`
           );
+          memberAddedOrExisted = true; // Still proceed to update project count
         }
-      } catch (memberError) {
-        console.error("Error adding project member:", memberError);
-        // Throw error to trigger transaction rollback
+
+        // Update project collaborator count if member was added or already existed
+        if (memberAddedOrExisted) {
+          console.log(`Updating project ${projectId} collaborator count.`);
+          // Fetch project again within transaction, lock for update
+          const projectToUpdate = await Project.findByPk(projectId, {
+            transaction,
+            lock: transaction.LOCK.UPDATE,
+          });
+
+          if (!projectToUpdate) {
+            throw new Error(
+              `Consistency error: Project ${projectId} not found during update phase.`
+            );
+          }
+
+          console.log(
+            `Current requiredCollaborators: ${projectToUpdate.requiredCollaborators}`
+          );
+          if (projectToUpdate.requiredCollaborators > 0) {
+            projectToUpdate.requiredCollaborators -= 1; // Decrement
+
+            // If count hits zero, update project status
+            if (projectToUpdate.requiredCollaborators === 0) {
+              const closedStatus = "Closed"; // <<<--- ADJUST THIS STATUS NAME IF NEEDED
+              console.log(
+                `Required collaborators reached 0. Setting project status to '${closedStatus}'.`
+              );
+              projectToUpdate.status = closedStatus;
+            }
+            await projectToUpdate.save({ transaction }); // Save project changes
+            console.log(
+              `Project ${projectId} updated. New requiredCollaborators: ${projectToUpdate.requiredCollaborators}, Status: ${projectToUpdate.status}`
+            );
+          } else {
+            console.log(
+              `Project ${projectId} already required 0 collaborators or less. Count not changed.`
+            );
+          }
+        }
+      } catch (memberOrProjectError) {
+        console.error(
+          "Error during member addition or project update:",
+          memberOrProjectError
+        );
+        // Throw error to trigger rollback in outer catch block
         throw new Error(
-          "Failed to add user to project members after approval."
+          "Failed to process membership or project update after approval."
         );
       }
-      console.warn(
-        "Member creation logic is commented out. Requires Member model."
-      );
-    }
+    } // --- End of 'if approved' block ---
 
-    // If all steps succeed, commit the transaction
+    // If everything succeeded, commit the transaction
     await transaction.commit();
-    console.log("Response transaction committed.");
+    console.log("Response transaction committed successfully.");
 
-    // TODO: Notify the requester about the decision
-
+    // Send success response
     res.status(200).json({
       success: true,
       message: `Request ${status} successfully.`,
       data: {
-        // Return updated request info
+        // Return basic updated request info
         id: request.id,
         status: request.status,
         projectId: request.projectId,
@@ -331,29 +416,36 @@ export const respondToRequest = asyncHandler(async (req, res) => {
       },
     });
   } catch (error) {
-    // Rollback transaction if any error occurred
-    await transaction.rollback();
-    console.error(`Error responding to request ${requestId}:`, error);
-    if (!res.headersSent) {
-      // Avoid setting status if already set
-      res.status(error.status || 500); // Use error status if available (like 400, 403, 404)
+    // --- Error Handling & Rollback ---
+    if (transaction && !transaction.finished) {
+      await transaction.rollback();
+      console.log("Transaction rolled back due to error in respondToRequest.");
     }
-    // Send error response
-    res.json({
-      success: false,
-      message: error.message || "Server error responding to request.",
-    });
+    console.error(`Error responding to request ${requestId}:`, error);
+
+    let statusCode = res.statusCode >= 400 ? res.statusCode : 500;
+    let message = error.message || "Server error responding to request.";
+
+    if (!res.headersSent) {
+      res.status(statusCode);
+    }
+    res.json({ success: false, message: message });
   }
 });
 
 // --- Controller to cancel a SENT request (by the requester) ---
 export const cancelRequest = asyncHandler(async (req, res) => {
-  const { requestId } = req.params; // Get request ID from URL: /api/collaboration-requests/:requestId/cancel
-  const userId = req.user.id; // Logged-in user (must be the requester)
+  const { requestId } = req.params;
+  const userId = req.user?.id;
 
   console.log(`--- CANCEL COLLABORATION REQUEST ${requestId} ---`);
   console.log(`Attempt by User ID: ${userId}`);
 
+  // Validate input
+  if (!userId) {
+    res.status(401);
+    throw new Error("Authentication required.");
+  }
   if (!requestId || isNaN(parseInt(requestId))) {
     res.status(400);
     throw new Error("Valid request ID parameter is required.");
@@ -361,27 +453,28 @@ export const cancelRequest = asyncHandler(async (req, res) => {
 
   const transaction = await sequelize.transaction();
   try {
+    // Find the request
     const request = await CollaborationRequest.findByPk(requestId, {
       transaction,
+      lock: transaction.LOCK.UPDATE, // Lock row for deletion
     });
 
     if (!request) {
-      await transaction.rollback();
       res.status(404);
       throw new Error("Request not found");
     }
 
-    // Verify the logged-in user is the one who sent the request
+    // Verify ownership (requester)
     if (request.requesterId !== userId) {
       await transaction.rollback();
-      res.status(403);
+      res.status(403); // Forbidden
       throw new Error("Not authorized to cancel this request");
     }
 
-    // Can only cancel pending requests
+    // Check if cancellable (pending)
     if (request.status !== "pending") {
       await transaction.rollback();
-      res.status(400);
+      res.status(400); // Bad Request
       throw new Error(`Cannot cancel request with status '${request.status}'.`);
     }
 
@@ -391,27 +484,28 @@ export const cancelRequest = asyncHandler(async (req, res) => {
       `Request ${requestId} cancelled successfully by user ${userId}.`
     );
 
+    // Commit transaction
     await transaction.commit();
+    console.log("Cancellation transaction committed.");
 
-    // Use 200 OK with message, or 204 No Content
+    // Success response
     res
       .status(200)
       .json({ success: true, message: "Request cancelled successfully" });
-    // res.status(204).send();
   } catch (error) {
-    await transaction.rollback();
+    // --- Error Handling & Rollback ---
+    if (transaction && !transaction.finished) {
+      await transaction.rollback();
+      console.log("Transaction rolled back due to error during cancellation.");
+    }
     console.error("Error canceling request:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "Failed to cancel request" });
+
+    let statusCode = res.statusCode >= 400 ? res.statusCode : 500;
+    let message = error.message || "Failed to cancel request";
+
+    if (!res.headersSent) {
+      res.status(statusCode);
+    }
+    res.json({ success: false, message: message });
   }
 });
-
-// --- Compatibility Exports (if needed elsewhere, but prefer named exports) ---
-export default {
-  sendRequest,
-  getReceivedRequests,
-  getSentRequests,
-
-  cancelRequest,
-};
