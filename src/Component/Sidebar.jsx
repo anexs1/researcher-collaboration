@@ -18,9 +18,9 @@ const menuItems = [
   { path: "/explore", label: "Explore", Icon: FaBook },
   { path: "/publications", label: "Publications", Icon: FaBook },
   { path: "/publications/new", label: "Post Publication", Icon: FaPlusSquare },
-  { path: "/projects", label: "My Projects", Icon: FaFolderOpen }, // Link to project list
+  { path: "/projects", label: "Projects", Icon: FaFolderOpen }, // Link to project list
   // **** CHANGE THIS PATH ****
-  { path: "/projects/new", label: "Create Project", Icon: FaRocket }, // Correct path to create form
+  { path: "/projects/new", label: "new Project", Icon: FaRocket }, // Correct path to create form
 ];
 
 // --- Styling Classes (Keep as they are) ---

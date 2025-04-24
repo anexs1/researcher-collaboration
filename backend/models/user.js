@@ -95,11 +95,6 @@ const UserModel = (sequelize) => {
       foreignKey: "requesterId",
       as: "sentRequests",
     });
-
-    User.hasMany(models.CollaborationRequest, {
-      foreignKey: "recipientId",
-      as: "receivedRequests",
-    });
   };
 
   return User;

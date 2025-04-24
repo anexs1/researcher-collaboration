@@ -10,70 +10,69 @@ const CollaborationRequestModel = (sequelize) => {
         primaryKey: true,
         autoIncrement: true,
       },
-      // Ensure these fields and their DB column names match your table
+      // --- Fields that MUST exist in your 'joinrequests' table ---
       projectId: {
         type: DataTypes.INTEGER,
         allowNull: false,
-        field: "projectId", // Assumes DB column is 'projectId'
-        references: { model: "Projects", key: "id" }, // Assumes Projects table exists
+        field: "projectId", // Assuming DB column name is projectId
+        references: { model: "Projects", key: "id" },
         onDelete: "CASCADE",
       },
       requesterId: {
         type: DataTypes.INTEGER,
         allowNull: false,
-        field: "requesterId", // Assumes DB column is 'requesterId'
-        references: { model: "Users", key: "id" }, // Assumes Users table exists
+        field: "requesterId", // Assuming DB column name is requesterId
+        references: { model: "Users", key: "id" },
         onDelete: "CASCADE",
       },
-      // NOTE: recipientId (Project Owner) needs to be fetched separately if needed, not stored here based on error
-      // REMOVED recipientId field definition
-
       status: {
         type: DataTypes.ENUM("pending", "approved", "rejected"),
-        allowNull: false, // Ensure status is not null
+        allowNull: false,
         defaultValue: "pending",
-        field: "status", // Assumes DB column is 'status'
+        field: "status", // Assuming DB column name is status
       },
       requestMessage: {
-        // Changed from 'message' to match your model definition
         type: DataTypes.TEXT,
         allowNull: true,
-        field: "requestMessage", // Assumes DB column is 'requestMessage'
+        field: "requestMessage", // Assuming DB column name is requestMessage
       },
-
-      // --- REMOVED fields potentially not in DB ---
-      // responseMessage: { type: DataTypes.TEXT, allowNull: true, field: "responseMessage" },
-      // respondedAt: { type: DataTypes.DATE, allowNull: true, field: "respondedAt" },
-      // publicationId: { type: DataTypes.INTEGER, allowNull: true, field: "publicationId" }, // If this column doesn't exist
+      responseMessage: {
+        type: DataTypes.TEXT,
+        allowNull: true, // Matches DB 'YES' for Null from DESCRIBE output
+        field: "responseMessage",
+      },
+      respondedAt: {
+        type: DataTypes.DATE, // Matches TIMESTAMP column type
+        allowNull: true, // Matches DB 'YES' for Null from DESCRIBE output
+        field: "respondedAt",
+      },
     },
     {
-      timestamps: true, // Keep createdAt, updatedAt if they exist in DB
-      tableName: "joinrequests", // Correct table name
-      underscored: false, // Keep as you had it (camelCase model fields)
-      freezeTableName: true, // Keep as you had it
+      timestamps: true, // Requires createdAt and updatedAt columns in DB
+      tableName: "joinrequests",
+      underscored: false, // Use if DB columns are camelCase (projectId)
+      freezeTableName: true,
       indexes: [
-        // Update indexes based on existing columns
+        // Only index existing columns
         { fields: ["projectId"] },
         { fields: ["requesterId"] },
-        // { fields: ['recipientId'] }, // Remove if column removed
         { fields: ["status"] },
-        // Adjust unique key if recipientId is removed
-        { unique: true, fields: ["projectId", "requesterId"] }, // Unique request per user per project
+        // Unique key based on existing columns (pending status included)
+        // If you want *any* request (approved/rejected too) to be unique per user/project, remove status here
+        { unique: true, fields: ["projectId", "requesterId", "status"] },
       ],
     }
   );
 
   CollaborationRequest.associate = (models) => {
     CollaborationRequest.belongsTo(models.User, {
-      foreignKey: "requesterId", // Use the correct field name from this model
+      foreignKey: "requesterId",
       as: "requester",
     });
     CollaborationRequest.belongsTo(models.Project, {
-      foreignKey: "projectId", // Use the correct field name from this model
+      foreignKey: "projectId",
       as: "project",
     });
-    // Remove recipient association if field is removed
-    // CollaborationRequest.belongsTo(models.User, { foreignKey: 'recipientId', as: 'recipient' });
   };
 
   return CollaborationRequest;

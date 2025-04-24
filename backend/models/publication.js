@@ -69,10 +69,10 @@ const PublicationModel = (sequelize) => {
       as: "owner",
     });
 
-    Publication.hasMany(models.CollaborationRequest, {
-      foreignKey: "publicationId",
-      as: "collaborationRequests",
-    });
+    // Publication.hasMany(models.CollaborationRequest, {
+    //   foreignKey: "publicationId",
+    //   as: "collaborationRequests",
+    // });
   };
 
   return Publication;
