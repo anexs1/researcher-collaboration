@@ -3,112 +3,90 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+dotenv.config(); // ⬅️ this must come before importing anything else that uses env vars
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
-import { createServer } from "http"; // Use http server for Socket.IO
-import { Server as SocketIOServer } from "socket.io"; // Rename to avoid conflict
+import http from "http";
 
-// --- Database ---
-import { connectDB } from "./config/db.js"; // Only import connectDB unless sequelize instance needed here
+// --- Load Environment Variables VERY EARLY ---
+// --------------------------------------------
 
-// --- Load Environment Variables ---
-dotenv.config();
+// --- Now import modules that might depend on process.env ---
+import { initSocketIO } from "./config/socketSetup.js"; // Adjust path if needed
+import { connectDB } from "./config/db.js"; // Adjust path if needed
+import authRoutes from "./routes/authRoutes.js"; // Adjust path
+import userRoutes from "./routes/userRoutes.js"; // Adjust path
+import projectRoutes from "./routes/projectRoutes.js"; // Adjust path
+import memberRoutes from "./routes/members.js"; // Adjust path
+import collaborationRequestRoutes from "./routes/collaborationRequestRoutes.js"; // Adjust path
+import adminRoutes from "./routes/admin.routes.js"; // Adjust path
+import researchRoutes from "./routes/researchRoutes.js"; // Adjust path
+import chatRoutes from "./routes/chatRoutes.js"; // Adjust path
+import { notFound, errorHandler } from "./middleware/errorMiddleware.js"; // Adjust path, ensure file exists
 
-// --- Verify Essential Environment Variables ---
+// --- Verify Essential Environment Variables AFTER dotenv.config() ---
 const JWT_SECRET = process.env.JWT_SECRET;
 const PORT = process.env.PORT || 5000;
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173"; // Your React app URL
+
+// Add a console log to verify JWT_SECRET loading
+console.log(
+  "JWT_SECRET loaded in server.js:",
+  JWT_SECRET
+    ? `Yes (starts with: ${JWT_SECRET.substring(0, 3)}...)`
+    : "No - Check .env file!"
+);
 
 if (!JWT_SECRET) {
   console.error(
-    "❌ FATAL ERROR: JWT_SECRET is not defined in environment variables."
+    "❌ FATAL ERROR: JWT_SECRET is not defined in environment variables. Ensure it's in .env and dotenv.config() is called early."
   );
   process.exit(1); // Exit if secret is missing
 }
-
-// --- Route Imports ---
-import authRoutes from "./routes/authRoutes.js";
-import userRoutes from "./routes/userRoutes.js";
-import projectRoutes from "./routes/projectRoutes.js";
-import memberRoutes from "./routes/members.js"; // Assuming this handles /api/projects/:projectId/members internally
-import collaborationRequestRoutes from "./routes/collaborationRequestRoutes.js"; // Import the routes
-import adminRoutes from "./routes/admin.routes.js"; // Check filename if different
-import researchRoutes from "./routes/researchRoutes.js";
-import chatRoutes from "./routes/chatRoutes.js";
+// -----------------------------------------------------------------
 
 // --- Express App Initialization ---
 const app = express();
-const httpServer = createServer(app); // Create HTTP server from Express app
+const server = http.createServer(app); // Create HTTP server BEFORE Socket.IO init
+
+// --- Initialize Socket.IO using the setup function ---
+const io = initSocketIO(server); // Pass the http server instance
+// ---------------------------------------------------
 
 // --- ES Module __dirname Equivalent ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --- Socket.IO Setup ---
-const io = new SocketIOServer(httpServer, {
-  cors: {
-    origin: FRONTEND_URL, // Use environment variable or default
-    methods: ["GET", "POST"],
-    credentials: true,
-  },
-});
+// --- Core Express Middleware ---
+app.use(cors({ origin: FRONTEND_URL, credentials: true })); // Enable CORS
+app.use(express.json({ limit: "10mb" })); // Parse JSON bodies
+app.use(express.urlencoded({ extended: true, limit: "10mb" })); // Parse URL-encoded bodies
 
-// Make io accessible to routes/controllers if needed
-app.set("io", io);
-
-// Basic Socket.IO connection handler
-io.on("connection", (socket) => {
-  console.log(`🔌 New client connected: ${socket.id}`);
-
-  socket.on("join_project", (projectId) => {
-    const roomName = `project_${projectId}`;
-    socket.join(roomName);
-    console.log(`User ${socket.id} joined project room: ${roomName}`);
-  });
-
-  socket.on("send_message", (data) => {
-    const roomName = `project_${data.projectId}`;
-    console.log(`Message received for room ${roomName}:`, data.message);
-    // Emit to others in the room
-    socket.to(roomName).emit("receive_message", data);
-    // TODO: Save message to DB via controller/service
-  });
-
-  socket.on("disconnect", (reason) => {
-    console.log(`🔌 Client disconnected: ${socket.id}, Reason: ${reason}`);
-  });
-
-  socket.on("connect_error", (err) => {
-    console.error(`Socket Connect Error: ${err.message}`);
-  });
-});
-
-// --- Core Middleware ---
-app.use(cors({ origin: FRONTEND_URL, credentials: true }));
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-
-// Static File Serving
+// --- Static File Serving for uploads ---
 const uploadsPath = path.join(__dirname, "uploads");
-console.log(`Serving static files from: ${uploadsPath}`);
+console.log(`Attempting to serve static files from: ${uploadsPath}`);
+// Optional: Check and create directory if it doesn't exist
 if (!fs.existsSync(uploadsPath)) {
   console.warn(`⚠️ Uploads directory does not exist, creating: ${uploadsPath}`);
-  fs.mkdirSync(uploadsPath, { recursive: true });
+  try {
+    fs.mkdirSync(uploadsPath, { recursive: true });
+    console.log(`✅ Successfully created uploads directory.`);
+  } catch (mkdirErr) {
+    console.error(`❌ Error creating uploads directory: ${mkdirErr.message}`);
+  }
 }
-app.use("/uploads", express.static(uploadsPath));
+app.use("/uploads", express.static(uploadsPath)); // Serve files from /uploads URL path
 
-// --- Settings File Initialization ---
+// --- Settings File Initialization (Optional) ---
 const initializeSettingsFile = () => {
-  const DATA_DIR = path.join(process.cwd(), "data");
+  const DATA_DIR = path.join(process.cwd(), "data"); // Or adjust path as needed
   const SETTINGS_PATH = path.join(DATA_DIR, "settings.json");
   const DEFAULT_SETTINGS = {
-    /* ... your default settings ... */
+    /* default settings */
   };
   try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR);
-    }
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
     if (!fs.existsSync(SETTINGS_PATH)) {
       fs.writeFileSync(
         SETTINGS_PATH,
@@ -117,7 +95,6 @@ const initializeSettingsFile = () => {
       );
       console.log("✅ Default settings.json file created at:", SETTINGS_PATH);
     } else {
-      // Optionally read and merge existing settings with defaults here if needed
       console.log("ℹ️ Settings file already exists at:", SETTINGS_PATH);
     }
   } catch (err) {
@@ -132,18 +109,16 @@ const startServer = async () => {
     await connectDB();
     console.log("✅ Database connected successfully.");
 
-    // 2. Initialize Settings File
-    initializeSettingsFile();
+    // 2. Initialize Settings File (if used)
+    // initializeSettingsFile();
 
     // --- API Routes Mounting ---
     console.log(" Mouting API routes...");
     app.use("/api/auth", authRoutes);
     app.use("/api/users", userRoutes);
     app.use("/api/projects", projectRoutes);
-    // Mount member routes under the project context
-    app.use("/api/projects/:projectId/members", memberRoutes);
-    // **** CORRECTED MOUNT PATH FOR COLLABORATION REQUESTS ****
-    app.use("/api/collaboration-requests", collaborationRequestRoutes); // Use hyphenated path
+    app.use("/api/projects/:projectId/members", memberRoutes); // Check route param handling
+    app.use("/api/collaboration-requests", collaborationRequestRoutes);
     app.use("/api/admin", adminRoutes);
     app.use("/api/research", researchRoutes);
     app.use("/api/chat", chatRoutes);
@@ -151,45 +126,26 @@ const startServer = async () => {
 
     // --- Root Route / Health Check ---
     app.get("/", (req, res) => {
-      /* ... HTML response ... */
       res.setHeader("Content-Type", "text/html");
-      res.send(`<h1>API Running</h1><p>Status: OK</p>`);
-    });
-
-    // --- 404 Not Found Handler ---
-    app.use((req, res, next) => {
-      const error = new Error(
-        `🤔 Not Found - ${req.method} ${req.originalUrl}`
+      res.send(
+        `<h1>API Running</h1><p>Status: OK - Timestamp: ${new Date().toISOString()}</p>`
       );
-      error.status = 404;
-      next(error);
     });
 
-    // --- Global Error Handler ---
-    app.use((err, req, res, next) => {
-      console.error("💥 Global Error Handler Caught:");
-      console.error("Error:", err.message);
-      if (process.env.NODE_ENV === "development") {
-        console.error("Stack:", err.stack);
-      }
-      const statusCode = err.status || err.statusCode || 500;
-      res.status(statusCode).json({
-        success: false,
-        message: err.message || "Internal Server Error",
-        // Optionally include stack in dev only
-        ...(process.env.NODE_ENV === "development" && { stack: err.stack }),
-      });
-    });
+    // --- Error Handling Middleware (Should be LAST after routes) ---
+    app.use(notFound); // Handle 404s
+    app.use(errorHandler); // Handle all other errors
 
     // --- Start Listening ---
-    httpServer.listen(PORT, () => {
+    // Use the http server instance which has Socket.IO attached
+    server.listen(PORT, () => {
       console.log(`\n🚀 Server running on port ${PORT}`);
       console.log(`   Frontend expected at: ${FRONTEND_URL}`);
-      console.log(`💬 WebSocket server ready.`);
+      // Socket.IO start message is now inside initSocketIO
     });
   } catch (err) {
     console.error("❌ Failed to start server:", err);
-    process.exit(1);
+    process.exit(1); // Exit process on critical startup failure
   }
 };
 

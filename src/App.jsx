@@ -1,4 +1,4 @@
-/// src/App.jsx
+// src/App.jsx
 
 import React, { useEffect, useState, useCallback } from "react";
 import {
@@ -8,78 +8,103 @@ import {
   Navigate,
   useLocation,
 } from "react-router-dom";
-import axios from "axios";
+import axios from "axios"; // Keep axios if used elsewhere, not directly needed for auth check here
+import { io } from "socket.io-client"; // Import socket client
+import { motion, AnimatePresence } from "framer-motion"; // For notification animation
 import "./index.css"; // Ensure your main CSS is imported
 
 // --- Layout Imports ---
-import AdminLayout from "./Layout/AdminLayout";
-import UserLayout from "./Layout/UserLayout";
+import AdminLayout from "./Layout/AdminLayout"; // Adjust path
+import UserLayout from "./Layout/UserLayout"; // Adjust path
 
 // --- Component Imports ---
-import Navbar from "./Component/Navbar";
-import NormalizeURL from "./Component/NormalizeURL";
-import AcademicSignupForm from "./Component/AcademicSignupForm";
-import CorporateSignupForm from "./Component/CorporateSignupForm";
-import MedicalSignupForm from "./Component/MedicalSignupForm";
-import NotResearcherSignupForm from "./Component/NotResearcherSignupForm";
-import UserActivityPage from "./Component/Profile/UserActivityPage";
+import Navbar from "./Component/Navbar"; // Adjust path
+import NormalizeURL from "./Component/NormalizeURL"; // Adjust path
+import AcademicSignupForm from "./Component/AcademicSignupForm"; // Adjust path
+import CorporateSignupForm from "./Component/CorporateSignupForm"; // Adjust path
+import MedicalSignupForm from "./Component/MedicalSignupForm"; // Adjust path
+import NotResearcherSignupForm from "./Component/NotResearcherSignupForm"; // Adjust path
+import UserActivityPage from "./Component/Profile/UserActivityPage"; // Adjust path
+import Notification from "./Component/Common/Notification"; // Adjust path
 
 // --- Page Imports (User Facing) ---
-import Home from "./Page/Home";
-import ExplorePage from "./Page/ExplorePage";
-import SignupPage from "./Page/SignupPage";
-import LoginPage from "./Page/LoginPage";
-import Profile from "./Page/Profile";
-import Publication from "./Page/Publication";
-import EditPublicationPage from "./Page/EditPublicationPage";
-import Projects from "./Page/Projects"; // Main projects list page
-import CreateProjectPage from "./Page/CreateProjectPage"; // **** Import the Create Project page ****
-import EditProjectPage from "./Page/EditProjectPage"; // Project edit page
-import Messages from "./Page/Messages";
-import PostPublicationPage from "./Page/PostPublicationPage";
-import AccountSettingsPage from "./Page/Settings/AccountSettingsPage";
-import ResearchDetails from "./Page/ResearchDetails";
-import ResearchForm from "./Page/ResearchForm";
+import Home from "./Page/Home"; // Adjust path
+import ExplorePage from "./Page/ExplorePage"; // Adjust path
+import SignupPage from "./Page/SignupPage"; // Adjust path
+import LoginPage from "./Page/LoginPage"; // Adjust path
+import Profile from "./Page/Profile"; // Adjust path
+import Publication from "./Page/Publication"; // Adjust path
+import EditPublicationPage from "./Page/EditPublicationPage"; // Adjust path
+import Projects from "./Page/Projects"; // Adjust path
+import CreateProjectPage from "./Page/CreateProjectPage"; // Adjust path
+import EditProjectPage from "./Page/EditProjectPage"; // Adjust path
+import Messages from "./Page/Messages"; // Adjust path
+import PostPublicationPage from "./Page/PostPublicationPage"; // Adjust path
+import AccountSettingsPage from "./Page/Settings/AccountSettingsPage"; // Adjust path
+import ResearchDetails from "./Page/ResearchDetails"; // Adjust path
+import ResearchForm from "./Page/ResearchForm"; // Adjust path
 
 // --- Page Imports (Admin Facing) ---
-import AdminDashboardPage from "./Page/Admin/AdminDashboardPage";
-import AdminUsersPage from "./Page/Admin/AdminUsersPage";
-import AdminSettingsPage from "./Page/Admin/AdminSettingsPage";
-import AdminReportsPage from "./Page/Admin/AdminReportsPage";
-import AdminPendingUsersPage from "./Page/Admin/AdminPendingUsersPage";
-import AdminChatPage from "./Page/Admin/AdminChatPage";
-import AdminPublicationManagementPage from "./Page/Admin/AdminPublicationManagementPage";
+import AdminDashboardPage from "./Page/Admin/AdminDashboardPage"; // Adjust path
+import AdminUsersPage from "./Page/Admin/AdminUsersPage"; // Adjust path
+import AdminSettingsPage from "./Page/Admin/AdminSettingsPage"; // Adjust path
+import AdminReportsPage from "./Page/Admin/AdminReportsPage"; // Adjust path
+import AdminPendingUsersPage from "./Page/Admin/AdminPendingUsersPage"; // Adjust path
+import AdminChatPage from "./Page/Admin/AdminChatPage"; // Adjust path
+import AdminPublicationManagementPage from "./Page/Admin/AdminPublicationManagementPage"; // Adjust path
+
+// --- Auth Hook (Example - Replace with your actual implementation) ---
+// You MUST have a way to get the current user and token
+const useAuth = () => {
+  // Replace this with your actual auth context or state management logic
+  const [user, setUser] = useState(() => {
+    const storedUser = localStorage.getItem("user");
+    try {
+      return storedUser ? JSON.parse(storedUser) : null;
+    } catch (e) {
+      localStorage.removeItem("user");
+      return null;
+    }
+  });
+  const [token, setToken] = useState(() => localStorage.getItem("authToken"));
+
+  // Example: Listen for custom event dispatched by LoginPage/Logout
+  useEffect(() => {
+    const handleAuthChange = () => {
+      console.log("Auth state change detected, updating hook state.");
+      setToken(localStorage.getItem("authToken"));
+      const storedUser = localStorage.getItem("user");
+      try {
+        setUser(storedUser ? JSON.parse(storedUser) : null);
+      } catch (e) {
+        localStorage.removeItem("user");
+        setUser(null);
+      }
+    };
+    // You might use a more robust method like Context API dispatch
+    window.addEventListener("authChange", handleAuthChange);
+    return () => window.removeEventListener("authChange", handleAuthChange);
+  }, []);
+
+  return { user, token, setUser, setToken };
+};
 
 // --- Helper Components ---
 
-// Simple Loading Screen
 const LoadingScreen = ({ message = "Loading..." }) => (
   <div className="flex justify-center items-center h-screen text-lg font-medium text-gray-700">
+    {/* Consider adding a visual spinner */}
     {message}
   </div>
 );
 
-// Protected Route for Regular Logged-in Users (WITH DEBUG LOGGING)
+// Protected Route for Regular Users
 const ProtectedRoute = ({ isLoggedIn, children }) => {
   const location = useLocation();
-  console.log(
-    `DEBUG: ProtectedRoute Check for path "${location.pathname}": isLoggedIn is [${isLoggedIn}]`
-  );
-  if (isLoggedIn === null) {
-    console.log(
-      `DEBUG: ProtectedRoute for path "${location.pathname}": Rendering LoadingScreen because isLoggedIn is null.`
-    );
+  if (isLoggedIn === null)
     return <LoadingScreen message="Verifying session..." />;
-  }
-  if (!isLoggedIn) {
-    console.log(
-      `DEBUG: ProtectedRoute for path "${location.pathname}": Redirecting to /login because isLoggedIn is [${isLoggedIn}].`
-    );
+  if (!isLoggedIn)
     return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-  console.log(
-    `DEBUG: ProtectedRoute for path "${location.pathname}": Allowing access because isLoggedIn is [${isLoggedIn}]. Rendering children.`
-  );
   return children;
 };
 
@@ -90,119 +115,168 @@ const AdminProtectedRoute = ({ isLoggedIn, isAdmin, children }) => {
     return <LoadingScreen message="Verifying access level..." />;
   if (!isLoggedIn)
     return <Navigate to="/login" state={{ from: location }} replace />;
-  if (!isAdmin) {
-    console.warn("Non-admin access attempt to:", location.pathname);
-    return <Navigate to="/profile" replace />;
-  }
+  if (!isAdmin) return <Navigate to="/" replace />; // Redirect non-admins to home perhaps
   return children;
 };
 
 // --- Main App Component ---
 function App() {
-  // Authentication State
-  const [isAdmin, setIsAdmin] = useState(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(null);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [loadingAuth, setLoadingAuth] = useState(true);
+  // Authentication State from Hook
+  const {
+    user: currentUser,
+    token,
+    setUser: setCurrentUserInternal,
+    setToken: setAuthTokenInternal,
+  } = useAuth();
+  const [isAdmin, setIsAdmin] = useState(null); // Derived state based on currentUser
+  const [isLoggedIn, setIsLoggedIn] = useState(null); // Derived state based on token/currentUser
+  const [loadingAuth, setLoadingAuth] = useState(true); // Initial auth check loading
 
-  // Other App State
+  // Socket.IO State
+  const [socket, setSocket] = useState(null);
+  const [appNotification, setAppNotification] = useState({
+    message: "",
+    type: "",
+    show: false,
+    data: null,
+  });
+
+  // Other App State (Example)
   const [researchData, setResearchData] = useState([]);
   const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
-  // Optional: Load research data
-  useEffect(() => {
-    try {
-      /* ... load research data ... */
-    } catch (error) {
-      /* ... */
-    }
-  }, []);
+  // --- Notification Handler ---
+  const showAppNotification = useCallback(
+    (message, type = "info", data = null) => {
+      // Optional: Prevent duplicate notifications in quick succession
+      // if (appNotification.show && appNotification.message === message) return;
+      setAppNotification({ message, type, show: true, data });
+      setTimeout(
+        () => setAppNotification((prev) => ({ ...prev, show: false })),
+        7000
+      );
+    },
+    []
+  ); // Empty dependency array - this function doesn't depend on changing state
 
-  // Logout Handler
-  const handleLogout = useCallback(() => {
+  // --- Socket Connection Effect ---
+  useEffect(() => {
+    let newSocket = null;
+    if (token && currentUser?.id && !socket) {
+      // Connect only if logged in (token & user ID exist) and not already connected
+      console.log(
+        `Socket Effect: User ${currentUser.id} logged in with token. Attempting connection...`
+      );
+      newSocket = io(API_BASE, {
+        auth: { token }, // Send token for backend authentication
+      });
+
+      newSocket.on("connect", () => {
+        console.log("Socket connected:", newSocket.id);
+        setSocket(newSocket);
+      });
+
+      newSocket.on("disconnect", (reason) => {
+        console.log("Socket disconnected:", reason);
+        // Only nullify socket state if it's the one we are tracking
+        setSocket((currentSocket) =>
+          currentSocket?.id === newSocket?.id ? null : currentSocket
+        );
+        if (reason === "io server disconnect") {
+          // The server explicitly disconnected the socket (e.g., invalid token during connection)
+          showAppNotification(
+            "Real-time connection lost. Please refresh or log in again.",
+            "error"
+          );
+        }
+        // Optional: Implement reconnection logic here if needed
+      });
+
+      newSocket.on("connect_error", (err) => {
+        console.error(
+          `Socket connection error for user ${currentUser.id}:`,
+          err.message
+        );
+        // Avoid flooding notifications for connection errors
+        // showAppNotification(`Cannot connect to real-time service: ${err.message}`, 'error');
+      });
+
+      // --- Listen for Server-Sent Events ---
+      newSocket.on("new_collaboration_request", (data) => {
+        console.log("Received new_collaboration_request:", data);
+        if (data && data.message) {
+          showAppNotification(data.message, "info", data);
+        }
+        // TODO: Update request counts or trigger refetches if needed
+      });
+
+      newSocket.on("request_response", (data) => {
+        console.log("Received request_response:", data);
+        if (data && data.message) {
+          showAppNotification(
+            data.message,
+            data.status === "approved" ? "success" : "warning",
+            data
+          );
+        }
+        // TODO: Update request lists/status if needed
+      });
+      // Add more event listeners here...
+      // ---------------------------------
+    } else if (!token && socket) {
+      // If token removed (logout) or currentUser lost, disconnect existing socket
+      console.log(
+        "Socket Effect: Token or User removed, disconnecting active socket..."
+      );
+      socket.disconnect();
+      setSocket(null);
+    }
+
+    // Cleanup function: Disconnect socket when effect dependencies change or component unmounts
+    return () => {
+      if (newSocket) {
+        console.log(
+          "Socket Effect Cleanup: Disconnecting socket",
+          newSocket.id
+        );
+        newSocket.disconnect();
+        setSocket(null); // Ensure state is cleared on cleanup
+      }
+    };
+    // Re-run this effect if the user's token changes (login/logout) or if the currentUser object reference changes
+  }, [token, currentUser?.id, API_BASE, showAppNotification]); // Added currentUser.id
+
+  // --- Auth State Derivation Effect ---
+  useEffect(() => {
+    setLoadingAuth(true);
+    // Derive loggedIn and admin status directly from the auth hook state
+    const userIsLoggedIn = !!token && !!currentUser?.id;
+    const userIsAdmin = currentUser?.role === "admin";
+
+    if (isLoggedIn !== userIsLoggedIn) setIsLoggedIn(userIsLoggedIn);
+    if (isAdmin !== userIsAdmin) setIsAdmin(userIsAdmin);
+
     console.log(
-      "Executing handleLogout: Clearing auth state and localStorage."
+      `Auth State Derived: LoggedIn=${userIsLoggedIn}, Admin=${userIsAdmin}`
     );
+    setLoadingAuth(false);
+  }, [token, currentUser]); // Re-derive if token or user changes
+
+  // --- Logout Handler ---
+  const handleLogout = useCallback(() => {
+    console.log("Executing handleLogout...");
     localStorage.removeItem("authToken");
     localStorage.removeItem("user");
-    setIsLoggedIn(false);
-    setIsAdmin(false);
-    setCurrentUser(null);
-  }, []);
-
-  // Auth Validation Effect
-  useEffect(() => {
-    console.log("Auth Validation Effect running...");
-    const token = localStorage.getItem("authToken");
-    const storedUserJson = localStorage.getItem("user");
-    let initialUser = null;
-    if (storedUserJson) {
-      try {
-        initialUser = JSON.parse(storedUserJson);
-      } catch (e) {
-        console.error("Auth Effect: Failed to parse stored user, clearing:", e);
-        localStorage.removeItem("user");
-      }
+    setAuthTokenInternal(null); // Update auth hook state -> triggers useEffect
+    setCurrentUserInternal(null); // Update auth hook state -> triggers useEffect
+    if (socket) {
+      console.log("Disconnecting socket due to logout.");
+      socket.disconnect(); // Disconnect socket explicitly on logout
     }
+    // Navigation is handled by ProtectedRoute checks after state updates
+  }, [socket, setAuthTokenInternal, setCurrentUserInternal]);
 
-    if (!token) {
-      console.log("Auth Effect: No token found. Setting logged out state.");
-      setIsLoggedIn(false);
-      setIsAdmin(false);
-      setCurrentUser(null);
-      setLoadingAuth(false);
-      return;
-    }
-
-    console.log("Auth Effect: Token found. Initiating validation...");
-    setLoadingAuth(true);
-    setCurrentUser(initialUser);
-    setIsLoggedIn(true);
-    setIsAdmin(initialUser?.role === "admin"); // Optimistic set
-
-    axios
-      .post(
-        `${API_BASE}/api/auth/validate`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
-      .then((response) => {
-        console.log(
-          "Auth Effect: Validation API call successful. Response data:",
-          response.data
-        );
-        if (response.data?.success && response.data?.user) {
-          const fetchedUser = response.data.user;
-          console.log(
-            "Auth Effect: Token validation PASSED for user:",
-            fetchedUser.id
-          );
-          setIsLoggedIn(true);
-          setIsAdmin(fetchedUser.role === "admin");
-          setCurrentUser(fetchedUser);
-          localStorage.setItem("user", JSON.stringify(fetchedUser));
-        } else {
-          console.warn(
-            "Auth Effect: Token validation FAILED (in .then):",
-            response.data?.message || "Response invalid. Logging out."
-          );
-          handleLogout();
-        }
-      })
-      .catch((error) => {
-        console.error(
-          "Auth Effect: Token validation API call FAILED (in .catch):",
-          error.response?.data || error.message
-        );
-        handleLogout();
-      })
-      .finally(() => {
-        setLoadingAuth(false);
-        console.log("Auth Effect: Validation process finished.");
-      });
-  }, [handleLogout, API_BASE]);
-
-  // --- Other State Handlers ---
+  // --- Other State Handlers (Placeholder) ---
   const handleAddResearch = (newResearch) => {
     /* ... */
   };
@@ -214,25 +288,43 @@ function App() {
   };
 
   // --- Render Logic ---
-  console.log("DEBUG: App Component Render State:", {
-    isLoggedIn,
-    isAdmin,
-    loadingAuth,
-    currentUserExists: !!currentUser,
-  });
   if (loadingAuth) {
-    return <LoadingScreen message="Initializing Application..." />;
+    return <LoadingScreen message="Initializing..." />;
   }
 
   return (
     <Router>
       <NormalizeURL />
+      {/* Render Navbar conditionally based on route */}
       <ConditionalNavbar
         isLoggedIn={isLoggedIn}
         currentUser={currentUser}
         onLogout={handleLogout}
       />
-      <div className="pt-16 md:pt-20">
+
+      {/* Main Content Area */}
+      <div className="pt-16 md:pt-20 bg-gray-50 min-h-screen">
+        {/* Global Notification Area */}
+        <AnimatePresence>
+          {appNotification.show && (
+            <motion.div
+              initial={{ opacity: 0, y: -30 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="fixed top-20 md:top-24 right-5 z-[200] w-full max-w-md" // Adjusted top position
+            >
+              <Notification
+                message={appNotification.message}
+                type={appNotification.type}
+                onClose={() =>
+                  setAppNotification((prev) => ({ ...prev, show: false }))
+                }
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Application Routes */}
         <Routes>
           {/* --- Public Routes --- */}
           <Route path="/" element={<Home />} />
@@ -268,7 +360,7 @@ function App() {
                 <LoginPage
                   setIsLoggedIn={setIsLoggedIn}
                   setIsAdmin={setIsAdmin}
-                  setCurrentUser={setCurrentUser}
+                  setCurrentUser={setCurrentUserInternal}
                 />
               )
             }
@@ -300,9 +392,12 @@ function App() {
               </ProtectedRoute>
             }
           >
-            {/* Standard User Pages */}
             <Route
               path="/profile"
+              element={<Profile currentUser={currentUser} />}
+            />
+            <Route
+              path="/profile/:userId"
               element={<Profile currentUser={currentUser} />}
             />
             <Route
@@ -325,29 +420,16 @@ function App() {
               path="/settings/account"
               element={<AccountSettingsPage currentUser={currentUser} />}
             />
-
-            {/* Project Related Routes */}
-            <Route path="/projects">
-              {" "}
-              {/* Parent route */}
-              <Route
-                index
-                element={<Projects currentUser={currentUser} />}
-              />{" "}
-              {/* List projects at /projects */}
-              {/* **** ADDED ROUTE FOR CREATE PROJECT **** */}
-              <Route path="new" element={<CreateProjectPage />} />{" "}
-              {/* Create form at /projects/new */}
-              <Route
-                path="edit/:projectId"
-                element={<EditProjectPage currentUser={currentUser} />}
-              />{" "}
-              {/* Edit form at /projects/edit/:id */}
-              {/* Optional: Route for viewing a single project detail page */}
-              {/* <Route path=":projectId" element={<ProjectDetailPage />} /> */}
-            </Route>
-
-            {/* Research Related Routes */}
+            <Route
+              path="/projects"
+              element={<Projects currentUser={currentUser} />}
+            />{" "}
+            {/* Render Projects at /projects */}
+            <Route path="/projects/new" element={<CreateProjectPage />} />
+            <Route
+              path="/projects/edit/:projectId"
+              element={<EditProjectPage currentUser={currentUser} />}
+            />
             <Route
               path="/research/create"
               element={
@@ -367,6 +449,7 @@ function App() {
                 />
               }
             />
+            {/* Add other nested user routes here */}
           </Route>
 
           {/* --- Protected Admin Routes --- */}
@@ -391,9 +474,11 @@ function App() {
               element={<AdminPublicationManagementPage />}
             />
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
+            {/* Add other nested admin routes here */}
           </Route>
 
           {/* --- 404 Not Found --- */}
+          {/* Consider a dedicated 404 component */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
@@ -405,6 +490,7 @@ function App() {
 const ConditionalNavbar = ({ isLoggedIn, currentUser, onLogout }) => {
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith("/admin");
+  // Hide navbar on admin routes
   if (isAdminRoute) return null;
   return (
     <Navbar
