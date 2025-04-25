@@ -34,8 +34,6 @@ Steps:
 
 ## 3. Backend Development (Node.js / Express.js)
 
-The backend handles the logic for user authentication, storing research announcements, and messaging.
-
 ## API Endpoints: Built with Express.js to handle requests from the frontend.
 
 ## Authentication: JWT is used for authenticating users and providing secure API access.
