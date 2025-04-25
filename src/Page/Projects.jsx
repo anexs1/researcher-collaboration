@@ -963,9 +963,7 @@ export default function Projects({ currentUser }) {
         </div>
       </div>
 
-      {/* --- Modal Rendering Section --- */}
       <AnimatePresence>
-        {/* Ensure keys are unique if modals can overlap or change quickly */}
         {modalType === "details" && selectedProject && (
           <ProjectDetailModal
             key={`detail-${selectedProject.id}`}
