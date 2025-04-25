@@ -32,11 +32,6 @@ Fetching Data: Frontend communicates with the backend API through RESTful API ca
 Authentication: Authentication is handled via JWT (JSON Web Tokens) for secure user login and session management.
 Steps:
 
-Implement UI components for the researcher's profile and announcements.
-Set up React Router for different pages: Home, Dashboard, Profile, Messages, and Search.
-Use Axios to call backend endpoints for retrieving and sending data.
-Integrate the chat functionality for real-time messaging.
-
 ## 3. Backend Development (Node.js / Express.js)
 
 The backend handles the logic for user authentication, storing research announcements, and messaging.
