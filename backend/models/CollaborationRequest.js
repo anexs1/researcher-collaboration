@@ -3,75 +3,95 @@ import { DataTypes } from "sequelize";
 
 const CollaborationRequestModel = (sequelize) => {
   const CollaborationRequest = sequelize.define(
-    "CollaborationRequest",
+    "CollaborationRequest", // Model name (usually singular PascalCase)
     {
+      // Primary Key
       id: {
-        type: DataTypes.INTEGER,
+        type: DataTypes.INTEGER.UNSIGNED, // Match DB dump if it was UNSIGNED
         primaryKey: true,
         autoIncrement: true,
       },
-      // --- Fields that MUST exist in your 'joinrequests' table ---
+
+      // --- Foreign Keys ---
       projectId: {
-        type: DataTypes.INTEGER,
+        type: DataTypes.INTEGER.UNSIGNED, // Match Project's ID type
         allowNull: false,
-        field: "projectId", // Assuming DB column name is projectId
-        references: { model: "Projects", key: "id" },
-        onDelete: "CASCADE",
+        references: { model: "Projects", key: "id" }, // Target table name 'Projects'
+        onDelete: "CASCADE", // Delete request if project is deleted
+        // No 'field:' needed if underscored: false and DB column is 'projectId'
       },
       requesterId: {
-        type: DataTypes.INTEGER,
+        type: DataTypes.INTEGER.UNSIGNED, // Match User's ID type
         allowNull: false,
-        field: "requesterId", // Assuming DB column name is requesterId
-        references: { model: "Users", key: "id" },
-        onDelete: "CASCADE",
+        references: { model: "Users", key: "id" }, // Target table name 'Users'
+        onDelete: "CASCADE", // Delete request if user is deleted
+        // No 'field:' needed if underscored: false and DB column is 'requesterId'
       },
+
+      // --- Request Details ---
       status: {
         type: DataTypes.ENUM("pending", "approved", "rejected"),
         allowNull: false,
         defaultValue: "pending",
-        field: "status", // Assuming DB column name is status
+        // No 'field:' needed if DB column is 'status'
       },
       requestMessage: {
         type: DataTypes.TEXT,
-        allowNull: true,
-        field: "requestMessage", // Assuming DB column name is requestMessage
+        allowNull: true, // Allow optional message
+        // No 'field:' needed if DB column is 'requestMessage'
       },
       responseMessage: {
         type: DataTypes.TEXT,
-        allowNull: true, // Matches DB 'YES' for Null from DESCRIBE output
-        field: "responseMessage",
+        allowNull: true,
+        // No 'field:' needed if DB column is 'responseMessage'
       },
       respondedAt: {
-        type: DataTypes.DATE, // Matches TIMESTAMP column type
-        allowNull: true, // Matches DB 'YES' for Null from DESCRIBE output
-        field: "respondedAt",
+        type: DataTypes.DATE, // Maps to TIMESTAMP/DATETIME
+        allowNull: true,
+        // No 'field:' needed if DB column is 'respondedAt'
       },
+      // createdAt and updatedAt are handled by Sequelize options below
     },
     {
-      timestamps: true, // Requires createdAt and updatedAt columns in DB
-      tableName: "joinrequests",
-      underscored: false, // Use if DB columns are camelCase (projectId)
-      freezeTableName: true,
+      // --- Options ---
+      timestamps: true, // Enable createdAt and updatedAt handling
+      tableName: "joinrequests", // <<< Match your actual table name exactly
+      // === IMPORTANT: Set based on DB column names ===
+      // If DB columns are camelCase (projectId, requesterId, createdAt):
+      underscored: false,
+      // If DB columns are snake_case (project_id, requester_id, created_at):
+      // underscored: true,
+      // =============================================
+      freezeTableName: true, // Prevent Sequelize from pluralizing table name
       indexes: [
-        // Only index existing columns
-        { fields: ["projectId"] },
-        { fields: ["requesterId"] },
-        { fields: ["status"] },
-        // Unique key based on existing columns (pending status included)
-        // If you want *any* request (approved/rejected too) to be unique per user/project, remove status here
-        { unique: true, fields: ["projectId", "requesterId", "status"] },
+        { fields: ["projectId"] }, // Index for faster project lookups
+        { fields: ["requesterId"] }, // Index for faster user lookups
+        { fields: ["status"] }, // Index for faster status filtering
+
+        // --- Consider your unique constraint needs ---
+        // This prevents a user from having multiple PENDING requests for the SAME project
+        {
+          unique: true,
+          fields: ["projectId", "requesterId", "status"],
+          where: { status: "pending" },
+        },
+        // If a user can only EVER request to join ONCE (regardless of status), use:
+        // { unique: true, fields: ["projectId", "requesterId"] },
       ],
     }
   );
 
+  // --- Associations ---
   CollaborationRequest.associate = (models) => {
+    // A request belongs to a User (the one making the request)
     CollaborationRequest.belongsTo(models.User, {
-      foreignKey: "requesterId",
-      as: "requester",
+      foreignKey: "requesterId", // <<< MUST match the key defined in this model's fields
+      as: "requester", // Alias used in controller includes
     });
+    // A request belongs to a Project
     CollaborationRequest.belongsTo(models.Project, {
-      foreignKey: "projectId",
-      as: "project",
+      foreignKey: "projectId", // <<< MUST match the key defined in this model's fields
+      as: "project", // Optional alias if needed elsewhere
     });
   };
 

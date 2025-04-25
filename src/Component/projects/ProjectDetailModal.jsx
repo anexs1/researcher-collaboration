@@ -1,146 +1,143 @@
 // src/Component/projects/ProjectDetailModal.jsx
-import React, { useState, useEffect, useCallback } from "react"; // Added useCallback
+
+import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { motion } from "framer-motion";
-import { FaTimes, FaUniversity } from "react-icons/fa"; // Removed FaSpinner as LoadingSpinner is used
+import { FaTimes, FaUniversity, FaExternalLinkAlt } from "react-icons/fa";
+import { Link } from "react-router-dom"; // <<< ADD THIS IMPORT
+
+// Adjust paths for common components if needed
 import LoadingSpinner from "../Common/LoadingSpinner";
 import ErrorMessage from "../Common/ErrorMessage";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
-const ProjectDetailModal = ({ project, onClose }) => {
-  // Initialize with the potentially basic project data passed in
-  const [detailedProject, setDetailedProject] = useState(project);
-  const [isLoading, setIsLoading] = useState(true); // Start loading to fetch full details
+const ProjectDetailModal = ({ project, onClose, currentUser }) => {
+  const [detailedProject, setDetailedProject] = useState(null); // Start null to differentiate from initial prop
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Define fetchDetails using useCallback to memoize it
+  // Fetch full project details when modal opens
   const fetchDetails = useCallback(
     async (projectId) => {
+      console.log(`ProjectDetailModal: Fetching details for ID: ${projectId}`);
       setIsLoading(true);
       setError("");
-
-      // --- Get the token from localStorage ---
-      const token = localStorage.getItem("authToken"); // Use the correct key 'authToken'
-
-      if (!token) {
-        setError("Authentication required to view project details.");
-        setIsLoading(false);
-        // Optionally call onClose() after a delay or show a login prompt
-        console.error("Auth token not found in localStorage.");
-        return; // Stop execution if no token
-      }
+      const token = localStorage.getItem("authToken");
 
       try {
-        // --- Add the headers configuration to axios.get ---
         const response = await axios.get(
           `${API_BASE_URL}/api/projects/${projectId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`, // Add the Authorization header
-            },
-          }
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} }
         );
 
         if (response.data?.success && response.data?.data) {
-          // Map fields robustly, providing defaults
+          console.log("ProjectDetailModal: Details fetched successfully.");
+          const apiData = response.data.data;
+          // Map API data carefully, providing fallbacks
           const fullData = {
-            ...response.data.data, // Spread fetched data first
-            id: response.data.data.id ?? projectId, // Ensure ID is present
-            title: response.data.data.title ?? "Untitled Project",
-            description: response.data.data.description ?? "No description.",
-            image: response.data.data.imageUrl || project?.image || null, // Use fetched, fallback to prop, then null
-            collaboratorsNeeded:
-              response.data.data.requiredCollaborators ??
-              response.data.data.collaboratorsNeeded ?? // Check alternative field names
-              1,
-            skillsNeeded: response.data.data.skillsNeeded ?? [],
-            status: response.data.data.status || "Planning",
-            category: response.data.data.category || "Other",
-            progress: response.data.data.progress ?? 0,
-            views: response.data.data.views ?? 0,
-            likes: response.data.data.likes ?? 0,
-            comments: response.data.data.comments ?? 0,
-            duration: response.data.data.duration, // Add fields if they exist in API response
-            funding: response.data.data.funding,
-            owner: response.data.data.owner, // Assume owner object is included
+            id: apiData.id ?? projectId,
+            title: apiData.title ?? project?.title ?? "Untitled Project",
+            description:
+              apiData.description ?? project?.description ?? "No description.",
+            image: apiData.imageUrl || apiData.image || project?.image || null, // Use consistent image field name
+            requiredCollaborators:
+              apiData.requiredCollaborators ??
+              project?.requiredCollaborators ??
+              0,
+            skillsNeeded: apiData.skillsNeeded ?? [], // Ensure it's an array
+            status: apiData.status || project?.status || "Unknown",
+            category: apiData.category || "General",
+            progress: apiData.progress ?? 0,
+            views: apiData.views ?? 0,
+            likes: apiData.likes ?? 0,
+            comments: apiData.comments ?? 0,
+            duration: apiData.duration || null,
+            funding: apiData.funding || null,
+            owner: apiData.owner || project?.owner || null, // Expect owner object
+            createdAt: apiData.createdAt || project?.createdAt,
+            updatedAt: apiData.updatedAt || project?.updatedAt,
+            projectUrl: apiData.projectUrl || null, // Example field
           };
           setDetailedProject(fullData);
         } else {
-          // Handle cases where API returns success: false or no data
           throw new Error(response.data?.message || "Invalid data received.");
         }
       } catch (err) {
-        console.error(
-          "Error fetching project details:",
-          err.response?.data || err.message
-        );
+        console.error("ProjectDetailModal: Error fetching details:", err);
         const message =
           err.response?.status === 401
-            ? "Unauthorized: Cannot view details." // Specific message for 401
+            ? "Unauthorized."
+            : err.response?.status === 404
+            ? "Project not found."
             : err.response?.data?.message ||
-              err.message || // Use backend message or generic error
-              "Could not load full project details.";
+              err.message ||
+              "Could not load details.";
         setError(message);
-        // Keep the initially passed project data as fallback if fetch fails
-        setDetailedProject(project);
+        setDetailedProject(null); // Clear details on error
       } finally {
         setIsLoading(false);
       }
     },
-    [project]
-  ); // Add `project` as dependency because it's used in the catch block fallback
+    [
+      project?.title,
+      project?.description,
+      project?.image,
+      project?.status,
+      project?.owner,
+      project?.createdAt,
+      project?.updatedAt,
+    ]
+  ); // Include initial project props used in fallback/mapping
 
-  // useEffect to trigger fetch when component mounts or project.id changes
+  // Trigger fetch when project ID changes
   useEffect(() => {
-    const projectId = project?.id; // Get ID from prop
-
-    if (!projectId) {
-      setError("No project ID provided for details.");
+    const projectId = project?.id;
+    if (projectId) {
+      fetchDetails(projectId);
+    } else {
+      setError("No project ID provided to modal.");
       setIsLoading(false);
-      setDetailedProject(null); // Clear details if no ID
-      return;
+      setDetailedProject(null);
     }
-
-    fetchDetails(projectId);
-
-    // Optional: Cleanup function (e.g., for AbortController) if needed
-    // return () => { ... };
-  }, [project?.id, fetchDetails]); // Depend on project.id and the memoized fetchDetails
+    // Optional cleanup if fetchDetails used AbortController
+    // return () => { /* abort fetch */ };
+  }, [project?.id, fetchDetails]); // Depend on ID and the memoized fetch function
 
   // --- Render Logic ---
   return (
-    // Modal backdrop and positioning
+    // Backdrop & Centering
     <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-[70] p-4 animate-fade-in">
-      {/* Modal content container with animation */}
+      {/* Modal Container with Animation */}
       <motion.div
         initial={{ opacity: 0, y: 30, scale: 0.95 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 30, scale: 0.95 }}
         transition={{ type: "spring", stiffness: 300, damping: 25 }}
-        className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden"
+        className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden" // Prevent modal exceeding viewport height
       >
         {/* Header */}
         <div className="flex justify-between items-center p-4 sm:p-5 border-b border-gray-200 flex-shrink-0">
           <h3 className="text-lg sm:text-xl font-semibold text-gray-900 truncate pr-4">
-            {/* Show title from detailedProject if available, else initial project, else loading */}
-            {detailedProject?.title || project?.title || "Loading Project..."}
+            {isLoading
+              ? "Loading..."
+              : detailedProject?.title || project?.title || "Project Details"}
           </h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100"
+            className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100"
             aria-label="Close modal"
           >
             <FaTimes size={20} />
           </button>
         </div>
 
-        {/* Body - Scrollable */}
+        {/* Scrollable Body */}
         <div className="p-4 sm:p-6 overflow-y-auto flex-grow">
           {/* Loading State */}
           {isLoading && (
-            <div className="flex justify-center items-center h-40">
+            <div className="flex justify-center items-center h-60">
               <LoadingSpinner />
             </div>
           )}
@@ -148,96 +145,108 @@ const ProjectDetailModal = ({ project, onClose }) => {
           {error && !isLoading && (
             <ErrorMessage message={error} onClose={() => setError("")} />
           )}
-          {/* Success State - Display Details */}
+
+          {/* --- Content Display (only when not loading and no error) --- */}
           {!isLoading && !error && detailedProject && (
-            <div className="space-y-4 text-sm sm:text-base text-gray-700">
+            <div className="space-y-5 text-sm sm:text-base text-gray-700">
               {/* Image */}
               {detailedProject.image ? (
                 <img
-                  src={detailedProject.image}
-                  alt={detailedProject.title}
-                  className="w-full h-auto max-h-60 object-contain rounded-lg mb-4 border bg-gray-50" // Use contain for potentially different aspect ratios
+                  src={
+                    detailedProject.image.startsWith("/")
+                      ? `${API_BASE_URL}${detailedProject.image}`
+                      : detailedProject.image
+                  }
+                  alt={detailedProject.title || "Project Image"}
+                  className="w-full h-auto max-h-72 object-contain rounded-lg mb-4 border bg-gray-50"
                 />
               ) : (
-                <div className="w-full h-40 bg-gradient-to-br from-gray-100 to-indigo-100 flex items-center justify-center rounded-lg mb-4">
-                  <FaUniversity className="text-5xl text-gray-300" />
+                <div className="w-full h-48 bg-gradient-to-br from-gray-100 to-indigo-100 flex items-center justify-center rounded-lg mb-4">
+                  <FaUniversity className="text-6xl text-gray-300" />
                 </div>
               )}
-              {/* Basic Info */}
-              <p>
-                <strong className="font-medium text-gray-800">Category:</strong>{" "}
-                {detailedProject.category || "N/A"}
-              </p>
-              <p>
-                <strong className="font-medium text-gray-800">Status:</strong>{" "}
-                <span
-                  className={`font-medium px-2 py-0.5 rounded-full text-xs ${
-                    detailedProject.status === "Completed"
-                      ? "bg-green-100 text-green-800"
-                      : detailedProject.status === "Active"
-                      ? "bg-blue-100 text-blue-800"
-                      : detailedProject.status === "Planning"
-                      ? "bg-yellow-100 text-yellow-800"
-                      : detailedProject.status === "On Hold"
-                      ? "bg-red-100 text-red-800"
-                      : "bg-gray-100 text-gray-800"
-                  }`}
-                >
-                  {detailedProject.status || "N/A"}
-                </span>
-              </p>
+
+              {/* Info Row: Category & Status */}
+              <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm border-b pb-3">
+                <p>
+                  <strong className="font-medium text-gray-800">
+                    Category:
+                  </strong>{" "}
+                  {detailedProject.category || "N/A"}
+                </p>
+                <p>
+                  <strong className="font-medium text-gray-800">Status:</strong>
+                  <span
+                    className={`ml-1.5 font-medium px-2 py-0.5 rounded-full text-xs ${
+                      detailedProject.status?.toLowerCase() === "completed"
+                        ? "bg-green-100 text-green-800"
+                        : detailedProject.status?.toLowerCase() === "active"
+                        ? "bg-blue-100 text-blue-800"
+                        : detailedProject.status?.toLowerCase() === "planning"
+                        ? "bg-yellow-100 text-yellow-800"
+                        : detailedProject.status?.toLowerCase() === "on hold"
+                        ? "bg-red-100 text-red-800"
+                        : "bg-gray-100 text-gray-800"
+                    }`}
+                  >
+                    {detailedProject.status || "N/A"}
+                  </span>
+                </p>
+              </div>
+
               {/* Description */}
               <div>
-                <strong className="font-medium text-gray-800 block mb-1">
+                <strong className="font-medium text-gray-800 block mb-1.5">
                   Description:
                 </strong>
-                <p className="whitespace-pre-wrap bg-gray-50 p-3 border rounded-md text-gray-800 text-sm leading-relaxed">
-                  {detailedProject.description || "No description provided."}
+                <p className="whitespace-pre-wrap bg-gray-50 p-3 border rounded-md text-gray-800 text-sm leading-relaxed shadow-sm">
+                  {detailedProject.description || (
+                    <span className="italic text-gray-500">
+                      No description provided.
+                    </span>
+                  )}
                 </p>
               </div>
 
               {/* Skills Needed */}
-              {detailedProject.skillsNeeded?.length > 0 && (
-                <div>
-                  <strong className="font-medium text-gray-800 block mb-1">
-                    Skills Needed:
-                  </strong>
-                  <div className="flex flex-wrap gap-2">
-                    {detailedProject.skillsNeeded.map(
-                      (
-                        skill,
-                        index // Added index for key safety if skills aren't unique
-                      ) => (
+              {detailedProject.skillsNeeded &&
+                detailedProject.skillsNeeded.length > 0 && (
+                  <div>
+                    <strong className="font-medium text-gray-800 block mb-1.5">
+                      Skills Needed:
+                    </strong>
+                    <div className="flex flex-wrap gap-2">
+                      {detailedProject.skillsNeeded.map((skill, index) => (
                         <span
                           key={`${skill}-${index}`}
-                          className="bg-indigo-100 text-indigo-800 text-xs font-medium px-2.5 py-1 rounded-full shadow-sm"
+                          className="bg-indigo-100 text-indigo-800 text-xs font-medium px-2.5 py-1 rounded-full"
                         >
                           {skill}
                         </span>
-                      )
-                    )}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+
               {/* Other Details Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 pt-4 border-t mt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 pt-4 border-t mt-5 text-sm">
                 <p>
                   <strong className="font-medium text-gray-800">
                     Duration:
                   </strong>{" "}
-                  {detailedProject.duration || "N/A"}
+                  {detailedProject.duration || "Not specified"}
                 </p>
                 <p>
                   <strong className="font-medium text-gray-800">
-                    Funding Status:
+                    Funding:
                   </strong>{" "}
-                  {detailedProject.funding || "N/A"}
+                  {detailedProject.funding || "Not specified"}
                 </p>
                 <p>
                   <strong className="font-medium text-gray-800">
                     Collaborators Needed:
                   </strong>{" "}
-                  {detailedProject.collaboratorsNeeded ?? "N/A"}
+                  {detailedProject.requiredCollaborators ?? "N/A"}
                 </p>
                 <p>
                   <strong className="font-medium text-gray-800">
@@ -253,31 +262,76 @@ const ProjectDetailModal = ({ project, onClose }) => {
                   <strong className="font-medium text-gray-800">Likes:</strong>{" "}
                   {detailedProject.likes ?? 0}
                 </p>
+                {/* External Project Link */}
+                {detailedProject.projectUrl && (
+                  <p className="md:col-span-2">
+                    <strong className="font-medium text-gray-800">
+                      Project Link:
+                    </strong>
+                    <a
+                      href={detailedProject.projectUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-1.5 text-indigo-600 hover:text-indigo-800 hover:underline inline-flex items-center gap-1"
+                    >
+                      Visit Site <FaExternalLinkAlt size={10} />
+                    </a>
+                  </p>
+                )}
               </div>
+
               {/* Owner Info */}
               {detailedProject.owner && (
-                <div className="pt-4 border-t mt-4">
-                  <strong className="font-medium text-gray-800">Owner:</strong>{" "}
-                  <span className="text-indigo-600">
-                    {detailedProject.owner.username || "N/A"}
-                  </span>
-                  {/* Optionally add owner email or link */}
+                <div className="pt-4 border-t mt-4 text-sm">
+                  <strong className="font-medium text-gray-800">Owner:</strong>
+                  {/* Use Link component here */}
+                  <Link
+                    to={
+                      detailedProject.owner.id
+                        ? `/profile/${detailedProject.owner.id}`
+                        : "#"
+                    }
+                    className="ml-1.5 text-indigo-600 hover:underline font-medium"
+                  >
+                    {detailedProject.owner.username || "Unknown User"}
+                  </Link>
                   {detailedProject.owner.email && (
                     <span className="text-gray-500 text-xs ml-2">
                       ({detailedProject.owner.email})
                     </span>
                   )}
+                  {/* Highlight if owner is the current user */}
+                  {detailedProject.owner.id === currentUser?.id && (
+                    <span className="text-xs text-indigo-600 font-semibold ml-1">
+                      (You)
+                    </span>
+                  )}
                 </div>
               )}
-              <p className="text-xs text-gray-400 mt-4 pt-3 border-t">
-                Project ID: {detailedProject.id || "N/A"}
-              </p>
+
+              {/* Timestamps & ID */}
+              <div className="text-xs text-gray-400 mt-5 pt-3 border-t flex flex-wrap justify-between gap-2">
+                <span>ID: {detailedProject.id || "N/A"}</span>
+                <span>
+                  Created:{" "}
+                  {detailedProject.createdAt
+                    ? new Date(detailedProject.createdAt).toLocaleDateString()
+                    : "N/A"}
+                </span>
+                <span>
+                  Updated:{" "}
+                  {detailedProject.updatedAt
+                    ? new Date(detailedProject.updatedAt).toLocaleDateString()
+                    : "N/A"}
+                </span>
+              </div>
             </div>
           )}
-          {/* Fallback if no details and not loading/error */}
+
+          {/* Fallback message if loading finished but no details (e.g., fetch failed but didn't set error) */}
           {!isLoading && !error && !detailedProject && (
             <p className="text-center text-gray-500 py-10">
-              Could not load project details.
+              Could not display project details.
             </p>
           )}
         </div>
@@ -290,11 +344,11 @@ const ProjectDetailModal = ({ project, onClose }) => {
           >
             Close
           </button>
-          {/* Add other actions here if needed, e.g., Join, Edit (if owner) */}
+          {/* Add other actions like Join/Edit buttons here if desired */}
         </div>
       </motion.div>
     </div>
   );
-}; // Removed semicolon
+};
 
 export default ProjectDetailModal;

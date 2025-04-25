@@ -454,7 +454,7 @@ const Home = () => {
               transition={{ duration: 0.8 }}
               className="text-4xl font-bold mb-12 text-center text-gray-800"
             >
-              About ResearchConnect
+              About Researcher Collaboration Portal
             </motion.h2>
 
             <div className="flex flex-col lg:flex-row gap-12 items-center">
@@ -469,10 +469,10 @@ const Home = () => {
                     Our Mission
                   </h3>
                   <p className="text-gray-700 leading-relaxed mb-6">
-                    ResearchConnect was founded in 2020 to break down barriers
-                    in academic collaboration. We believe groundbreaking
-                    research happens when diverse minds connect across
-                    disciplines and borders.
+                    Researcher Collaboration Portal was founded in 2020 to break
+                    down barriers in academic collaboration. We believe
+                    groundbreaking research happens when diverse minds connect
+                    across disciplines and borders.
                   </p>
                   <p className="text-gray-700 leading-relaxed mb-6">
                     Our platform combines sophisticated matching algorithms with
@@ -481,7 +481,7 @@ const Home = () => {
                   </p>
                   <div className="bg-blue-50 p-6 rounded-xl border border-blue-100">
                     <h4 className="font-semibold text-blue-800 mb-2">
-                      Why Choose ResearchConnect?
+                      Why Choose Researcher Collaboration Portal?
                     </h4>
                     <ul className="list-disc list-inside text-gray-700 space-y-2">
                       <li>Verified academic profiles</li>
@@ -558,7 +558,7 @@ const Home = () => {
                     <div>
                       <h4 className="font-medium text-gray-700 mb-2">Email</h4>
                       <p className="text-blue-600">
-                        contact@researchconnect.org
+                        contact@Researcher Collaboration Portal.org
                       </p>
                     </div>
                     <div>
@@ -676,7 +676,9 @@ const Home = () => {
           <div className="max-w-6xl mx-auto">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
               <div>
-                <h3 className="text-xl font-semibold mb-4">ResearchConnect</h3>
+                <h3 className="text-xl font-semibold mb-4">
+                  Researcher Collaboration Portal
+                </h3>
                 <p className="text-gray-400">
                   Connecting researchers across Africa and beyond to accelerate
                   scientific discovery.
@@ -799,7 +801,7 @@ const Home = () => {
             </div>
             <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
               <p>
-                © 2025 ResearchConnect. All rights reserved. |
+                © 2025 Researcher Collaboration Portal. All rights reserved. |
                 <a href="#" className="hover:text-white ml-2 transition-colors">
                   Privacy Policy
                 </a>{" "}
@@ -909,14 +911,6 @@ const Home = () => {
             >
               Join Now - It's Free
             </motion.button>
-            <motion.button
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.8, duration: 0.8 }}
-              className="bg-transparent border-2 border-white text-white font-bold py-4 px-8 rounded-full hover:bg-white hover:bg-opacity-10 transition-colors shadow-lg"
-            >
-              Learn More
-            </motion.button>
           </div>
         </div>
 
@@ -956,7 +950,6 @@ const Home = () => {
         </motion.div>
       </section>
 
-      {/* Search and Filter Section */}
       <section className="py-12 px-6 bg-white mt-20">
         <div className="max-w-6xl mx-auto">
           <motion.h2
