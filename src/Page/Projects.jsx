@@ -1027,6 +1027,6 @@ export default function Projects({ currentUser }) {
           aria-hidden="true"
         />
       )}
-    </div> // End main container div
+    </div>
   );
-} // End of Projects component
+}
