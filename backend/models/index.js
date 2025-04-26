@@ -8,7 +8,7 @@ import UserModel from "./user.js";
 import PublicationModel from "./Publication.js"; // Ensure correct casing if file is Publication.js
 import CollaborationRequestModel from "./CollaborationRequest.js";
 import MemberModel from "./Member.js";
-import ProjectModel from "./project.js";
+import ProjectModel from "./Project.js";
 import CommentModel from "./comment.js"; // Import the Comment model
 
 // Initialize the db object BEFORE using it
