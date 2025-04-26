@@ -1,5 +1,3 @@
-// src/Component/projects/RequestsModal.jsx
-
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import {
@@ -21,14 +19,13 @@ const RequestsModal = ({ project, onClose, currentUser }) => {
   const [requests, setRequests] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [processingRequestId, setProcessingRequestId] = useState(null); // ID of request being approved/rejected
+  const [processingRequestId, setProcessingRequestId] = useState(null);
   const [notification, setNotification] = useState({
     message: "",
     type: "",
     show: false,
   });
 
-  // --- Notification Handler ---
   const showModalNotification = useCallback((message, type = "success") => {
     setNotification({ message, type, show: true });
     const timer = setTimeout(
@@ -38,7 +35,6 @@ const RequestsModal = ({ project, onClose, currentUser }) => {
     return () => clearTimeout(timer);
   }, []);
 
-  // --- Fetch Pending Requests ---
   const fetchRequests = useCallback(async () => {
     if (!project?.id) {
       setError("Project ID missing.");
@@ -55,17 +51,15 @@ const RequestsModal = ({ project, onClose, currentUser }) => {
     }
 
     try {
-      // --- Endpoint to fetch PENDING requests for THIS project ---
-      // Adjust endpoint as needed (e.g., might include status=pending query param)
       const response = await axios.get(
-        `${API_BASE_URL}/api/projects/${project.id}/requests?status=pending`,
+        `${API_BASE_URL}/api/projects/${project.id}/requests?status=pending`, // This GET endpoint seems correct based on previous fixes
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
 
       if (response.data?.success && Array.isArray(response.data.data)) {
-        setRequests(response.data.data); // Expecting an array of request objects
+        setRequests(response.data.data);
       } else {
         throw new Error(
           response.data?.message || "Invalid data received for requests."
@@ -84,21 +78,19 @@ const RequestsModal = ({ project, onClose, currentUser }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [project?.id]); // Dependency: project ID
+  }, [project?.id]);
 
-  // Fetch requests when modal opens
   useEffect(() => {
     fetchRequests();
   }, [fetchRequests]);
 
-  // --- Handle Request Action (Approve/Reject) ---
   const handleRequestAction = useCallback(
-    async (requestId, action) => {
-      // action: 'approved' or 'rejected'
+    async (requestId, action, responseMessage = null) => {
+      // Added optional responseMessage param
       if (!requestId || !action) return;
 
-      setProcessingRequestId(requestId); // Show loading state for this specific request
-      setError(null); // Clear previous errors
+      setProcessingRequestId(requestId);
+      setError(null);
       const token = localStorage.getItem("authToken");
       if (!token) {
         showModalNotification("Authentication required.", "error");
@@ -109,19 +101,24 @@ const RequestsModal = ({ project, onClose, currentUser }) => {
       console.log(`Attempting to ${action} request ID: ${requestId}`);
 
       try {
-        // --- Endpoint to update request status ---
-        // Adjust endpoint as needed
+        // --- FIX: Construct the correct URL with '/respond' ---
+        const url = `${API_BASE_URL}/api/collaboration-requests/${requestId}/respond`; // <<< CORRECTED URL
+
+        // Data to send - status is required, responseMessage is optional
+        const requestData = {
+          status: action,
+          ...(responseMessage && { responseMessage: responseMessage }), // Include message only if provided
+        };
+
         const response = await axios.patch(
-          `${API_BASE_URL}/api/collaboration-requests/${requestId}`,
-          { status: action }, // Send the new status
+          url,
+          requestData, // Send status and optional message
           { headers: { Authorization: `Bearer ${token}` } }
         );
 
         if (response.data?.success) {
           showModalNotification(`Request ${action} successfully.`, "success");
-          // Remove the processed request from the list
           setRequests((prev) => prev.filter((req) => req.id !== requestId));
-          // Optionally: Notify parent component if needed (e.g., update member list)
         } else {
           throw new Error(
             response.data?.message || `Failed to ${action} request.`
@@ -133,16 +130,15 @@ const RequestsModal = ({ project, onClose, currentUser }) => {
           err.response?.data?.message ||
           err.message ||
           `Could not ${action} request.`;
-        setError(errorMsg); // Show error at the top
+        setError(errorMsg);
         showModalNotification(errorMsg, "error");
       } finally {
-        setProcessingRequestId(null); // Stop loading for this request
+        setProcessingRequestId(null);
       }
     },
-    [showModalNotification]
-  ); // Dependencies
+    [showModalNotification] // Added dependency
+  );
 
-  // --- Render Logic ---
   const renderRequestList = () => {
     if (isLoading) {
       return (
@@ -152,7 +148,6 @@ const RequestsModal = ({ project, onClose, currentUser }) => {
       );
     }
     if (error && requests.length === 0) {
-      // Show main error only if list is empty
       return <ErrorMessage message={error} onClose={() => setError(null)} />;
     }
     if (requests.length === 0) {
@@ -189,16 +184,21 @@ const RequestsModal = ({ project, onClose, currentUser }) => {
                   ({new Date(req.createdAt).toLocaleDateString()})
                 </span>
               </div>
-              {req.message && (
-                <p className="text-sm text-gray-600 bg-gray-50 p-2 rounded border border-gray-200 mt-1 whitespace-pre-wrap text-xs">
-                  {req.message}
+              {/* Display incoming request message */}
+              {req.requestMessage && (
+                <p className="text-xs text-gray-600 bg-gray-50 p-2 rounded border border-gray-200 mt-1 whitespace-pre-wrap">
+                  <span className="font-medium">Message:</span>{" "}
+                  {req.requestMessage}
                 </p>
               )}
             </div>
             {/* Actions */}
             <div className="flex-shrink-0 flex items-center gap-2 mt-2 sm:mt-0">
               <button
-                onClick={() => handleRequestAction(req.id, "approved")}
+                // Pass an optional approval message if desired
+                onClick={() =>
+                  handleRequestAction(req.id, "approved" /*, "Welcome!"*/)
+                }
                 disabled={processingRequestId === req.id}
                 className="p-1.5 rounded-full text-green-600 bg-green-100 hover:bg-green-200 disabled:opacity-50 disabled:cursor-wait transition-colors"
                 title="Approve Request"
@@ -210,7 +210,13 @@ const RequestsModal = ({ project, onClose, currentUser }) => {
                 )}
               </button>
               <button
-                onClick={() => handleRequestAction(req.id, "rejected")}
+                // Pass an optional rejection message if desired
+                onClick={() =>
+                  handleRequestAction(
+                    req.id,
+                    "rejected" /*, "Sorry, project is full."*/
+                  )
+                }
                 disabled={processingRequestId === req.id}
                 className="p-1.5 rounded-full text-red-600 bg-red-100 hover:bg-red-200 disabled:opacity-50 disabled:cursor-wait transition-colors"
                 title="Reject Request"
@@ -244,7 +250,7 @@ const RequestsModal = ({ project, onClose, currentUser }) => {
           </h3>
           <button
             onClick={onClose}
-            disabled={!!processingRequestId} // Disable close while processing
+            disabled={!!processingRequestId}
             className="text-gray-400 hover:text-gray-600 disabled:opacity-50 transition-colors p-1 rounded-full hover:bg-gray-100"
             aria-label="Close modal"
           >
@@ -274,21 +280,19 @@ const RequestsModal = ({ project, onClose, currentUser }) => {
 
         {/* Body - Scrollable List */}
         <div className="p-4 overflow-y-auto flex-grow">
-          {/* Display general error if list is empty and error occurred */}
           {error && requests.length === 0 && !isLoading && (
             <div className="py-5">
               <ErrorMessage message={error} onClose={() => setError(null)} />
             </div>
           )}
-          {/* Render the list or loading/empty state */}
           {renderRequestList()}
         </div>
 
-        {/* Footer (Optional - maybe just a close button) */}
+        {/* Footer */}
         <div className="flex justify-end p-3 border-t border-gray-200 flex-shrink-0 bg-gray-100 rounded-b-xl">
           <button
             onClick={onClose}
-            disabled={!!processingRequestId} // Disable close while processing
+            disabled={!!processingRequestId}
             className="bg-gray-200 text-gray-700 hover:bg-gray-300 px-4 py-1.5 rounded-md text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:opacity-50"
           >
             Close

@@ -5,83 +5,81 @@ const MemberModel = (sequelize) => {
   const Member = sequelize.define(
     "Member", // Model name (singular PascalCase)
     {
-      // Assuming you don't need a separate primary 'id' for the join table itself,
-      // The combination of user_id and project_id can be the primary key.
-      // If you DO have an 'id' column, uncomment this:
-      // id: {
-      //   type: DataTypes.INTEGER.UNSIGNED,
-      //   primaryKey: true,
-      //   autoIncrement: true,
-      // },
+      // Assuming composite primary key (user_id, project_id)
+      // If you have a separate 'id' PK column, uncomment it.
 
-      // Foreign Keys - defined here but primarily configured in association
+      // --- Foreign Keys (camelCase in model) ---
       userId: {
-        // Use camelCase in the model
         type: DataTypes.INTEGER.UNSIGNED, // Match User ID type
         allowNull: false,
-        // References are typically set in the association, not duplicated here
-        // references: { model: 'Users', key: 'id' }
+        primaryKey: true, // Part of composite primary key
       },
       projectId: {
-        // Use camelCase in the model
         type: DataTypes.INTEGER.UNSIGNED, // Match Project ID type
         allowNull: false,
-        // references: { model: 'Projects', key: 'id' }
+        primaryKey: true, // Part of composite primary key
       },
 
-      // Additional fields on the join table
+      // --- Additional Fields (camelCase in model) ---
       role: {
         type: DataTypes.STRING,
         allowNull: false,
-        defaultValue: "Collaborator", // Or 'member' - be consistent
-        // 'field: "role"' is handled by underscored: true if DB is snake_case
+        defaultValue: "member", // Changed default to 'member' for consistency with controller
+        // Or keep 'Collaborator' if that's preferred, just be consistent
       },
       status: {
-        // Status of the membership (e.g., active, invited, requested - might overlap with CollaborationRequest)
-        type: DataTypes.ENUM("active", "invited", "pending", "inactive"), // Example statuses
+        // Status of the membership
+        type: DataTypes.ENUM("active", "invited", "pending", "inactive"), // Match DB ENUM values
         allowNull: false,
-        defaultValue: "active",
-        // 'field: "status"' handled by underscored: true
+        defaultValue: "active", // Default when created via controller
       },
-      // joinedAt is usually derived from createdAt if timestamps are enabled
-      // joined_at: {
-      //   type: DataTypes.DATE,
-      //   allowNull: false,
-      //   defaultValue: DataTypes.NOW,
-      // },
+      // --- Added joinedAt field to match DB column 'joined_at' ---
+      joinedAt: {
+        // camelCase model field name
+        type: DataTypes.DATE,
+        allowNull: false, // Assuming DB column is NOT NULL
+        defaultValue: DataTypes.NOW, // Set current time automatically on creation
+        // 'field: joined_at' mapping is handled by underscored: true
+      },
 
-      // createdAt and updatedAt will be added by timestamps: true
-      // and mapped to created_at/updated_at by underscored: true
+      // createdAt and updatedAt are added by `timestamps: true`
+      // and mapped to created_at/updated_at by `underscored: true`
     },
     {
-      tableName: "project_members", // <<< Ensure this is your exact join table name
+      // --- Model Options ---
+      tableName: "project_members", // Exact table name
       timestamps: true, // Enable createdAt, updatedAt
-      underscored: true, // <<< Use snake_case for columns (user_id, project_id, created_at, etc.)
-      freezeTableName: true,
-      // Define a composite primary key
-      // Remove this if you have a separate auto-incrementing 'id' column
-      primaryKey: true, // Indicate that the combo below is the PK
+      underscored: true, // Map camelCase fields to snake_case columns
+      freezeTableName: true, // Prevent table name pluralization
+      // primaryKey: true,          // This is usually inferred when fields have primaryKey: true
+      // Keeping it doesn't hurt, but might be redundant. Can be removed.
+
       indexes: [
-        // Composite unique key ensures a user is only in a project once
-        { unique: true, fields: ["user_id", "project_id"] }, // Use DB column names here for index
+        // Composite unique key also serves as the primary key defined above
+        {
+          unique: true,
+          primary: true, // Explicitly mark this index as the primary key constraint
+          fields: ["user_id", "project_id"], // Use DB column names for index definition
+        },
+        // Optional: Add separate indexes on foreign keys if needed for performance,
+        // though the PK index often covers lookups.
+        // { fields: ["user_id"] },
+        // { fields: ["project_id"] },
       ],
     }
   );
 
-  // Associations are defined in User and Project models for Many-to-Many
-  // You generally don't define the belongsTo here for a simple join table model
-  // UNLESS 'Member' represents more than just the join record (e.g., it has its own properties beyond FKs and role/status).
-  // If it's JUST a join table, the belongsToMany in User/Project is sufficient.
-  // If 'Member' IS a distinct entity, then these are correct:
+  // --- Associations ---
+  // Define associations ONLY if the Member model represents more than just
+  // the join record (e.g., if you query Member directly and need .getUser()/.getProject()).
+  // If it's purely a join table for User.belongsToMany(Project), omit this.
   /*
   Member.associate = (models) => {
     Member.belongsTo(models.User, {
       foreignKey: "userId", // FK in *this* model (maps to user_id via underscored)
-      // No 'as' needed unless User needs multiple Member associations
     });
     Member.belongsTo(models.Project, {
       foreignKey: "projectId", // FK in *this* model (maps to project_id via underscored)
-      // No 'as' needed unless Project needs multiple Member associations
     });
   };
   */

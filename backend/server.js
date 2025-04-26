@@ -20,8 +20,7 @@ import userRoutes from "./routes/userRoutes.js"; // Adjust path
 import projectRoutes from "./routes/projectRoutes.js"; // Adjust path
 import memberRoutes from "./routes/members.js"; // Adjust path
 import publicationRoutes from "./routes/publicationRoutes.js"; // <-- IMPORT Publication routes
-
-import collaborationRequestRoutes from "./routes/collaborationRequestRoutes.js"; // Adjust path
+import collaborationRequestRoutes from "./routes/collaborationRequestRoutes.js";
 import adminRoutes from "./routes/admin.routes.js"; // Adjust path
 import researchRoutes from "./routes/researchRoutes.js"; // Adjust path
 import chatRoutes from "./routes/chatRoutes.js"; // Adjust path
