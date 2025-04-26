@@ -23,23 +23,20 @@ export const getMessagingContacts = asyncHandler(async (req, res) => {
   }
 
   try {
-    // Verify Member model is available
-    if (!Member || !User || !Project) {
+    // Verify necessary models are loaded
+    if (!Member || !User) {
       console.error(
-        "FATAL: User, Project, or Member model is undefined in messagingController. Check models/index.js."
+        "FATAL: Member or User model is undefined in messagingController. Check models/index.js."
       );
       throw new Error(
         "Server configuration error: Required models not available."
       );
     }
 
-    // 1. Find all project IDs where the current user is an ACTIVE member
+    // 1. Find project IDs where the current user is an ACTIVE member
     const userMemberships = await Member.findAll({
-      where: {
-        userId: currentUserId,
-        status: "active",
-      },
-      attributes: ["projectId"],
+      where: { userId: currentUserId, status: "active" },
+      attributes: ["projectId"], // Use Model field name
     });
 
     const projectIdsUserIsIn = userMemberships.map((m) => m.projectId);
@@ -58,41 +55,33 @@ export const getMessagingContacts = asyncHandler(async (req, res) => {
     // 2. Find all *other* active members in those same projects
     const coMembers = await Member.findAll({
       where: {
-        projectId: { [Op.in]: projectIdsUserIsIn }, // In the same projects
-        userId: { [Op.ne]: currentUserId }, // Not the current user
-        status: "active", // Only active co-members
+        projectId: { [Op.in]: projectIdsUserIsIn },
+        userId: { [Op.ne]: currentUserId },
+        status: "active",
       },
       include: [
         {
           model: User,
-          as: "user", // <<< Alias from Member.associate
-          attributes: [
-            "id",
-            "username",
-            "profilePictureUrl",
-            "firstName",
-            "lastName",
-          ],
+          as: "user", // Alias from Member.associate
+          // *** Select ONLY columns that exist in the Users table/User model ***
+          attributes: ["id", "username", "profilePictureUrl"], // Use Model field names
+          // REMOVED 'firstName', 'lastName'
         },
       ],
-      // We don't need Member fields, just the included user
-      attributes: ["userId"], // Include userId to help with potential grouping/mapping if needed
+      attributes: ["userId"], // Use Model field name
     });
 
-    // 3. Process the results to get a unique list of users
+    // 3. Process results into a unique list of contacts
     const contactsMap = new Map();
     coMembers.forEach((member) => {
-      // Ensure member.user and member.user.id exist before adding
       if (member.user?.id && !contactsMap.has(member.user.id)) {
         contactsMap.set(member.user.id, {
           id: member.user.id,
           username: member.user.username,
-          name:
-            [member.user.firstName, member.user.lastName]
-              .filter(Boolean)
-              .join(" ") || member.user.username, // Construct name, fallback to username
+          // Use username as 'name' since firstName/lastName aren't available
+          name: member.user.username || `User ${member.user.id}`,
           profilePictureUrl: member.user.profilePictureUrl,
-          // Placeholders for future chat features
+          // Placeholders
           lastMessageSnippet: null,
           lastMessageTimestamp: null,
           unreadCount: 0,
@@ -101,11 +90,7 @@ export const getMessagingContacts = asyncHandler(async (req, res) => {
     });
 
     const uniqueContacts = Array.from(contactsMap.values());
-
-    // Sort contacts alphabetically by name or username
-    uniqueContacts.sort((a, b) =>
-      (a.name || a.username).localeCompare(b.name || b.username)
-    );
+    uniqueContacts.sort((a, b) => (a.name || "").localeCompare(b.name || "")); // Sort by name (username)
 
     console.log(
       `Found ${uniqueContacts.length} unique contacts for user ${currentUserId}`
@@ -114,9 +99,10 @@ export const getMessagingContacts = asyncHandler(async (req, res) => {
   } catch (error) {
     console.error(`Error fetching contacts for user ${currentUserId}:`, error);
     if (error.message.includes("associated")) {
-      console.error(
-        "Potential Association Error: Check 'as' aliases in Member/User models and includes."
-      );
+      console.error("Hint: Check model associations and 'as' aliases.");
+    }
+    if (error.original) {
+      console.error("Original DB Error:", error.original);
     }
     const statusCode =
       error.statusCode || res.statusCode >= 400 ? res.statusCode : 500;
@@ -127,3 +113,5 @@ export const getMessagingContacts = asyncHandler(async (req, res) => {
     }
   }
 });
+
+// Add other messaging controllers here later

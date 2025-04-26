@@ -41,7 +41,7 @@ const UserModel = (sequelize) => {
         allowNull: false,
         defaultValue: "pending",
       },
-      // Assuming these exist in DB as camelCase:
+      // Existing DB fields (camelCase)
       university: { type: DataTypes.STRING, allowNull: true },
       department: { type: DataTypes.STRING, allowNull: true },
       companyName: { type: DataTypes.STRING, allowNull: true },
@@ -50,10 +50,7 @@ const UserModel = (sequelize) => {
       hospitalName: { type: DataTypes.STRING, allowNull: true },
       profilePictureUrl: { type: DataTypes.STRING, allowNull: true },
       bio: { type: DataTypes.TEXT, allowNull: true },
-      // createdAt, updatedAt (Sequelize expects camelCase by default)
-      // Remove firstName, lastName IF THEY DON'T EXIST in your DB Users table
-      // firstName: { type: DataTypes.STRING, allowNull: true },
-      // lastName: { type: DataTypes.STRING, allowNull: true },
+      // createdAt, updatedAt handled by timestamps: true
     },
     {
       timestamps: true, // Expects createdAt, updatedAt columns
@@ -70,7 +67,7 @@ const UserModel = (sequelize) => {
         withPassword: { attributes: {} },
       },
       indexes: [
-        // Use MODEL field names (camelCase)
+        // Use model field names (camelCase)
         { fields: ["status"] },
         { fields: ["role"] },
         { unique: true, fields: ["email"] },
@@ -91,7 +88,7 @@ const UserModel = (sequelize) => {
   };
 
   User.associate = (models) => {
-    // Associations use MODEL field names for foreign keys
+    // Associations use MODEL field names (camelCase) for foreign keys
     User.hasMany(models.Project, {
       foreignKey: "ownerId",
       as: "ownedProjects",
@@ -110,7 +107,6 @@ const UserModel = (sequelize) => {
       User.hasMany(models.Comment, { foreignKey: "userId", as: "comments" });
     }
 
-    // Many-to-Many with Project through Member
     User.belongsToMany(models.Project, {
       through: models.Member,
       foreignKey: "userId", // FK in Member model (camelCase)
@@ -118,7 +114,6 @@ const UserModel = (sequelize) => {
       as: "memberProjects",
     });
 
-    // Direct hasMany with Member
     User.hasMany(models.Member, {
       foreignKey: "userId", // FK in Member model (camelCase)
       as: "memberships",
