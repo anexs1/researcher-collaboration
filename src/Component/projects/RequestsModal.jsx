@@ -32,8 +32,9 @@ const RequestsModal = ({
     type: "",
     show: false,
   });
-  const initialRequestCount = useRef(0); // <<< Ref to store initial count
+  const initialRequestCount = useRef(0); // Ref to store initial count fetched
   const hasFetched = useRef(false); // Prevent multiple initial fetches
+  const wasLastRequestHandled = useRef(false); // <<< Ref flag to trigger useEffect callback
 
   // --- Notification Handler ---
   const showModalNotification = useCallback((message, type = "success") => {
@@ -52,12 +53,13 @@ const RequestsModal = ({
       setIsLoading(false);
       return;
     }
-    // Avoid refetching if already fetched unless explicitly told to
-    if (hasFetched.current && isLoading) return;
+    // Prevent refetch if already loading or fetched (unless forced)
+    if (isLoading && hasFetched.current) return;
 
     console.log(`Fetching requests for project ${project.id}`);
     setIsLoading(true);
     setError(null);
+    wasLastRequestHandled.current = false; // Reset flag on fetch
     const token = localStorage.getItem("authToken");
     if (!token) {
       setError("Authentication required.");
@@ -73,12 +75,12 @@ const RequestsModal = ({
 
       if (response.data?.success && Array.isArray(response.data.data)) {
         setRequests(response.data.data);
-        initialRequestCount.current = response.data.data.length; // <<< Store initial count
+        initialRequestCount.current = response.data.data.length; // Store initial count
         console.log(
           "Initial pending request count:",
           initialRequestCount.current
         );
-        hasFetched.current = true; // Mark as fetched
+        hasFetched.current = true;
       } else {
         throw new Error(
           response.data?.message || "Invalid data received for requests."
@@ -88,29 +90,29 @@ const RequestsModal = ({
       console.error("Error fetching join requests:", err);
       const errorMsg =
         err.response?.status === 403
-          ? "You don't have permission to view requests."
+          ? "You don't have permission."
           : err.response?.data?.message ||
             err.message ||
             "Could not load requests.";
       setError(errorMsg);
       setRequests([]);
-      initialRequestCount.current = 0; // Reset count on error
+      initialRequestCount.current = 0;
     } finally {
       setIsLoading(false);
     }
-  }, [project?.id]); // Dependency: project ID
+  }, [project?.id, isLoading]); // Added isLoading to dependencies of useCallback
 
-  // Fetch requests when modal opens (only once)
+  // Fetch requests only once when modal opens
   useEffect(() => {
     if (!hasFetched.current) {
       fetchRequests();
     }
-  }, [fetchRequests]);
+  }, [fetchRequests]); // fetchRequests is stable due to useCallback deps
 
   // --- Handle Request Action (Approve/Reject) ---
   const handleRequestAction = useCallback(
     async (requestId, action, responseMessage = null) => {
-      if (!requestId || !action || processingRequestId) return; // Prevent double clicks
+      if (!requestId || !action || processingRequestId) return;
 
       setProcessingRequestId(requestId);
       setError(null);
@@ -137,27 +139,19 @@ const RequestsModal = ({
         if (response.data?.success) {
           showModalNotification(`Request ${action} successfully.`, "success");
 
-          // Update state and check if all handled
+          // Update state and set flag if last request was handled
           setRequests((prev) => {
             const updatedRequests = prev.filter((req) => req.id !== requestId);
-            // Use the length *after* filtering to check if it's now zero
             if (
               updatedRequests.length === 0 &&
               initialRequestCount.current > 0
             ) {
               console.log(
-                "Last pending request handled for project:",
+                "Setting flag: Last pending request handled for project:",
                 project.id
               );
-              if (onAllRequestsHandled) {
-                onAllRequestsHandled(project.id); // <<< Call parent callback
-              }
-              // Optionally reset initial count if modal might stay open or refetch
-              // initialRequestCount.current = 0;
-            }
-            // Update initial count only if it was > 0 to begin with
-            // (prevents count going negative if fetch fails then action succeeds)
-            else if (initialRequestCount.current > 0) {
+              wasLastRequestHandled.current = true; // <<< Set flag
+            } else if (initialRequestCount.current > 0) {
               initialRequestCount.current = Math.max(
                 0,
                 initialRequestCount.current - 1
@@ -166,7 +160,6 @@ const RequestsModal = ({
             return updatedRequests;
           });
         } else {
-          // Throw error if backend indicates failure even with 2xx status
           throw new Error(
             response.data?.message || `Failed to ${action} request.`
           );
@@ -177,19 +170,30 @@ const RequestsModal = ({
           err.response?.data?.message ||
           err.message ||
           `Could not ${action} request.`;
-        setError(errorMsg); // Show error at the top
-        showModalNotification(errorMsg, "error"); // Also show notification
+        setError(errorMsg);
+        showModalNotification(errorMsg, "error");
       } finally {
         setProcessingRequestId(null);
       }
     },
-    [
-      showModalNotification,
-      onAllRequestsHandled,
-      project?.id,
-      processingRequestId,
-    ]
-  ); // Add dependencies
+    [showModalNotification, project?.id, processingRequestId]
+  ); // Removed onAllRequestsHandled
+
+  // --- useEffect to call parent AFTER state update ---
+  useEffect(() => {
+    // Check the flag AFTER the render cycle where 'requests' might have become empty
+    if (wasLastRequestHandled.current) {
+      if (onAllRequestsHandled) {
+        console.log(
+          "useEffect triggered: Calling onAllRequestsHandled for project:",
+          project.id
+        );
+        onAllRequestsHandled(project.id);
+      }
+      wasLastRequestHandled.current = false; // Reset the flag immediately after calling
+    }
+    // Dependency array: run when requests array changes OR when the callback prop changes
+  }, [requests, onAllRequestsHandled, project?.id]);
 
   // --- Render Logic ---
   const renderRequestList = () => {
@@ -201,34 +205,27 @@ const RequestsModal = ({
         </div>
       );
     }
-    // Show main error only if list is empty AND an error occurred during fetch
     if (error && requests.length === 0 && !isLoading) {
       return <ErrorMessage message={error} onClose={() => setError(null)} />;
     }
-    // Check empty state after loading and potential actions
     if (!isLoading && requests.length === 0) {
-      // If initial count was > 0, it means we processed them all
       if (initialRequestCount.current > 0 && !error) {
-        // Make sure no fetch error caused this state
         return (
           <p className="text-center text-gray-500 py-10 italic">
             {" "}
-            All pending requests have been approved .{" "}
+            All pending requests have been handled.{" "}
           </p>
         );
       } else if (!error) {
-        // No initial requests and no fetch error
         return (
           <p className="text-center text-gray-500 py-10 italic">
             {" "}
             No pending join requests found.{" "}
           </p>
         );
-      }
-      // If there's an error but the list is empty AFTER loading, show error instead of empty message
-      else if (error) {
+      } else if (error) {
         return <ErrorMessage message={error} onClose={() => setError(null)} />;
-      }
+      } // Show error if fetch failed and list empty
     }
 
     // Render the list if not loading and requests exist
@@ -239,21 +236,22 @@ const RequestsModal = ({
             key={req.id}
             className="p-3 border rounded-lg bg-white shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3"
           >
-            {/* Request Info */}
             <div className="flex-grow">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                {" "}
+                {/* Added flex-wrap */}
                 {req.requester?.profilePictureUrl ? (
                   <img
                     src={req.requester.profilePictureUrl}
                     alt={req.requester.username}
-                    className="w-6 h-6 rounded-full object-cover"
+                    className="w-6 h-6 rounded-full object-cover flex-shrink-0"
                     onError={(e) => (e.target.style.display = "none")}
                   />
                 ) : (
-                  <FaUserCircle className="w-6 h-6 text-gray-400" />
+                  <FaUserCircle className="w-6 h-6 text-gray-400 flex-shrink-0" />
                 )}
                 <span
-                  className="font-medium text-gray-800 text-sm truncate"
+                  className="font-medium text-gray-800 text-sm truncate inline-block max-w-[150px] sm:max-w-xs"
                   title={req.requester?.username || "Unknown User"}
                 >
                   {req.requester?.username || "Unknown User"}
@@ -263,15 +261,14 @@ const RequestsModal = ({
                   ({new Date(req.createdAt).toLocaleDateString()}){" "}
                 </span>
               </div>
-              {/* Display incoming request message */}
               {req.requestMessage && (
                 <p className="text-xs text-gray-600 bg-gray-50 p-2 rounded border border-gray-200 mt-1 whitespace-pre-wrap">
+                  {" "}
                   <span className="font-medium">Message:</span>{" "}
-                  {req.requestMessage}
+                  {req.requestMessage}{" "}
                 </p>
               )}
             </div>
-            {/* Actions */}
             <div className="flex-shrink-0 flex items-center gap-2 mt-2 sm:mt-0">
               <button
                 onClick={() => handleRequestAction(req.id, "approved")}
@@ -279,11 +276,12 @@ const RequestsModal = ({
                 className="p-1.5 rounded-full text-green-600 bg-green-100 hover:bg-green-200 disabled:opacity-50 disabled:cursor-wait transition-colors"
                 title="Approve Request"
               >
+                {" "}
                 {processingRequestId === req.id ? (
                   <FaSpinner className="animate-spin h-4 w-4" />
                 ) : (
                   <FaCheck className="h-4 w-4" />
-                )}
+                )}{" "}
               </button>
               <button
                 onClick={() => handleRequestAction(req.id, "rejected")}
@@ -291,11 +289,12 @@ const RequestsModal = ({
                 className="p-1.5 rounded-full text-red-600 bg-red-100 hover:bg-red-200 disabled:opacity-50 disabled:cursor-wait transition-colors"
                 title="Reject Request"
               >
+                {" "}
                 {processingRequestId === req.id ? (
                   <FaSpinner className="animate-spin h-4 w-4" />
                 ) : (
                   <FaBan className="h-4 w-4" />
-                )}
+                )}{" "}
               </button>
             </div>
           </li>
@@ -316,7 +315,8 @@ const RequestsModal = ({
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b border-gray-200 flex-shrink-0 bg-white">
           <h3 className="text-lg font-semibold text-gray-800 truncate pr-4">
-            Manage Join Requests for "{project?.title || "Project"}"
+            {" "}
+            Manage Join Requests for "{project?.title || "Project"}"{" "}
           </h3>
           <button
             onClick={onClose}
@@ -324,12 +324,14 @@ const RequestsModal = ({
             className="text-gray-400 hover:text-gray-600 disabled:opacity-50 transition-colors p-1 rounded-full hover:bg-gray-100"
             aria-label="Close modal"
           >
-            <FaTimes size={20} />
+            {" "}
+            <FaTimes size={20} />{" "}
           </button>
         </div>
 
         {/* Modal-level Notification Area */}
         <AnimatePresence>
+          {" "}
           {notification.show && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
@@ -337,20 +339,21 @@ const RequestsModal = ({
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden"
             >
+              {" "}
               <Notification
                 message={notification.message}
                 type={notification.type}
                 onClose={() =>
                   setNotification((prev) => ({ ...prev, show: false }))
                 }
-              />
+              />{" "}
             </motion.div>
-          )}
+          )}{" "}
         </AnimatePresence>
 
         {/* Body - Scrollable List */}
         <div className="p-4 overflow-y-auto flex-grow">
-          {/* Display general fetch error if list is empty AFTER loading */}
+          {/* Display general fetch error only if list is empty AFTER loading */}
           {error && requests.length === 0 && !isLoading && (
             <div className="py-5">
               {" "}
@@ -360,7 +363,6 @@ const RequestsModal = ({
               />{" "}
             </div>
           )}
-          {/* Render the list or loading/empty state */}
           {renderRequestList()}
         </div>
 
@@ -371,7 +373,8 @@ const RequestsModal = ({
             disabled={!!processingRequestId}
             className="bg-gray-200 text-gray-700 hover:bg-gray-300 px-4 py-1.5 rounded-md text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:opacity-50"
           >
-            Close
+            {" "}
+            Close{" "}
           </button>
         </div>
       </motion.div>
