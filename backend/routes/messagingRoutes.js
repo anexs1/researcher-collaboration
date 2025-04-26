@@ -1,6 +1,7 @@
 // backend/routes/messagingRoutes.js
 import express from "express";
-import { getMessagingContacts } from "../controllers/messagingController.js"; // Adjust path
+// Import ONLY the controller function you are using
+import { getGroupedContacts } from "../controllers/messagingController.js"; // Adjust path
 import { protect } from "../middleware/authMiddleware.js"; // Adjust path
 
 const router = express.Router();
@@ -8,9 +9,12 @@ const router = express.Router();
 // Apply authentication to all messaging routes
 router.use(protect);
 
-// GET /api/messaging/contacts - Fetch users the current user can message
-router.get("/contacts", getMessagingContacts);
+// REMOVED route for /contacts as the controller wasn't exported
+// router.get("/contacts", getMessagingContacts);
 
-// Add other routes later (e.g., fetch/send messages)
+// *** Route for grouped contacts ***
+router.get("/grouped-contacts", getGroupedContacts);
+
+// Add other routes later...
 
 export default router;

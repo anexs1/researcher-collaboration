@@ -7,9 +7,11 @@ import {
   FaSearch,
   FaSpinner,
   FaExclamationTriangle,
-} from "react-icons/fa";
+  FaProjectDiagram,
+  FaUserClock,
+  FaUserCheck,
+} from "react-icons/fa"; // Added icons
 
-// Adjust paths as needed
 import LoadingSpinner from "../Component/Common/LoadingSpinner";
 import ErrorMessage from "../Component/Common/ErrorMessage";
 
@@ -17,13 +19,15 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 function Messages({ currentUser }) {
-  const [contacts, setContacts] = useState([]);
+  // State now holds the grouped data structure
+  const [groupedContacts, setGroupedContacts] = useState([]); // e.g., [{projectId, projectName, contacts: [...]}]
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState(""); // Search will now filter within groups
   const navigate = useNavigate();
 
-  const fetchContacts = useCallback(async () => {
+  // --- Fetch Grouped Contacts ---
+  const fetchGroupedContacts = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     const token = localStorage.getItem("authToken");
@@ -34,74 +38,91 @@ function Messages({ currentUser }) {
     }
 
     try {
+      // --- Use the NEW backend endpoint ---
       const response = await axios.get(
-        `${API_BASE_URL}/api/messaging/contacts`,
+        `${API_BASE_URL}/api/messaging/grouped-contacts`,
         {
           headers: { Authorization: `Bearer ${token}` },
-          // params: { search: searchTerm || undefined } // Optional backend search
         }
       );
 
       if (response.data?.success && Array.isArray(response.data.data)) {
-        setContacts(response.data.data);
+        setGroupedContacts(response.data.data);
       } else {
         throw new Error(response.data?.message || "Failed to load contacts.");
       }
     } catch (err) {
-      console.error("Error fetching message contacts:", err);
+      console.error("Error fetching grouped message contacts:", err);
       const errorMsg =
         err.response?.data?.message ||
         err.message ||
         "Could not load contacts.";
       setError(errorMsg);
-      setContacts([]);
+      setGroupedContacts([]);
     } finally {
       setIsLoading(false);
     }
-  }, []); // Add searchTerm if using backend search
+  }, []); // Doesn't depend on searchTerm for backend fetch anymore
 
+  // Fetch contacts on component mount
   useEffect(() => {
-    fetchContacts();
-  }, [fetchContacts]);
+    fetchGroupedContacts();
+  }, [fetchGroupedContacts]);
 
-  const filteredContacts = contacts.filter(
-    (contact) =>
-      (contact.username?.toLowerCase() || "").includes(
-        searchTerm.toLowerCase()
-      ) ||
-      (contact.name?.toLowerCase() || "").includes(searchTerm.toLowerCase())
-  );
+  // --- Client-side Filtering within Groups ---
+  const filteredGroupedContacts = groupedContacts
+    .map((group) => ({
+      ...group,
+      // Filter contacts within each group
+      contacts: group.contacts.filter((contact) =>
+        contact.username?.toLowerCase().includes(searchTerm.toLowerCase())
+      ),
+    }))
+    // Keep only groups that still have contacts after filtering
+    .filter((group) => group.contacts.length > 0);
 
+  // --- Handle Clicking a Contact ---
   const handleContactClick = (userId) => {
-    navigate(`/messages/${userId}`); // Example route
+    console.log(`Navigating to chat with user ${userId}`);
+    navigate(`/messages/${userId}`); // Navigate to individual chat page
   };
 
+  // --- Render Logic ---
   return (
     <div className="flex flex-col h-full max-w-4xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-      {" "}
-      {/* Centered layout */}
+      {/* Header */}
       <div className="mb-6 border-b pb-4 border-gray-200">
         <h1 className="text-2xl md:text-3xl font-bold text-gray-800">
           Messages
         </h1>
         <p className="text-sm text-gray-600 mt-1">
-          Start a conversation with your collaborators.
+          Contacts grouped by project.
         </p>
       </div>
-      <div className="mb-4">
-        <div className="relative">
+
+      {/* Search/Filter Bar */}
+      <div className="mb-4 sticky top-0 bg-gray-50 py-2 z-10 -mx-4 px-4 border-b">
+        {" "}
+        {/* Make search sticky */}
+        <div className="relative max-w-xl mx-auto">
+          {" "}
+          {/* Center search */}
           <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search contacts by name or username..."
+            placeholder="Search contacts by username..."
             className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 shadow-sm"
             aria-label="Search contacts"
           />
         </div>
       </div>
-      <div className="flex-grow overflow-y-auto -mx-4 px-4">
+
+      {/* Content Area */}
+      <div className="flex-grow overflow-y-auto -mx-4 px-4 pb-4">
+        {" "}
+        {/* Allow content to scroll */}
         {isLoading ? (
           <div className="flex justify-center items-center py-20">
             {" "}
@@ -115,21 +136,20 @@ function Messages({ currentUser }) {
               message={error}
               onClose={() => {
                 setError(null);
-                fetchContacts();
+                fetchGroupedContacts();
               }}
             />{" "}
           </div>
-        ) : filteredContacts.length === 0 ? (
+        ) : filteredGroupedContacts.length === 0 ? ( // Check filtered results
           <div className="text-center py-16 px-6 bg-white rounded-lg shadow-sm border border-gray-100">
             <FaExclamationTriangle className="mx-auto h-12 w-12 text-gray-300 mb-4" />
             <h3 className="text-xl font-semibold text-gray-700">
               No Contacts Found
             </h3>
             <p className="mt-2 text-gray-600">
-              {" "}
               {searchTerm
-                ? "No contacts match your search."
-                : "Join or create projects to find collaborators to message!"}{" "}
+                ? "No contacts match your search in any shared projects."
+                : "Join or create projects and add members/get requests to start messaging!"}
             </p>
             {searchTerm && (
               <button
@@ -142,79 +162,92 @@ function Messages({ currentUser }) {
             )}
           </div>
         ) : (
-          <ul className="space-y-2">
-            {filteredContacts.map((contact) => (
-              <li key={contact.id}>
-                <button
-                  onClick={() => handleContactClick(contact.id)}
-                  className="w-full flex items-center p-3 rounded-lg bg-white hover:bg-indigo-50 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-1 border border-gray-200 hover:border-indigo-200 shadow-sm text-left"
-                >
-                  <div className="flex-shrink-0 mr-3 relative">
-                    {contact.profilePictureUrl ? (
-                      <img
-                        src={contact.profilePictureUrl}
-                        alt={contact.username}
-                        className="w-10 h-10 rounded-full object-cover border border-gray-100"
-                        onError={(e) => {
-                          e.target.onerror = null;
-                          e.target.style.display = "none";
-                          const fallback = e.target.nextElementSibling;
-                          if (fallback) fallback.style.display = "flex";
-                        }}
-                      />
-                    ) : null}
-                    <div
-                      className={`w-10 h-10 rounded-full bg-gradient-to-br from-indigo-200 to-purple-200 flex items-center justify-center text-indigo-700 font-semibold ${
-                        contact.profilePictureUrl ? "hidden" : "flex"
-                      }`}
-                    >
+          // --- Render Grouped List ---
+          <div className="space-y-6">
+            {filteredGroupedContacts.map((group) => (
+              <div
+                key={group.projectId}
+                className="bg-white p-4 rounded-lg shadow-sm border border-gray-200"
+              >
+                {/* Project Header */}
+                <h2 className="text-md font-semibold text-gray-800 mb-3 flex items-center border-b pb-2">
+                  <FaProjectDiagram className="mr-2 text-indigo-600" />
+                  {group.projectName}
+                  {/* Optional: Link to project page */}
+                  <Link
+                    to={`/projects/${group.projectId}`}
+                    className="ml-auto text-xs text-indigo-500 hover:underline"
+                  >
+                    View Project
+                  </Link>
+                </h2>
+                {/* Contacts within this project */}
+                <ul className="space-y-2">
+                  {group.contacts.map((contact) => (
+                    <li key={contact.id || contact.requestId}>
                       {" "}
-                      {(contact.name || contact.username || "?")
-                        .charAt(0)
-                        .toUpperCase()}{" "}
-                    </div>
-                  </div>
-                  <div className="flex-grow overflow-hidden">
-                    <p
-                      className="text-sm font-medium text-gray-800 truncate"
-                      title={contact.name || contact.username}
-                    >
-                      {" "}
-                      {contact.name ||
-                        contact.username ||
-                        `User ${contact.id}`}{" "}
-                    </p>
-                    <p className="text-xs text-gray-500 truncate mt-0.5">
-                      {" "}
-                      {contact.lastMessageSnippet ||
-                        "Start a conversation..."}{" "}
-                    </p>
-                  </div>
-                  <div className="flex-shrink-0 ml-3 text-right">
-                    {contact.lastMessageTimestamp && (
-                      <p className="text-xs text-gray-400 mb-1">
-                        {" "}
-                        {new Date(
-                          contact.lastMessageTimestamp
-                        ).toLocaleTimeString([], {
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })}{" "}
-                      </p>
-                    )}
-                    {contact.unreadCount > 0 && (
-                      <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
-                        {" "}
-                        {contact.unreadCount > 9
-                          ? "9+"
-                          : contact.unreadCount}{" "}
-                      </span>
-                    )}
-                  </div>
-                </button>
-              </li>
+                      {/* Use unique key */}
+                      <button
+                        onClick={() => handleContactClick(contact.id)}
+                        className="w-full flex items-center p-2 rounded-md hover:bg-gray-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-indigo-300 text-left"
+                        title={`Message ${contact.username}`}
+                      >
+                        {/* Avatar */}
+                        <div className="flex-shrink-0 mr-2.5 relative">
+                          {contact.profilePictureUrl ? (
+                            <img
+                              src={contact.profilePictureUrl}
+                              alt={contact.username}
+                              className="w-8 h-8 rounded-full object-cover"
+                              onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.style.display = "none";
+                                const fb = e.target.nextElementSibling;
+                                if (fb) fb.style.display = "flex";
+                              }}
+                            />
+                          ) : null}
+                          <div
+                            className={`w-8 h-8 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center text-gray-600 font-semibold text-xs ${
+                              contact.profilePictureUrl ? "hidden" : "flex"
+                            }`}
+                          >
+                            {(contact.username || "?").charAt(0).toUpperCase()}
+                          </div>
+                        </div>
+                        {/* Info */}
+                        <div className="flex-grow overflow-hidden">
+                          <p className="text-sm font-medium text-gray-700 truncate">
+                            {contact.username || `User ${contact.id}`}
+                          </p>
+                        </div>
+                        {/* Status/Type Indicator */}
+                        <div className="flex-shrink-0 ml-2">
+                          {contact.type === "requester" && (
+                            <span
+                              title={`Pending request from ${contact.username}`}
+                              className="text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded-full flex items-center"
+                            >
+                              <FaUserClock className="mr-1" /> Pending
+                            </span>
+                          )}
+                          {contact.type === "member" && (
+                            <span
+                              title={`${contact.username} is a member`}
+                              className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full flex items-center"
+                            >
+                              <FaUserCheck className="mr-1" /> Member
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ))}
-          </ul>
+          </div>
+          // --- End Grouped List ---
         )}
       </div>
     </div>
