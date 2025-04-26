@@ -1,5 +1,3 @@
-// src/pages/Projects.jsx
-
 import React, { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
@@ -24,7 +22,9 @@ import {
   FaUserCheck,
   FaEyeSlash,
   FaSpinner,
+  FaMapMarkerAlt, // Added for potential use
 } from "react-icons/fa";
+import { FiCalendar } from "react-icons/fi"; // Added for potential use
 
 // --- Components ---
 // CRITICAL: Verify these paths are correct relative to Projects.jsx
@@ -34,7 +34,7 @@ import Notification from "../Component/Common/Notification";
 import ProjectDetailModal from "../Component/projects/ProjectDetailModal";
 import MembersModal from "../Component/projects/MembersModal";
 import JoinRequestModal from "../Component/projects/JoinRequestModal"; // For users sending requests
-import RequestsModal from "../Component/projects/RequestsModal"; // << For owners managing requests (Ensure this component exists)
+import RequestsModal from "../Component/projects/RequestsModal"; // << For owners managing requests
 import ReportModal from "../Component/projects/ReportModal";
 import ChatModal from "../Component/projects/ChatModal"; // Placeholder if not implemented
 
@@ -42,19 +42,14 @@ import ChatModal from "../Component/projects/ChatModal"; // Placeholder if not i
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 const PROJECTS_PER_PAGE = 9;
-// Status options - Ensure values align with your backend/database/filtering logic
+// Status options - Align with backend/database ENUMs
 const statusOptions = [
   { value: "", label: "All Statuses" },
-  // Add your actual status options here, matching backend/DB enums exactly
   { value: "Planning", label: "Planning" },
-  { value: "open", label: "Open" },
   { value: "Active", label: "Active" },
-  { value: "active", label: "Active (DB)" },
   { value: "Completed", label: "Completed" },
-  { value: "completed", label: "Completed (DB)" },
   { value: "On Hold", label: "On Hold" },
-  { value: "Archived", label: "Archived" }, // Status used for 'hiding'
-  { value: "Hidden", label: "Hidden" }, // Alternative status for 'hiding'
+  { value: "Archived", label: "Archived" }, // Use this for "Hidden" state
 ];
 
 // --- Helper Function for Status Badge ---
@@ -65,12 +60,9 @@ const getStatusBadgeClasses = (status) => {
     case "active":
       return "bg-blue-100 text-blue-800 border-blue-200";
     case "planning":
-    case "open":
       return "bg-yellow-100 text-yellow-800 border-yellow-200";
-    // Group statuses that indicate hidden/inactive
     case "on hold":
-    case "archived":
-    case "hidden":
+    case "archived": // Treat Archived as a distinct inactive state
       return "bg-red-100 text-red-800 border-red-200";
     default:
       return "bg-gray-100 text-gray-800 border-gray-200";
@@ -78,21 +70,21 @@ const getStatusBadgeClasses = (status) => {
 };
 
 // --- ProjectCard Sub-Component ---
-// Renders a single project card, including owner-specific actions
 const ProjectCard = React.memo(
   ({
     project,
     currentUser,
     isSaved,
     activeDropdown,
-    isUpdatingStatus, // Data/State Props
-    // Callback Props (Ensure all are passed from Projects component)
+    isUpdatingStatus, // For hide/unhide loading
+    hasPendingRequests, // <<< ADDED PROP: Boolean indicating if there are pending requests
+    // Callback Props
     onToggleDropdown,
     onToggleSave,
     onViewProject,
     onViewMembers,
     onOpenJoinModal,
-    onOpenRequestsModal,
+    onOpenRequestsModal, // This still opens the modal
     onOpenReportModal,
     onShareProject,
     onDownloadProject,
@@ -109,14 +101,16 @@ const ProjectCard = React.memo(
       () => setIsHoveringChild(false),
       []
     );
+    // Handle image source potentially relative or absolute
     const imageSource = project.image
-      ? project.image.startsWith("/")
-        ? `${API_BASE_URL}${project.image}`
-        : project.image
+      ? project.image.startsWith("http") || project.image.startsWith("blob:")
+        ? project.image
+        : project.image.startsWith("/")
+        ? `${API_BASE_URL}${project.image}` // Prepend base URL if it starts with /
+        : project.image // Assume relative path or data URI if needed
       : null;
-    // Determine if the project is considered hidden (using 'Archived' or 'Hidden' status)
-    const isHidden =
-      project.status === "Archived" || project.status === "Hidden";
+    // Determine if the project is considered hidden (using 'Archived' status)
+    const isHidden = project.status === "Archived";
 
     return (
       <motion.div
@@ -190,7 +184,6 @@ const ProjectCard = React.memo(
                 aria-orientation="vertical"
                 aria-labelledby={`options-menu-${project.id}`}
               >
-                {/* Attach mouse handlers to prevent hover conflict */}
                 <button
                   onMouseEnter={handleChildMouseEnter}
                   onMouseLeave={handleChildMouseLeave}
@@ -227,7 +220,6 @@ const ProjectCard = React.memo(
                 >
                   <FaUsers className="mr-2 text-orange-500" /> View Members
                 </button>
-                {/* Non-Owner Action */}
                 {!isOwner && (
                   <button
                     onMouseEnter={handleChildMouseEnter}
@@ -240,16 +232,13 @@ const ProjectCard = React.memo(
                     Join
                   </button>
                 )}
-                {/* Owner Dropdown Actions (Hide/Unhide kept here) */}
                 {isOwner && (
                   <>
                     <div className="border-t my-1 mx-2 border-gray-100"></div>
-                    {/* Hide/Unhide Button */}
                     <button
                       onMouseEnter={handleChildMouseEnter}
                       onMouseLeave={handleChildMouseLeave}
-                      // Toggle between 'Archived' (to hide) and 'Active' (to unhide)
-                      // Adjust 'Active' if your primary visible status is different (e.g., 'Planning', 'open')
+                      // Use 'Archived' for hiding, toggle back to 'Active' or 'Planning' (choose one as default visible state)
                       onClick={() =>
                         onUpdateProjectStatus(
                           project,
@@ -258,9 +247,8 @@ const ProjectCard = React.memo(
                       }
                       className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50"
                       role="menuitem"
-                      disabled={isUpdatingStatus} // Disable while this specific action is processing
+                      disabled={isUpdatingStatus}
                     >
-                      {/* Show spinner if this project is the one being updated */}
                       {isUpdatingStatus ? (
                         <FaSpinner className="animate-spin h-4 w-4 mr-2" />
                       ) : isHidden ? (
@@ -287,9 +275,9 @@ const ProjectCard = React.memo(
                 className="w-full h-full object-cover"
                 loading="lazy"
                 onError={(e) => {
-                  e.target.style.display = "none";
+                  e.target.src = "/placeholder-image.png";
                 }}
-              />
+              /> // Provide a placeholder
             ) : (
               <FaUniversity className="text-6xl text-gray-300" />
             )}
@@ -312,8 +300,7 @@ const ProjectCard = React.memo(
             >
               {project.owner ? (
                 <>
-                  {" "}
-                  <span className="hidden sm:inline mr-1">By:</span>{" "}
+                  <span className="hidden sm:inline mr-1">By:</span>
                   {isOwner ? (
                     <span className="font-medium text-indigo-600">You</span>
                   ) : (
@@ -328,10 +315,19 @@ const ProjectCard = React.memo(
                     >
                       {project.owner.username || "User"}
                     </Link>
-                  )}{" "}
-                  <span className="ml-1.5 bg-gray-200 rounded-full h-4 w-4 flex items-center justify-center text-gray-500 text-[8px] font-bold uppercase">
-                    {project.owner.username ? project.owner.username[0] : "?"}
-                  </span>{" "}
+                  )}
+                  {/* Simple Avatar Placeholder */}
+                  {project.owner.profilePictureUrl ? (
+                    <img
+                      src={project.owner.profilePictureUrl}
+                      alt="Owner"
+                      className="ml-1.5 h-4 w-4 rounded-full object-cover"
+                    />
+                  ) : (
+                    <span className="ml-1.5 bg-gray-200 rounded-full h-4 w-4 flex items-center justify-center text-gray-500 text-[8px] font-bold uppercase">
+                      {project.owner.username ? project.owner.username[0] : "?"}
+                    </span>
+                  )}
                 </>
               ) : (
                 <span className="text-gray-400 italic">Owner unknown</span>
@@ -363,13 +359,13 @@ const ProjectCard = React.memo(
             </span>
           </div>
 
-          {/* === Footer Buttons - Including Owner Actions === */}
+          {/* === Footer Buttons === */}
           <div
             className={`flex mt-auto pt-3 border-t border-gray-100 ${
               isOwner ? "gap-1 sm:gap-1.5" : "space-x-2"
             }`}
           >
-            {/* --- VIEW BUTTON (Always first) --- */}
+            {/* View Button */}
             <button
               onMouseEnter={handleChildMouseEnter}
               onMouseLeave={handleChildMouseLeave}
@@ -385,7 +381,7 @@ const ProjectCard = React.memo(
               <FaEye className="flex-shrink-0" />{" "}
               <span className="hidden sm:inline">View</span>
             </button>
-            {/* --- CONDITIONAL BUTTONS --- */}
+            {/* Owner/Non-Owner Buttons */}
             {isOwner ? (
               <>
                 <Link
@@ -399,6 +395,7 @@ const ProjectCard = React.memo(
                   <FaPencilAlt className="flex-shrink-0" />{" "}
                   <span className="hidden sm:inline">Edit</span>
                 </Link>
+                {/* Manage Requests Button - Conditionally Styled/Disabled */}
                 <button
                   onMouseEnter={handleChildMouseEnter}
                   onMouseLeave={handleChildMouseLeave}
@@ -406,8 +403,17 @@ const ProjectCard = React.memo(
                     e.stopPropagation();
                     onOpenRequestsModal(project);
                   }}
-                  className="py-1.5 px-2 sm:px-3 rounded-md text-sm font-medium flex items-center justify-center gap-1 transition-colors flex-grow bg-teal-50 text-teal-700 hover:bg-teal-100"
-                  title="Manage Join Requests"
+                  disabled={!hasPendingRequests} // Disable button if no pending requests
+                  className={`py-1.5 px-2 sm:px-3 rounded-md text-sm font-medium flex items-center justify-center gap-1 transition-colors flex-grow ${
+                    hasPendingRequests
+                      ? "bg-teal-50 text-teal-700 hover:bg-teal-100" // Active style
+                      : "bg-gray-100 text-gray-400 cursor-not-allowed opacity-70" // Disabled style
+                  }`}
+                  title={
+                    hasPendingRequests
+                      ? "Manage Join Requests"
+                      : "No Pending Requests"
+                  }
                 >
                   <FaUserCheck className="flex-shrink-0" />{" "}
                   <span className="hidden sm:inline">Requests</span>
@@ -440,12 +446,11 @@ const ProjectCard = React.memo(
               </button>
             )}
           </div>
-          {/* === End Footer Buttons === */}
         </div>
       </motion.div>
     );
   }
-); // End of ProjectCard
+);
 
 // --- Main Projects Page Component ---
 export default function Projects({ currentUser }) {
@@ -455,10 +460,10 @@ export default function Projects({ currentUser }) {
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
-  const [selectedProject, setSelectedProject] = useState(null); // Project context for modals and actions
-  const [modalType, setModalType] = useState(null); // Controls which modal is visible
-  const [savedProjects, setSavedProjects] = useState([]); // Example state
-  const [activeDropdown, setActiveDropdown] = useState(null); // ID of project with open dropdown
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [modalType, setModalType] = useState(null);
+  const [savedProjects, setSavedProjects] = useState(new Set()); // Use Set for efficient lookup
+  const [activeDropdown, setActiveDropdown] = useState(null);
   const [reportData, setReportData] = useState("");
   const [notification, setNotification] = useState({
     message: "",
@@ -466,7 +471,8 @@ export default function Projects({ currentUser }) {
     show: false,
   });
   const [isSubmittingJoin, setIsSubmittingJoin] = useState(false);
-  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false); // Loading state for hide/unhide
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [projectsWithNoPending, setProjectsWithNoPending] = useState(new Set()); // Stores IDs of projects with 0 pending requests
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const limit = PROJECTS_PER_PAGE;
@@ -483,66 +489,93 @@ export default function Projects({ currentUser }) {
 
   // Fetch projects API call
   const fetchProjects = useCallback(
-    async (currentPage = page) => {
+    async (currentPage = 1) => {
+      // Default to page 1 if not specified
       console.log(
         `Fetching projects: page=${currentPage}, limit=${limit}, status=${filterStatus}, search=${searchTerm}`
       );
       setIsLoading(true);
+      setError(""); // Clear previous errors
       const authToken = localStorage.getItem("authToken");
       try {
         const response = await axios.get(`${API_BASE_URL}/api/projects`, {
           headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
           params: {
-            status: filterStatus || undefined,
-            search: searchTerm || undefined,
+            status: filterStatus || undefined, // Send status only if selected
+            search: searchTerm || undefined, // Send search only if entered
             page: currentPage,
             limit,
           },
         });
         if (response.data?.success && Array.isArray(response.data.data)) {
+          // Basic mapping, ensure all needed fields are present or handled
           const fetchedProjects = response.data.data.map((proj) => ({
-            /* ... map project fields ... */ id: proj.id,
-            title: proj.title ?? "Untitled",
-            description: proj.description ?? "No description.",
+            id: proj.id,
+            title: proj.title ?? "Untitled Project",
+            description: proj.description ?? "No description available.",
             status: proj.status ?? "Unknown",
             requiredCollaborators: proj.requiredCollaborators ?? 0,
             ownerId: proj.ownerId ?? null,
-            owner: proj.owner || null,
+            owner: proj.owner
+              ? {
+                  // Safely map owner details
+                  id: proj.owner.id,
+                  username: proj.owner.username ?? "Unknown User",
+                  profilePictureUrl: proj.owner.profilePictureUrl || null, // Handle potentially missing pic URL
+                }
+              : null,
             createdAt: proj.createdAt,
             updatedAt: proj.updatedAt,
-            progress: proj.progress ?? 0,
-            views: proj.views ?? 0,
-            likes: proj.likes ?? 0,
-            comments: proj.comments ?? 0,
-            image: proj.imageUrl || null,
+            // Add other fields if they come from the API and are needed by ProjectCard
+            image: proj.imageUrl || null, // Assuming API returns imageUrl
+            // If your API returns pending request count, map it here:
+            // pendingRequestCount: proj.pendingRequestCount ?? 0
           }));
           setProjects(fetchedProjects);
-          setTotalPages(Math.ceil((response.data.count || 0) / limit) || 1);
-          setError("");
+          setTotalPages(response.data.totalPages || 1);
+          // IMPORTANT: Reset projectsWithNoPending if filters change,
+          // otherwise old state might persist incorrectly.
+          // We do this reset in the filter/search useEffect instead.
         } else {
-          throw new Error(response.data?.message || "Failed fetch.");
+          throw new Error(
+            response.data?.message || "Failed to fetch projects."
+          );
         }
       } catch (err) {
         console.error("Fetch projects error:", err);
-        setError(
-          err.response?.data?.message || err.message || "Could not load."
-        );
+        const errorMsg =
+          err.response?.data?.message ||
+          err.message ||
+          "Could not load projects.";
+        setError(errorMsg);
+        showNotification(errorMsg, "error");
         setProjects([]);
         setTotalPages(1);
       } finally {
         setIsLoading(false);
       }
     },
-    [searchTerm, filterStatus, page, limit]
-  ); // Add page and limit
+    [searchTerm, filterStatus, limit]
+  ); // Remove 'page' dependency here, handle pagination separately
 
-  // Effects
+  // Fetch on initial load and when filters/search change
   useEffect(() => {
-    fetchProjects(page);
-  }, [fetchProjects, page]); // Refetch when page changes
+    setPage(1); // Reset to page 1 when filters change
+    setProjectsWithNoPending(new Set()); // <<< RESET PENDING STATE on filter change
+    fetchProjects(1); // Fetch page 1
+  }, [searchTerm, filterStatus, fetchProjects]); // `fetchProjects` includes limit
+
+  // Fetch when page changes
   useEffect(() => {
-    if (page !== 1 && !isLoading) setPage(1);
-  }, [searchTerm, filterStatus, isLoading]); // Reset page, avoid during load
+    // Fetch only if not the initial filter-triggered fetch
+    // This prevents double-fetching when filters change AND page resets
+    if (
+      page > 1 ||
+      (page === 1 && projects.length === 0 && !isLoading && !error)
+    ) {
+      fetchProjects(page);
+    }
+  }, [page, fetchProjects]); // Run when page changes
 
   // --- Modal Handlers ---
   const handleCloseModal = useCallback(() => {
@@ -570,9 +603,11 @@ export default function Projects({ currentUser }) {
     setSelectedProject(project);
     setModalType("requests");
     setActiveDropdown(null);
-  }, []); // For owner
+  }, []);
   const handleOpenReportModal = useCallback((project) => {
-    /* Generate report */ const reportContent = `...`;
+    const reportContent = `Project Report:\nTitle: ${project.title}\nStatus: ${
+      project.status
+    }\nOwner: ${project.owner?.username || "N/A"}\n...more data...`;
     setReportData(reportContent);
     setSelectedProject(project);
     setModalType("report");
@@ -582,31 +617,102 @@ export default function Projects({ currentUser }) {
   // --- Action Handlers ---
   const confirmJoinRequest = useCallback(
     async (message) => {
-      /* ... API POST /api/collaboration-requests ... */
+      if (!selectedProject || !currentUser?.id) {
+        showNotification("Cannot send request.", "error");
+        return;
+      }
+      setIsSubmittingJoin(true);
+      const authToken = localStorage.getItem("authToken");
+      try {
+        await axios.post(
+          `${API_BASE_URL}/api/collaboration-requests`,
+          { projectId: selectedProject.id, message },
+          { headers: { Authorization: `Bearer ${authToken}` } }
+        );
+        showNotification("Join request sent successfully!", "success");
+        handleCloseModal();
+      } catch (err) {
+        console.error("Join request error:", err);
+        const errorMsg =
+          err.response?.data?.message ||
+          err.message ||
+          "Could not send request.";
+        showNotification(errorMsg, "error");
+        // Keep modal open on error? Or handleCloseModal();
+      } finally {
+        setIsSubmittingJoin(false);
+      }
     },
     [selectedProject, currentUser?.id, showNotification, handleCloseModal]
   );
+
   const toggleSaveProject = useCallback(
     (projectId) => {
-      /* ... Needs API ... */
+      // Placeholder: Needs API integration
+      setSavedProjects((prev) => {
+        const newSet = new Set(prev);
+        if (newSet.has(projectId)) {
+          newSet.delete(projectId);
+          showNotification("Project unsaved.", "info");
+        } else {
+          newSet.add(projectId);
+          showNotification("Project saved!", "success");
+        }
+        return newSet;
+      });
+      setActiveDropdown(null); // Close dropdown after action
     },
-    [savedProjects, showNotification]
-  );
+    [showNotification]
+  ); // Removed savedProjects dependency to avoid loops if API call added
+
   const handleShareProject = useCallback(
     (projectId) => {
-      /* ... Clipboard API ... */
+      const projectUrl = `${window.location.origin}/projects/${projectId}`; // Adjust URL structure if needed
+      navigator.clipboard
+        .writeText(projectUrl)
+        .then(() =>
+          showNotification("Project link copied to clipboard!", "success")
+        )
+        .catch(() => showNotification("Could not copy link.", "error"));
+      setActiveDropdown(null);
     },
     [showNotification]
   );
+
   const handleDownloadProject = useCallback(
     (project) => {
-      /* ... Blob download ... */
+      // Simple text download example
+      const data = `Project Title: ${project.title}\nDescription: ${project.description}\nStatus: ${project.status}\nOwner: ${project.owner?.username}`;
+      const blob = new Blob([data], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${project.title.replace(/\s+/g, "_")}_details.txt`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showNotification("Project info downloaded.", "info");
+      setActiveDropdown(null);
     },
     [showNotification]
   );
+
   const downloadReport = useCallback(() => {
-    /* ... Blob download ... */
+    if (!reportData || !selectedProject) return;
+    const blob = new Blob([reportData], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${selectedProject.title.replace(/\s+/g, "_")}_report.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showNotification("Report downloaded.", "info");
+    handleCloseModal();
   }, [selectedProject, reportData, showNotification, handleCloseModal]);
+
   const toggleDropdown = useCallback((projectId) => {
     setActiveDropdown((prev) => (prev === projectId ? null : projectId));
   }, []);
@@ -619,9 +725,9 @@ export default function Projects({ currentUser }) {
         return;
       }
       const oldStatus = projectToUpdate.status;
-      setActiveDropdown(null);
+      setActiveDropdown(null); // Close dropdown
       setIsUpdatingStatus(true);
-      setSelectedProject(projectToUpdate);
+      setSelectedProject(projectToUpdate); // Track which project is updating for spinner
       setError("");
       const authToken = localStorage.getItem("authToken");
       if (!authToken) {
@@ -630,14 +736,17 @@ export default function Projects({ currentUser }) {
         setSelectedProject(null);
         return;
       }
+
       console.log(
-        `Updating project ${projectToUpdate.id} status to ${newStatus}`
+        `Updating project ${projectToUpdate.id} status from ${oldStatus} to ${newStatus}`
       );
+      // Optimistic UI update
       setProjects((prev) =>
         prev.map((p) =>
           p.id === projectToUpdate.id ? { ...p, status: newStatus } : p
         )
-      ); // Optimistic Update
+      );
+
       try {
         const response = await axios.put(
           `${API_BASE_URL}/api/projects/${projectToUpdate.id}`,
@@ -645,105 +754,133 @@ export default function Projects({ currentUser }) {
           { headers: { Authorization: `Bearer ${authToken}` } }
         );
         if (!response.data?.success) {
-          throw new Error(response.data?.message || "Failed update.");
+          throw new Error(
+            response.data?.message || "Failed to update project status."
+          );
         }
         showNotification(`Project status updated to ${newStatus}.`, "success");
+        // Update successful, optimistic update stands
       } catch (err) {
         console.error(
           `Error updating project ${projectToUpdate.id} status:`,
           err
         );
-        showNotification(
-          err.response?.data?.message || err.message || "Could not update.",
-          "error"
-        );
+        const errorMsg =
+          err.response?.data?.message ||
+          err.message ||
+          "Could not update project status.";
+        showNotification(errorMsg, "error");
+        setError(errorMsg);
+        // Revert UI on error
         setProjects((prev) =>
           prev.map((p) =>
             p.id === projectToUpdate.id ? { ...p, status: oldStatus } : p
           )
-        ); // Revert on error
-        setError(
-          err.response?.data?.message || err.message || "Update failed."
         );
       } finally {
         setIsUpdatingStatus(false);
-        setSelectedProject(null);
+        setSelectedProject(null); // Clear tracking state
       }
     },
-    [showNotification, setProjects]
-  ); // Dependencies
+    [showNotification]
+  ); // Removed setProjects dependency
 
   // Handler to Delete Project (Owner)
   const handleDeleteProject = useCallback(
     async (projectIdToDelete) => {
       if (!projectIdToDelete) {
-        showNotification("ID missing.", "error");
+        showNotification("Project ID missing.", "error");
         return;
       }
-      if (!window.confirm("Delete project permanently?")) {
+      if (
+        !window.confirm(
+          "Are you sure you want to delete this project permanently? This action cannot be undone."
+        )
+      ) {
         setActiveDropdown(null);
         return;
       }
-      setActiveDropdown(null);
+
+      setActiveDropdown(null); // Close dropdown
       const authToken = localStorage.getItem("authToken");
       if (!authToken) {
-        showNotification("Auth required.", "error");
+        showNotification("Authentication required.", "error");
         return;
       }
+
+      // Store current state for potential revert
       const currentProjects = [...projects];
       const currentPage = page;
-      const currentTotalPages = totalPages; // Store state for potential revert
-      setProjects((prev) => prev.filter((p) => p.id !== projectIdToDelete)); // Optimistic Update
+      const currentTotalPages = totalPages;
+
+      // Optimistic UI update
+      setProjects((prev) => prev.filter((p) => p.id !== projectIdToDelete));
+
       try {
         console.log(`Deleting project ID: ${projectIdToDelete}`);
         const response = await axios.delete(
           `${API_BASE_URL}/api/projects/${projectIdToDelete}`,
-          { headers: { Authorization: `Bearer ${authToken}` } }
+          {
+            headers: { Authorization: `Bearer ${authToken}` },
+          }
         );
+
         if (!response.data?.success) {
-          throw new Error(response.data?.message || "Delete failed.");
+          throw new Error(
+            response.data?.message || "Failed to delete project."
+          );
         }
         showNotification(
-          response.data.message || "Project deleted!",
+          response.data.message || "Project deleted successfully!",
           "success"
         );
-        // Adjust pagination
-        const projectsAfterDelete = currentProjects.filter(
-          (p) => p.id !== projectIdToDelete
-        );
-        // Use count from response if available, otherwise estimate
-        const newTotalItems = response.data.count ?? currentProjects.length - 1;
-        const newTotalPages = Math.ceil(newTotalItems / limit) || 1; // Ensure at least 1 page
-        setTotalPages(newTotalPages);
-        if (currentPage > newTotalPages) {
-          setPage(newTotalPages);
-        } // Go to new last page
-        // No explicit refetch needed here if page doesn't change, UI is already updated.
+
+        // Option 1: Refetch current page data to get accurate total count and potentially shift items
+        fetchProjects(currentPage);
+        // Option 2: Manually adjust pagination (less reliable if total count unknown)
+        /*
+            const newTotalItems = currentProjects.length - 1; // Estimate
+            const newTotalPages = Math.ceil(newTotalItems / limit) || 1;
+            setTotalPages(newTotalPages);
+            if (currentPage > newTotalPages && newTotalPages > 0) {
+                setPage(newTotalPages); // Go to new last page if current page is now invalid
+            } else if (currentProjects.length % limit === 1 && currentPage === currentTotalPages && currentPage > 1){
+                 // If deleting the only item on the last page, go to previous page
+                 setPage(currentPage - 1);
+            }
+            // If page didn't change, the optimistic UI update is likely sufficient for now
+            */
       } catch (err) {
         console.error(`Delete project ${projectIdToDelete} error:`, err);
-        showNotification(
-          err.response?.data?.message || err.message || "Could not delete.",
-          "error"
-        );
-        setError(
-          err.response?.data?.message || err.message || "Could not delete."
-        );
-        setProjects(currentProjects); // Revert UI on error
+        const errorMsg =
+          err.response?.data?.message ||
+          err.message ||
+          "Could not delete project.";
+        showNotification(errorMsg, "error");
+        setError(errorMsg);
+        // Revert UI and state on error
+        setProjects(currentProjects);
         setTotalPages(currentTotalPages);
-        setPage(currentPage); // Revert pagination state
+        setPage(currentPage);
       }
     },
-    [
-      showNotification,
-      projects,
-      page,
-      limit,
-      totalPages,
-      setProjects,
-      setPage,
-      setTotalPages,
-    ]
-  ); // Dependencies
+    [projects, page, totalPages, limit, showNotification, fetchProjects]
+  ); // Added fetchProjects
+
+  // --- ADDED CALLBACK: Called by RequestsModal when last request is handled ---
+  const handleRequestsHandled = useCallback((handledProjectId) => {
+    console.log(
+      `All pending requests handled for project ID: ${handledProjectId}`
+    );
+    setProjectsWithNoPending((prevSet) => {
+      const newSet = new Set(prevSet);
+      newSet.add(handledProjectId);
+      return newSet;
+    });
+    // Maybe show a notification?
+    // showNotification(`Requests managed for project ${handledProjectId}.`, "info");
+    // Keep the modal open for the user to close manually
+  }, []); // Removed showNotification dependency
 
   // --- Main Render ---
   return (
@@ -759,14 +896,13 @@ export default function Projects({ currentUser }) {
                 exit={{ opacity: 0, x: 100 }}
                 transition={{ type: "spring", stiffness: 300, damping: 30 }}
               >
-                {" "}
                 <Notification
                   message={notification.message}
                   type={notification.type}
                   onClose={() =>
                     setNotification((prev) => ({ ...prev, show: false }))
                   }
-                />{" "}
+                />
               </motion.div>
             )}
           </AnimatePresence>
@@ -789,7 +925,7 @@ export default function Projects({ currentUser }) {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search..."
+                placeholder="Search title or description..."
                 className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500"
               />
             </div>
@@ -825,12 +961,11 @@ export default function Projects({ currentUser }) {
 
         {/* Content Area */}
         <div className="mt-6 pb-10">
-          {" "}
-          {/* Added padding-bottom */}
           {isLoading ? (
             <div className="flex justify-center items-center py-24">
-              <LoadingSpinner size="lg" />
-              <span className="ml-3 text-gray-500">Loading Projects...</span>
+              {" "}
+              <LoadingSpinner size="lg" />{" "}
+              <span className="ml-3 text-gray-500">Loading Projects...</span>{" "}
             </div>
           ) : projects.length === 0 ? (
             <div className="text-center mt-8 py-12 px-6 bg-white rounded-lg shadow border border-gray-200">
@@ -838,8 +973,8 @@ export default function Projects({ currentUser }) {
               <h3 className="text-xl font-semibold">No Projects Found</h3>
               <p className="mt-2 text-gray-600">
                 {searchTerm || filterStatus
-                  ? "No projects match criteria."
-                  : "No projects available yet."}
+                  ? "No projects match your current filters."
+                  : "No projects have been created yet."}
               </p>
               <div className="mt-6 space-x-4">
                 {(searchTerm || filterStatus) && (
@@ -847,19 +982,23 @@ export default function Projects({ currentUser }) {
                     onClick={() => {
                       setSearchTerm("");
                       setFilterStatus("");
-                      setPage(1);
+                      setPage(
+                        1
+                      ); /* fetchProjects(1) will be triggered by useEffect */
                     }}
                     className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 border border-gray-200"
                   >
-                    Clear Filters
+                    {" "}
+                    Clear Filters{" "}
                   </button>
-                )}{" "}
+                )}
                 {currentUser && (
                   <Link
                     to="/projects/new"
                     className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 inline-flex items-center shadow-sm"
                   >
-                    <FaPlus className="mr-2" /> Create
+                    {" "}
+                    <FaPlus className="mr-2" /> Create Project{" "}
                   </Link>
                 )}
               </div>
@@ -876,23 +1015,25 @@ export default function Projects({ currentUser }) {
                       key={project.id}
                       project={project}
                       currentUser={currentUser}
-                      isSaved={savedProjects.includes(project.id)}
+                      isSaved={savedProjects.has(project.id)} // Use Set.has()
                       activeDropdown={activeDropdown}
-                      // --- Ensure ALL handlers are passed down ---
+                      hasPendingRequests={
+                        !projectsWithNoPending.has(project.id)
+                      } // <<< Pass pending state
                       onToggleDropdown={toggleDropdown}
                       onToggleSave={toggleSaveProject}
                       onViewProject={handleViewProject}
                       onViewMembers={handleViewMembers}
                       onOpenJoinModal={handleOpenJoinModal}
-                      onOpenRequestsModal={handleOpenRequestsModal} // Pass request modal handler
+                      onOpenRequestsModal={handleOpenRequestsModal}
                       onOpenReportModal={handleOpenReportModal}
                       onShareProject={handleShareProject}
                       onDownloadProject={handleDownloadProject}
-                      onUpdateProjectStatus={handleUpdateProjectStatus} // Pass status update handler
-                      onDeleteProject={handleDeleteProject} // Pass delete handler
+                      onUpdateProjectStatus={handleUpdateProjectStatus}
+                      onDeleteProject={handleDeleteProject}
                       isUpdatingStatus={
                         isUpdatingStatus && selectedProject?.id === project.id
-                      } // Pass loading flag for status update
+                      }
                     />
                   ))}
                 </AnimatePresence>
@@ -912,7 +1053,8 @@ export default function Projects({ currentUser }) {
                       className="px-3 py-1.5 rounded-md text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
                       aria-label="Previous page"
                     >
-                      Prev
+                      {" "}
+                      Prev{" "}
                     </button>
                     {/* Simple Pagination Display Logic */}
                     {[...Array(totalPages).keys()]
@@ -933,7 +1075,8 @@ export default function Projects({ currentUser }) {
                             aria-current={page === num ? "page" : undefined}
                             aria-label={`Page ${num}`}
                           >
-                            {num}
+                            {" "}
+                            {num}{" "}
                           </button>
                         ) : (num === 2 && page > 4) ||
                           (num === totalPages - 1 && page < totalPages - 3) ? (
@@ -953,7 +1096,8 @@ export default function Projects({ currentUser }) {
                       className="px-3 py-1.5 rounded-md text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
                       aria-label="Next page"
                     >
-                      Next
+                      {" "}
+                      Next{" "}
                     </button>
                   </nav>
                 </div>
@@ -963,6 +1107,7 @@ export default function Projects({ currentUser }) {
         </div>
       </div>
 
+      {/* Modals */}
       <AnimatePresence>
         {modalType === "details" && selectedProject && (
           <ProjectDetailModal
@@ -995,9 +1140,9 @@ export default function Projects({ currentUser }) {
             project={selectedProject}
             currentUser={currentUser}
             onClose={handleCloseModal}
+            onAllRequestsHandled={handleRequestsHandled} // <<< Pass callback
           />
-        )}{" "}
-        {/* Render Requests Modal */}
+        )}
         {modalType === "report" && selectedProject && (
           <ReportModal
             key={`report-${selectedProject.id}`}
