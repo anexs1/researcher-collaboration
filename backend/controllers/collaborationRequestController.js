@@ -1,4 +1,3 @@
-// backend/controllers/collaborationRequestController.js
 import asyncHandler from "express-async-handler";
 import db from "../models/index.js"; // Adjust path if necessary
 import { emitToUser } from "../config/socketSetup.js"; // Adjust path if necessary
@@ -311,6 +310,7 @@ export const respondToRequest = asyncHandler(async (req, res) => {
           projectId: projectId,
           role: "member", // Ensure this role exists or is acceptable
           status: "active", // Ensure 'active' is a valid ENUM value in Member model & DB
+          // joinedAt will be set by defaultValue in the Member model
         };
         console.log("Attempting to create Member with:", memberData);
         await Member.create(memberData, { transaction });
@@ -319,7 +319,7 @@ export const respondToRequest = asyncHandler(async (req, res) => {
         console.log(
           `User ${requesterIdToNotify} is already a member of project ${projectId}. No membership change needed.`
         );
-        // Optionally: Update existing member status if needed (e.g., if they were 'invited' before)
+        // Optionally: Update existing member status if needed
         // if (existingMember.status !== 'active') {
         //   await existingMember.update({ status: 'active' }, { transaction });
         //   console.log(`Updated existing member status to active.`);
@@ -400,8 +400,8 @@ export const respondToRequest = asyncHandler(async (req, res) => {
       );
     console.error(
       "Stack Trace:",
-      error.stack?.split("\n").slice(0, 7).join("\n")
-    ); // Log more stack trace if needed
+      error.stack?.split("\n").slice(0, 10).join("\n")
+    ); // Log more stack trace
     console.error("----------------------------------------------------------");
     const statusCode =
       error.statusCode || res.statusCode >= 400 ? res.statusCode : 500;
@@ -424,6 +424,13 @@ export const getReceivedRequests = asyncHandler(async (req, res) => {
     throw new Error("Authentication required.");
   }
 
+  // Validate status query parameter
+  const validStatuses = ["pending", "approved", "rejected", "all"];
+  if (requestedStatus !== "all" && !validStatuses.includes(requestedStatus)) {
+    res.status(400);
+    throw new Error(`Invalid status filter. Use: ${validStatuses.join(", ")}`);
+  }
+
   try {
     const ownedProjects = await Project.findAll({
       where: { ownerId },
@@ -439,11 +446,13 @@ export const getReceivedRequests = asyncHandler(async (req, res) => {
       `Fetching requests with status '${requestedStatus}' for projects owned by ${ownerId}`
     );
 
+    const whereClause = { projectId: { [Op.in]: ownedProjectIds } };
+    if (requestedStatus !== "all") {
+      whereClause.status = requestedStatus; // Apply status filter if not 'all'
+    }
+
     const requests = await CollaborationRequest.findAll({
-      where: {
-        projectId: { [Op.in]: ownedProjectIds },
-        status: requestedStatus, // Filter by status
-      },
+      where: whereClause,
       include: [
         {
           model: User,
@@ -538,7 +547,11 @@ export const cancelRequest = asyncHandler(async (req, res) => {
   );
 
   try {
-    const request = await CollaborationRequest.findByPk(parsedRequestId);
+    // Use transaction for deletion consistency? Optional but safer.
+    // const transaction = await sequelize.transaction();
+    const request = await CollaborationRequest.findByPk(
+      parsedRequestId /*, { transaction } */
+    );
     if (!request) {
       res.status(404);
       throw new Error("Request not found.");
@@ -557,7 +570,8 @@ export const cancelRequest = asyncHandler(async (req, res) => {
     }
 
     console.log("Authorization confirmed. Deleting request...");
-    await request.destroy(); // Use destroy to delete the record
+    await request.destroy(/* { transaction } */); // Use destroy to delete the record
+    // await transaction.commit();
     console.log("Request deleted successfully.");
 
     // Optional: Notify project owner?
@@ -570,6 +584,7 @@ export const cancelRequest = asyncHandler(async (req, res) => {
       `Error cancelling request ${parsedRequestId} for user ${requesterId}:`,
       error
     );
+    // if (transaction && !transaction.finished) await transaction.rollback(); // Rollback if using transaction
     const statusCode =
       error.statusCode || res.statusCode >= 400 ? res.statusCode : 500;
     const responseMessage = error.message || "Server error cancelling request.";

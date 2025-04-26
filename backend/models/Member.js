@@ -7,29 +7,39 @@ const MemberModel = (sequelize) => {
     {
       // Assuming composite primary key (user_id, project_id)
       // If you have a separate 'id' PK column, uncomment it.
+      // id: {
+      //   type: DataTypes.INTEGER.UNSIGNED,
+      //   primaryKey: true,
+      //   autoIncrement: true,
+      // },
 
       // --- Foreign Keys (camelCase in model) ---
       userId: {
         type: DataTypes.INTEGER.UNSIGNED, // Match User ID type
         allowNull: false,
         primaryKey: true, // Part of composite primary key
+        references: { model: "Users", key: "id" }, // Add references for FK constraint definition
+        onDelete: "CASCADE",
+        onUpdate: "CASCADE",
       },
       projectId: {
         type: DataTypes.INTEGER.UNSIGNED, // Match Project ID type
         allowNull: false,
         primaryKey: true, // Part of composite primary key
+        references: { model: "Projects", key: "id" }, // Add references for FK constraint definition
+        onDelete: "CASCADE",
+        onUpdate: "CASCADE",
       },
 
       // --- Additional Fields (camelCase in model) ---
       role: {
-        type: DataTypes.STRING,
+        type: DataTypes.STRING, // Or ENUM if you have fixed roles
         allowNull: false,
-        defaultValue: "member", // Changed default to 'member' for consistency with controller
-        // Or keep 'Collaborator' if that's preferred, just be consistent
+        defaultValue: "member", // Consistent with controller
       },
       status: {
         // Status of the membership
-        type: DataTypes.ENUM("active", "invited", "pending", "inactive"), // Match DB ENUM values
+        type: DataTypes.ENUM("active", "invited", "pending", "inactive"), // Match DB ENUM values exactly
         allowNull: false,
         defaultValue: "active", // Default when created via controller
       },
@@ -37,7 +47,7 @@ const MemberModel = (sequelize) => {
       joinedAt: {
         // camelCase model field name
         type: DataTypes.DATE,
-        allowNull: false, // Assuming DB column is NOT NULL
+        allowNull: false, // Assuming DB column is NOT NULL (Adjust if needed)
         defaultValue: DataTypes.NOW, // Set current time automatically on creation
         // 'field: joined_at' mapping is handled by underscored: true
       },
@@ -51,8 +61,6 @@ const MemberModel = (sequelize) => {
       timestamps: true, // Enable createdAt, updatedAt
       underscored: true, // Map camelCase fields to snake_case columns
       freezeTableName: true, // Prevent table name pluralization
-      // primaryKey: true,          // This is usually inferred when fields have primaryKey: true
-      // Keeping it doesn't hurt, but might be redundant. Can be removed.
 
       indexes: [
         // Composite unique key also serves as the primary key defined above
@@ -61,8 +69,7 @@ const MemberModel = (sequelize) => {
           primary: true, // Explicitly mark this index as the primary key constraint
           fields: ["user_id", "project_id"], // Use DB column names for index definition
         },
-        // Optional: Add separate indexes on foreign keys if needed for performance,
-        // though the PK index often covers lookups.
+        // Optional separate indexes (often covered by PK)
         // { fields: ["user_id"] },
         // { fields: ["project_id"] },
       ],
@@ -70,19 +77,18 @@ const MemberModel = (sequelize) => {
   );
 
   // --- Associations ---
-  // Define associations ONLY if the Member model represents more than just
-  // the join record (e.g., if you query Member directly and need .getUser()/.getProject()).
-  // If it's purely a join table for User.belongsToMany(Project), omit this.
-  /*
+  // Define associations if Member model needs to directly access User/Project
+  // OR if User/Project use 'Member' as the 'through' model in belongsToMany
   Member.associate = (models) => {
     Member.belongsTo(models.User, {
-      foreignKey: "userId", // FK in *this* model (maps to user_id via underscored)
+      foreignKey: "userId", // FK in *this* model (maps to user_id)
+      as: "user", // << Define alias needed for include in controller
     });
     Member.belongsTo(models.Project, {
-      foreignKey: "projectId", // FK in *this* model (maps to project_id via underscored)
+      foreignKey: "projectId", // FK in *this* model (maps to project_id)
+      as: "project", // << Define alias if needed elsewhere
     });
   };
-  */
 
   return Member;
 };
