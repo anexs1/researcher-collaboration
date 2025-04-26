@@ -26,20 +26,15 @@ console.log("Models initialized:", Object.keys(db).join(", "));
 
 console.log("Setting up model associations...");
 // Apply associations by iterating through the db object
-// This ensures all models are defined before associations are called
 Object.keys(db).forEach((modelName) => {
   if (db[modelName].associate) {
     console.log(`Associating model: ${modelName}`);
-    // Pass the full db object containing all initialized models
-    db[modelName].associate(db);
-  } else {
-    // console.log(`Model ${modelName} has no associate method.`); // Optional log
+    db[modelName].associate(db); // Pass the full db object
   }
 });
 console.log("Model associations setup complete.");
 
 // Add sequelize instance and Sequelize class to the db object
-// (Useful for raw queries or accessing Sequelize constants)
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
 

@@ -25,6 +25,7 @@ import adminRoutes from "./routes/admin.routes.js"; // Adjust path
 import researchRoutes from "./routes/researchRoutes.js"; // Adjust path
 import chatRoutes from "./routes/chatRoutes.js"; // Adjust path
 import { notFound, errorHandler } from "./middleware/errorMiddleware.js"; // Adjust path, ensure file exists
+import messagingRoutes from "./routes/messagingRoutes.js"; // <<< Import
 
 // --- Verify Essential Environment Variables AFTER dotenv.config() ---
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -63,6 +64,7 @@ const __dirname = path.dirname(__filename);
 app.use(cors({ origin: FRONTEND_URL, credentials: true })); // Enable CORS
 app.use(express.json({ limit: "10mb" })); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true, limit: "10mb" })); // Parse URL-encoded bodies
+app.use("/api/messaging", messagingRoutes); // <<< Mount
 
 // --- Static File Serving for uploads ---
 const uploadsPath = path.join(__dirname, "uploads");

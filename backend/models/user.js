@@ -1,43 +1,30 @@
 // backend/models/User.js
 import { DataTypes } from "sequelize";
-import bcrypt from "bcryptjs"; // Ensure bcryptjs is imported
+import bcrypt from "bcryptjs";
 
 const UserModel = (sequelize) => {
   const User = sequelize.define(
     "User",
     {
+      // --- Fields (camelCase - Matching DB Columns) ---
       id: {
-        type: DataTypes.INTEGER,
+        type: DataTypes.INTEGER.UNSIGNED,
         primaryKey: true,
         autoIncrement: true,
       },
       username: {
         type: DataTypes.STRING,
         allowNull: false,
-        validate: {
-          notEmpty: true,
-          len: [3, 30],
-        },
+        unique: true,
+        validate: { notEmpty: true, len: [3, 30] },
       },
       email: {
         type: DataTypes.STRING,
         allowNull: false,
         unique: true,
-        validate: {
-          isEmail: true,
-          notEmpty: true,
-        },
+        validate: { isEmail: true, notEmpty: true },
       },
-      password: {
-        type: DataTypes.STRING,
-        allowNull: false,
-        validate: {
-          notEmpty: true,
-          // Len validation might be better handled elsewhere if hashing changes length
-          // len: [6, 100], // Consider removing length validation on hashed password
-        },
-        // Important: Do not select password by default (handled by scopes)
-      },
+      password: { type: DataTypes.STRING, allowNull: false },
       role: {
         type: DataTypes.ENUM(
           "user",
@@ -47,92 +34,95 @@ const UserModel = (sequelize) => {
           "non-researcher"
         ),
         defaultValue: "user",
+        allowNull: false,
       },
       status: {
         type: DataTypes.ENUM("pending", "approved", "rejected", "suspended"),
         allowNull: false,
         defaultValue: "pending",
       },
-      // Add other profile fields if they exist in your migration/table
-      // bio: { type: DataTypes.TEXT, allowNull: true },
-      // profilePictureUrl: { type: DataTypes.STRING, allowNull: true },
+      // Assuming these exist in DB as camelCase:
       university: { type: DataTypes.STRING, allowNull: true },
       department: { type: DataTypes.STRING, allowNull: true },
       companyName: { type: DataTypes.STRING, allowNull: true },
       jobTitle: { type: DataTypes.STRING, allowNull: true },
       medicalSpecialty: { type: DataTypes.STRING, allowNull: true },
       hospitalName: { type: DataTypes.STRING, allowNull: true },
-      // Add fields for interests and socialLinks if they exist
-      // interests: { type: DataTypes.JSON, allowNull: true }, // Or DataTypes.TEXT
-      // socialLinks: { type: DataTypes.JSON, allowNull: true }, // Or DataTypes.TEXT
+      profilePictureUrl: { type: DataTypes.STRING, allowNull: true },
+      bio: { type: DataTypes.TEXT, allowNull: true },
+      // createdAt, updatedAt (Sequelize expects camelCase by default)
+      // Remove firstName, lastName IF THEY DON'T EXIST in your DB Users table
+      // firstName: { type: DataTypes.STRING, allowNull: true },
+      // lastName: { type: DataTypes.STRING, allowNull: true },
     },
     {
-      timestamps: true,
+      timestamps: true, // Expects createdAt, updatedAt columns
       hooks: {
-        // Hash password before saving
-        beforeSave: async (user, options) => {
-          // Pass options to hooks
+        beforeSave: async (user) => {
           if (user.changed("password")) {
             const salt = await bcrypt.genSalt(10);
             user.password = await bcrypt.hash(user.password, salt);
           }
         },
       },
-      // --- ADD SCOPES ---
       scopes: {
-        // Default scope excludes password
-        defaultScope: {
-          attributes: { exclude: ["password"] },
-        },
-        // Scope to include password when needed
-        withPassword: {
-          attributes: { include: ["password"] }, // Explicitly include
-          // Or simply remove the default exclusion for this scope:
-          // attributes: {},
-        },
+        defaultScope: { attributes: { exclude: ["password"] } },
+        withPassword: { attributes: {} },
       },
-      indexes: [{ fields: ["status"] }, { fields: ["role"] }],
-      tableName: "Users", // Ensure this matches your actual table name
+      indexes: [
+        // Use MODEL field names (camelCase)
+        { fields: ["status"] },
+        { fields: ["role"] },
+        { unique: true, fields: ["email"] },
+        { unique: true, fields: ["username"] },
+      ],
+      tableName: "Users",
+      underscored: false, // <<< Set to FALSE because DB uses camelCase
     }
   );
 
-  // --- USE CONSISTENT METHOD NAME ---
-  // Compare password instance method
   User.prototype.matchPassword = async function (candidatePassword) {
-    // Ensure 'this.password' actually contains the hashed password
-    // This relies on fetching the user with the 'withPassword' scope
     if (!this.password) {
-      console.error(
-        `Attempted matchPassword on user ${this.id} without password field fetched. Use 'withPassword' scope.`
+      throw new Error(
+        "Password field not available for comparison (use 'withPassword' scope)."
       );
-      // Throwing an error might be better than returning false
-      throw new Error("Password field not available for comparison.");
-      // return false;
     }
     return await bcrypt.compare(candidatePassword, this.password);
   };
 
-  // Define associations
   User.associate = (models) => {
-    // Keep your existing associations
-    User.hasMany(models.Publication, {
-      foreignKey: "authorId",
-      as: "authoredPublications",
-    });
-    User.belongsToMany(models.Project, {
-      through: models.Member,
-      foreignKey: "userId",
-      as: "projectMemberships",
+    // Associations use MODEL field names for foreign keys
+    User.hasMany(models.Project, {
+      foreignKey: "ownerId",
+      as: "ownedProjects",
     });
     User.hasMany(models.CollaborationRequest, {
       foreignKey: "requesterId",
       as: "sentRequests",
     });
-    User.hasMany(models.Comment, {
-      foreignKey: "userId",
-      as: "comments", // Alias for fetching comments written by a user
+    if (models.Publication) {
+      User.hasMany(models.Publication, {
+        foreignKey: "authorId",
+        as: "authoredPublications",
+      });
+    }
+    if (models.Comment) {
+      User.hasMany(models.Comment, { foreignKey: "userId", as: "comments" });
+    }
+
+    // Many-to-Many with Project through Member
+    User.belongsToMany(models.Project, {
+      through: models.Member,
+      foreignKey: "userId", // FK in Member model (camelCase)
+      otherKey: "projectId", // FK in Member model (camelCase)
+      as: "memberProjects",
     });
-    // Add other associations if needed
+
+    // Direct hasMany with Member
+    User.hasMany(models.Member, {
+      foreignKey: "userId", // FK in Member model (camelCase)
+      as: "memberships",
+    });
   };
 
   return User;

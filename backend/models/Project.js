@@ -1,112 +1,89 @@
+// backend/models/Project.js
 import { DataTypes } from "sequelize";
 
 const ProjectModel = (sequelize) => {
   const Project = sequelize.define(
-    "Project", // Model name (PascalCase, singular)
+    "Project",
     {
-      // --- Fields based on your controller and likely DB structure ---
+      // --- Fields (camelCase in Model - Should match DB columns now) ---
       id: {
-        type: DataTypes.INTEGER.UNSIGNED, // Assuming UNSIGNED based on other models
+        type: DataTypes.INTEGER.UNSIGNED,
         primaryKey: true,
         autoIncrement: true,
       },
       title: {
         type: DataTypes.STRING(255),
         allowNull: false,
-        validate: {
-          notEmpty: { msg: "Project title cannot be empty." },
-          len: {
-            args: [5, 255],
-            msg: "Title must be between 5 and 255 characters.",
-          },
-        },
+        validate: { notEmpty: true, len: [5, 255] },
       },
       description: {
         type: DataTypes.TEXT,
         allowNull: false,
-        validate: {
-          notEmpty: { msg: "Project description cannot be empty." },
-        },
+        validate: { notEmpty: true },
       },
-      // Foreign Key: ownerId relates to the User model
       ownerId: {
-        type: DataTypes.INTEGER.UNSIGNED, // Match User ID type
+        // <<< Model field (camelCase)
+        type: DataTypes.INTEGER.UNSIGNED,
         allowNull: false,
-        // No 'field:' needed if DB column is 'ownerId' and underscored: false
-        references: {
-          model: "Users", // Exact name of the Users table
-          key: "id",
-        },
-        onUpdate: "CASCADE", // Optional: Define behavior on User ID update
-        onDelete: "CASCADE", // Optional: Delete Projects if Owner User is deleted
+        references: { model: "Users", key: "id" }, // References Users table
+        onUpdate: "CASCADE",
+        onDelete: "CASCADE",
       },
       requiredCollaborators: {
         type: DataTypes.INTEGER.UNSIGNED,
-        allowNull: false, // Make required if it always needs a value
+        allowNull: false,
         defaultValue: 1,
-        validate: {
-          isInt: { msg: "Required collaborators must be a number." },
-          min: { args: [0], msg: "Required collaborators cannot be negative." },
-        },
+        validate: { isInt: true, min: 0 },
       },
       status: {
-        type: DataTypes.ENUM("Planning", "Active", "Completed", "On Hold"), // Match DB ENUM values exactly
+        type: DataTypes.ENUM("Planning", "Active", "Completed", "On Hold"),
         allowNull: false,
         defaultValue: "Planning",
       },
-      // imageUrl: { // Uncomment and define if you handle image uploads
-      //   type: DataTypes.STRING,
-      //   allowNull: true,
-      // },
-      // createdAt and updatedAt are handled by timestamps option
+      // createdAt, updatedAt (Sequelize expects camelCase columns by default)
     },
     {
-      // --- Model Options ---
-      tableName: "Projects", // Match your actual table name exactly
-      timestamps: true, // Enable createdAt and updatedAt
-      // === IMPORTANT: Set based on DB column names ===
-      // If DB columns are camelCase (projectId, createdAt):
-      underscored: false,
-      // If DB columns are snake_case (project_id, created_at):
-      // underscored: true,
-      // =============================================
-      freezeTableName: true, // Prevent Sequelize from pluralizing table name if it matches model name
+      tableName: "Projects",
+      timestamps: true, // Expects createdAt, updatedAt columns
+      underscored: false, // <<< SET TO FALSE because DB uses camelCase (ownerId)
+      freezeTableName: true,
       indexes: [
-        { fields: ["ownerId"] }, // Index for faster owner lookups
-        { fields: ["status"] }, // Index for faster status filtering
+        // Use MODEL field names (camelCase) for index definitions
+        { fields: ["ownerId"] },
+        { fields: ["status"] },
       ],
     }
   );
 
-  // Define Associations
   Project.associate = (models) => {
-    // A Project belongs to one User (Owner)
-    Project.belongsTo(models.User, {
-      foreignKey: "ownerId", // Key in THIS model (Project)
-      as: "owner", // Alias used in includes: project.owner
-    });
-
-    // A Project can have many Collaboration Requests
+    // Associations use MODEL field names (camelCase) for foreign keys
+    Project.belongsTo(models.User, { foreignKey: "ownerId", as: "owner" }); // ownerId in Project model matches ownerId in DB
     Project.hasMany(models.CollaborationRequest, {
-      foreignKey: "projectId", // Key in the OTHER model (CollaborationRequest)
-      as: "joinRequests", // Alias used in includes: project.joinRequests
-      onDelete: "CASCADE", // If project deleted, delete associated requests
+      foreignKey: "projectId",
+      as: "joinRequests",
+      onDelete: "CASCADE",
+    }); // projectId in Request model should match DB
+
+    // Many-to-Many with User through Member
+    Project.belongsToMany(models.User, {
+      through: models.Member,
+      foreignKey: "projectId", // FK in Member model (camelCase)
+      otherKey: "userId", // FK in Member model (camelCase)
+      as: "members",
     });
 
-    // A Project can have many Members (If using a Members model/join table)
-    // Project.belongsToMany(models.User, {
-    //   through: models.Member, // Your join table model name
-    //   foreignKey: 'projectId', // Foreign key in Member table linking to Project
-    //   otherKey: 'userId', // Foreign key in Member table linking to User
-    //   as: 'members' // Alias: project.members
-    // });
+    Project.hasMany(models.Member, {
+      foreignKey: "projectId", // FK in Member model (camelCase)
+      as: "memberships",
+    });
 
-    // A Project can have many Tasks (If using a Task model)
-    // Project.hasMany(models.Task, {
-    //    foreignKey: 'projectId',
-    //    as: 'tasks',
-    //    onDelete: 'CASCADE'
-    // });
+    if (models.Comment) {
+      Project.hasMany(models.Comment, {
+        foreignKey: "projectId",
+        as: "comments",
+        onDelete: "CASCADE",
+      });
+    }
   };
 
   return Project;
