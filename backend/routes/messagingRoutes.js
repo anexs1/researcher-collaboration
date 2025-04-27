@@ -2,17 +2,17 @@
 import express from "express";
 import {
   getGroupedContacts,
-  getChatHistory, // <<< Make sure both are imported
-} from "../controllers/messagingController.js";
-import { protect } from "../middleware/authMiddleware.js";
+  getChatHistory, // <<< Ensure both are imported
+} from "../controllers/messagingController.js"; // Adjust path if needed
+import { protect } from "../middleware/authMiddleware.js"; // Adjust path if needed
 
 const router = express.Router();
-router.use(protect);
+router.use(protect); // Protect all routes in this file
 
-// GET /api/messaging/grouped-contacts
+// GET /api/messaging/grouped-contacts - For Messages.jsx contact list
 router.get("/grouped-contacts", getGroupedContacts);
 
-// GET /api/messaging/history/:otherUserId
-router.get("/history/:otherUserId", getChatHistory); // <<< Route added
+// GET /api/messaging/history/:otherUserId - For ChatPage.jsx history
+router.get("/history/:otherUserId", getChatHistory); // <<< Ensure this route exists
 
 export default router;

@@ -6,11 +6,11 @@ import db from "../models/index.js"; // Adjust path
 const { User, Message } = db; // Models needed
 
 const userSockets = new Map(); // { 'userIdString': Set<socketId> }
-let ioInstance = null;
+let ioInstance = null; // Module-level instance to export emitToUser correctly
 
 export const initSocketIO = (httpServer) => {
   const jwtSecret = process.env.JWT_SECRET;
-  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173"; // Ensure this matches your frontend port
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
 
   if (!jwtSecret) {
     throw new Error("FATAL ERROR: JWT_SECRET Missing.");
@@ -31,14 +31,13 @@ export const initSocketIO = (httpServer) => {
     if (token) {
       try {
         const decoded = jwt.verify(token, jwtSecret);
-        // Use defaultScope (excludes password) - important!
-        const user = await User.findByPk(decoded.id);
+        const user = await User.findByPk(decoded.id); // Use defaultScope (no password)
         if (user) {
           socket.userId = user.id.toString();
-          socket.username = user.username; // Store username for convenience
+          socket.username = user.username;
           if (!userSockets.has(socket.userId))
             userSockets.set(socket.userId, new Set());
-          userSockets.get(socket.userId).add(socket.id); // Add socket ID to user's set
+          userSockets.get(socket.userId).add(socket.id);
           console.log(
             `Socket Auth OK: Socket ${socket.id} -> User ${socket.userId} (${socket.username})`
           );
@@ -52,11 +51,11 @@ export const initSocketIO = (httpServer) => {
         }
       } catch (err) {
         console.error(`Socket Auth Fail: Socket ${socket.id}`, err.message);
-        next(new Error(`Authentication error: ${err.message}`));
+        next(new Error(`Auth error: ${err.message}`));
       }
     } else {
       console.warn(`Socket Auth Fail (No Token): Socket ${socket.id}`);
-      next(new Error("Authentication error - No token"));
+      next(new Error("Auth error - No token"));
     }
   });
 
@@ -71,7 +70,6 @@ export const initSocketIO = (httpServer) => {
       `✅ Client Connected: Socket ID ${socket.id}, User ID: ${userId}`
     );
 
-    // Disconnect Handler
     socket.on("disconnect", (reason) => {
       console.log(
         `🔌 Client Disconnected: Socket ID ${socket.id}, User ID: ${userId}, Reason: ${reason}`
@@ -81,36 +79,26 @@ export const initSocketIO = (httpServer) => {
         userSet.delete(socket.id);
         if (userSet.size === 0) {
           userSockets.delete(userId);
-          console.log(`User ${userId} removed from socket map.`);
+          console.log(`User ${userId} removed from map.`);
         } else {
           console.log(`User ${userId} sockets remaining:`, Array.from(userSet));
         }
       }
     });
 
-    // Error Handler
     socket.on("connect_error", (err) => {
       console.error(`Socket Connect Error for ${socket.id}: ${err.message}`);
     });
 
     // --- Chat Event Listeners ---
-    const getRoomName = (id1, id2) =>
-      [id1?.toString(), id2?.toString()].sort().join("--");
-
     socket.on("joinChatRoom", ({ roomName }) => {
-      // Use explicit roomName from client
       if (roomName) {
         socket.join(roomName);
         console.log(
           `Socket ${socket.id} (User ${userId}) joined room: ${roomName}`
         );
-      } else {
-        console.warn(
-          `Socket ${socket.id} (User ${userId}) tried join without roomName.`
-        );
       }
     });
-
     socket.on("leaveChatRoom", ({ roomName }) => {
       if (roomName) {
         socket.leave(roomName);
@@ -121,17 +109,21 @@ export const initSocketIO = (httpServer) => {
     });
 
     socket.on("sendMessage", async (messageData, callback) => {
-      console.log(`Received sendMessage from ${socket.userId}:`, messageData);
+      console.log(
+        `Received sendMessage from ${socket.userId}:`,
+        JSON.stringify(messageData)
+      ); // Log full data
       const { receiverId, content } = messageData;
-      const senderId = socket.userId;
-      const numericReceiverId = parseInt(receiverId); // Ensure it's a number
+      const senderId = socket.userId; // Trust ID attached during auth
+      const numericReceiverId = parseInt(receiverId);
 
       if (!numericReceiverId || !content || !senderId) {
-        if (callback) callback({ success: false, error: "Missing data." });
+        if (typeof callback === "function")
+          callback({ success: false, error: "Missing data." });
         return;
       }
       if (senderId === numericReceiverId.toString()) {
-        if (callback)
+        if (typeof callback === "function")
           callback({ success: false, error: "Cannot message self." });
         return;
       }
@@ -157,23 +149,27 @@ export const initSocketIO = (httpServer) => {
           content: newMessage.content,
           createdAt: newMessage.createdAt,
           readStatus: newMessage.readStatus,
-          sender: { id: senderId, username: socket.username }, // Attach sender username
+          sender: { id: senderId, username: socket.username }, // Attach sender info
         };
 
         // Emit only to the specific sender and receiver sockets
         emitToUser(senderId, "newMessage", messageToSend);
         emitToUser(numericReceiverId, "newMessage", messageToSend);
+        console.log(
+          `Emitted newMessage for participants ${senderId} and ${numericReceiverId}`
+        );
 
-        if (callback) callback({ success: true, messageId: newMessage.id });
+        if (typeof callback === "function")
+          callback({ success: true, messageId: newMessage.id });
       } catch (error) {
         console.error("Error processing sendMessage:", error);
         if (error.original) console.error("Original DB Error:", error.original);
-        if (callback)
+        if (typeof callback === "function")
           callback({ success: false, error: "Failed to save/send." });
       }
     });
 
-    // Add other listeners (typing indicator, read status update) here...
+    // Add other listeners...
   }); // End ioInstance.on('connection')
 
   console.log("💬 WebSocket server configured.");
@@ -203,8 +199,7 @@ export const emitToUser = (targetUserId, eventName, data) => {
         ", "
       )}]`
     );
-    // io.to() can take an array of socket IDs
-    ioInstance.to(socketIdArray).emit(eventName, data);
+    ioInstance.to(socketIdArray).emit(eventName, data); // Emit to all sockets for that user
     return true;
   } else {
     console.log(

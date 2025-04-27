@@ -20,27 +20,29 @@ const API_BASE_URL =
 
 // Helper to create a consistent room name
 const getRoomName = (userId1, userId2) => {
-  if (!userId1 || !userId2) return null; // Handle null/undefined IDs
+  if (!userId1 || !userId2) return null;
   return [userId1.toString(), userId2.toString()].sort().join("--");
 };
 
 function ChatPage({ currentUser }) {
   const { userId: otherUserIdParam } = useParams();
   const navigate = useNavigate();
-  // const { addRawNotification } = useNotifications(); // Uncomment if using global notifications
+  // const { addRawNotification } = useNotifications(); // Optional
 
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [otherUserDetails, setOtherUserDetails] = useState(null);
-  const [isLoading, setIsLoading] = useState(true); // Start loading
+  const [isLoading, setIsLoading] = useState(true); // <<< Start loading
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState(null);
-  const [socket, setSocket] = useState(null);
+  const [isConnected, setIsConnected] = useState(false); // Separate state for socket connection status
+  const socketRef = useRef(null); // Ref for the socket instance
   const messagesEndRef = useRef(null);
-  const socketRef = useRef(null); // Use ref for stable socket instance management
 
   const currentUserId = currentUser?.id;
   const otherUserId = otherUserIdParam ? parseInt(otherUserIdParam, 10) : null;
+
+  // Derive roomName, ensure it's null if IDs are invalid or same
   const roomName =
     currentUserId && otherUserId && currentUserId !== otherUserId
       ? getRoomName(currentUserId, otherUserId)
@@ -48,91 +50,95 @@ function ChatPage({ currentUser }) {
 
   // --- Scroll to bottom ---
   const scrollToBottom = useCallback(() => {
-    // Add a small delay to allow the DOM to update after adding a message
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({
         behavior: "smooth",
         block: "end",
       });
-    }, 50);
+    }, 100); // Small delay
   }, []);
 
-  useEffect(scrollToBottom, [messages]); // Scroll when messages array changes
+  useEffect(() => {
+    // Scroll only if there are messages to avoid scrolling on initial empty load
+    if (messages.length > 0) {
+      scrollToBottom();
+    }
+  }, [messages, scrollToBottom]); // Rerun when messages change
 
   // --- Fetch Initial Data (User Details & Chat History) ---
   const fetchInitialData = useCallback(async () => {
-    // Ensure IDs are valid before proceeding
+    // Basic validation
     if (!currentUserId || !otherUserId || currentUserId === otherUserId) {
       setError(
         currentUserId === otherUserId
           ? "Cannot chat with yourself."
-          : "User information is missing or invalid."
+          : "User information missing."
       );
-      setIsLoading(false); // Stop loading on initial validation failure
+      setIsLoading(false);
       return;
     }
 
     console.log(
       `ChatPage: Fetching initial data for chat between ${currentUserId} and ${otherUserId}`
     );
-    setIsLoading(true); // <<< Set loading true at the START
+    setIsLoading(true); // Ensure loading is true at the start
     setError(null);
-    const token = localStorage.getItem("authToken"); // <<< VERIFY KEY NAME
+    const token = localStorage.getItem("authToken"); // <<< VERIFY KEY NAME!
     if (!token) {
-      setError("Authentication token not found. Please log in.");
-      setIsLoading(false); // Stop loading if not authenticated
+      setError("Authentication required.");
+      setIsLoading(false);
       return;
     }
 
+    let userDetails = null;
+    let history = [];
+    let fetchError = null;
+
     try {
+      // Fetch concurrently
       const [userDetailsResponse, historyResponse] = await Promise.all([
         axios
           .get(`${API_BASE_URL}/api/users/public/${otherUserId}`, {
-            // Use public profile route
             headers: { Authorization: `Bearer ${token}` },
           })
           .catch((err) => {
-            // Catch error specifically for user details
             console.warn(
-              "Could not fetch other user details:",
+              "User details fetch failed:",
               err.response?.data?.message || err.message
             );
-            return null; // Return null on error to allow history fetch to continue
-          }),
+            return null;
+          }), // Catch user details error separately
         axios.get(`${API_BASE_URL}/api/messaging/history/${otherUserId}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
 
-      // Process User Details response
+      // Process User Details
       if (userDetailsResponse?.data?.success && userDetailsResponse.data.data) {
-        setOtherUserDetails(userDetailsResponse.data.data);
+        userDetails = userDetailsResponse.data.data;
       } else {
-        // Use fallback even if request failed (userDetailsResponse might be null)
-        setOtherUserDetails({
-          id: otherUserId,
-          username: `User ${otherUserId}`,
-        });
+        userDetails = { id: otherUserId, username: `User ${otherUserId}` }; // Use fallback
       }
 
-      // Process Message History response
+      // Process History - This needs success to continue without critical error
       if (
         historyResponse.data?.success &&
         Array.isArray(historyResponse.data.data)
       ) {
-        setMessages(historyResponse.data.data);
-        console.log(
-          `ChatPage: Fetched ${historyResponse.data.data.length} messages.`
-        );
+        history = historyResponse.data.data;
+        console.log(`ChatPage: Fetched ${history.length} messages.`);
       } else {
-        console.log("No previous message history found or failed to load.");
-        setMessages([]); // Set empty array
+        // Allow proceeding even if history fetch fails but user details succeeded
+        console.warn(
+          "No message history found or failed to load:",
+          historyResponse.data?.message
+        );
+        history = [];
+        // Optionally set a non-critical error if needed: setError("Could not load message history.");
       }
-      // Clear any previous fetch error on success
-      setError(null);
     } catch (err) {
-      // Catch errors from historyPromise or Promise.all itself
-      console.error("Error fetching initial chat data:", err);
+      // Catch errors primarily from history fetch or Promise.all itself
+      console.error("Error during initial chat data fetch:", err);
       let errorMsg = "Could not load chat data.";
       if (err.response) {
         errorMsg = err.response.data?.message || `Error ${err.response.status}`;
@@ -141,40 +147,34 @@ function ChatPage({ currentUser }) {
       } else {
         errorMsg = err.message;
       }
-      setError(errorMsg);
-      setMessages([]); // Clear data on error
-      // Keep potentially fetched (or fallback) user details unless user detail fetch failed specifically
-      if (!otherUserDetails) setOtherUserDetails(null);
+      fetchError = errorMsg; // Set error state
+      userDetails = otherUserDetails || {
+        id: otherUserId,
+        username: `User ${otherUserId}`,
+      }; // Keep fallback/existing details if history failed
+      history = []; // Clear messages on critical error
     } finally {
-      // --- CRITICAL FIX ---
-      console.log("fetchInitialData: Setting isLoading to false.");
-      setIsLoading(false); // <<< ENSURE this is ALWAYS called
-      // --------------------
+      console.log("fetchInitialData: Setting state and isLoading to false.");
+      setOtherUserDetails(userDetails);
+      setMessages(history);
+      setError(fetchError); // Set error state AFTER setting messages/details
+      setIsLoading(false); // <<< CRITICAL: Ensure this is always called
     }
   }, [currentUserId, otherUserId]); // Dependencies
 
-  // Effect to run fetchInitialData on mount or if IDs change
   useEffect(() => {
     fetchInitialData();
-  }, [fetchInitialData]);
+  }, [fetchInitialData]); // Fetch on mount/dependency change
 
-  // --- Socket Connection and Event Handling ---
+  // --- Socket Connection ---
   useEffect(() => {
-    if (!currentUserId || !otherUserId || !roomName) {
-      console.log("Socket Effect: Skipping connection (missing IDs/roomName).");
-      return; // Exit if required IDs/room are not available
-    }
-    const token = localStorage.getItem("authToken"); // <<< VERIFY KEY
-    if (!token) {
-      console.log("Socket Effect: Skipping connection (no token).");
-      return;
-    }
+    if (!currentUserId || !otherUserId || !roomName) return; // Exit if prerequisites not met
+    const token = localStorage.getItem("authToken");
+    if (!token) return;
 
-    // Prevent multiple connections if effect re-runs quickly
-    if (socketRef.current) {
-      console.log(
-        "Socket Effect: Socket ref already exists, skipping new connection."
-      );
+    // Avoid reconnecting if already connected
+    if (socketRef.current?.connected) {
+      console.log("Socket Effect: Already connected via ref.");
       return;
     }
 
@@ -185,116 +185,76 @@ function ChatPage({ currentUser }) {
       query: { userId: currentUserId },
       reconnectionAttempts: 5,
     });
-
-    socketRef.current = newSocket; // Store in ref
-    setSocket(newSocket); // Update state
+    socketRef.current = newSocket; // Store ref
 
     // --- Event Listeners ---
     newSocket.on("connect", () => {
       console.log("Chat socket connected:", newSocket.id);
+      setIsConnected(true);
       newSocket.emit("joinChatRoom", { roomName });
-    });
+      setError(null); /* Clear connection errors */
+    }); // Set connected true
     newSocket.on("disconnect", (reason) => {
       console.log("Chat socket disconnected:", newSocket.id, "Reason:", reason);
-      if (socketRef.current && socketRef.current.id === newSocket.id) {
-        // Clear ref only if this instance disconnects
-        socketRef.current = null;
-        setSocket(null);
-      }
+      setIsConnected(false);
+      if (socketRef.current?.id === newSocket.id) socketRef.current = null;
     });
     newSocket.on("connect_error", (err) => {
       console.error("Chat socket connection error:", err.message);
-      setError(`Connection error: ${err.message}. Attempting to reconnect...`); // Inform user
-      if (socketRef.current && socketRef.current.id === newSocket.id) {
-        socketRef.current = null; // Clear potentially broken ref
-        setSocket(null);
-      }
+      setIsConnected(false);
+      setError(`Connection error. Retrying...`);
+      if (socketRef.current?.id === newSocket.id) socketRef.current = null;
     });
 
     newSocket.on("newMessage", (message) => {
       console.log("Socket 'newMessage' received:", message);
       if (message?.content && message.senderId && message.receiverId) {
-        const messageSenderId = message.senderId.toString();
-        const messageReceiverId = message.receiverId.toString();
-        const currentUserIdStr = currentUserId.toString();
-        const otherUserIdStr = otherUserId.toString();
-
+        const msgSenderId = message.senderId.toString();
+        const msgReceiverId = message.receiverId.toString();
+        const currentIdStr = currentUserId.toString();
+        const otherIdStr = otherUserId.toString();
         const isCorrectChat =
-          (messageSenderId === currentUserIdStr &&
-            messageReceiverId === otherUserIdStr) ||
-          (messageSenderId === otherUserIdStr &&
-            messageReceiverId === currentUserIdStr);
-
+          (msgSenderId === currentIdStr && msgReceiverId === otherIdStr) ||
+          (msgSenderId === otherIdStr && msgReceiverId === currentIdStr);
         if (isCorrectChat) {
           console.log("Adding message to state:", message.id);
-          setMessages((prevMessages) => {
-            // Prevent duplicates if message already exists (e.g., from history fetch)
-            if (prevMessages.some((m) => m.id === message.id))
-              return prevMessages;
-            return [...prevMessages, message];
-          });
-        } else {
-          console.log("Ignoring message for a different chat.");
+          setMessages((prev) =>
+            prev.some((m) => m.id === message.id) ? prev : [...prev, message]
+          ); // Add if unique
         }
       } else {
-        console.warn("Received invalid message structure:", message);
+        console.warn("Invalid message structure received:", message);
       }
     });
 
-    newSocket.on("loadMessages", (history) => {
-      /* ... optional handler ... */
-    });
-
-    // --- Cleanup Function ---
+    // --- Cleanup ---
     return () => {
-      console.log(
-        "ChatPage Cleanup: Disconnecting socket instance:",
-        newSocket.id
-      );
+      console.log("ChatPage Cleanup: Disconnecting socket:", newSocket.id);
       if (newSocket) {
         newSocket.emit("leaveChatRoom", { roomName });
-        newSocket.off("connect"); // Remove specific listeners
-        newSocket.off("disconnect");
-        newSocket.off("connect_error");
-        newSocket.off("newMessage");
-        newSocket.off("loadMessages");
         newSocket.disconnect();
       }
-      // Clear ref/state if this specific instance is being cleaned up
       if (socketRef.current && socketRef.current.id === newSocket.id) {
         socketRef.current = null;
-        setSocket(null);
       }
+      setIsConnected(false); // Set disconnected on cleanup
     };
-    // Only reconnect if essential IDs, room name, or API URL change
-  }, [currentUserId, otherUserId, roomName, API_BASE_URL]);
+  }, [currentUserId, otherUserId, roomName, API_BASE_URL]); // Dependencies
 
-  // --- Send Message Handler ---
+  // --- Send Message ---
   const handleSendMessage = useCallback(
     (e) => {
       e.preventDefault();
       const contentToSend = newMessage.trim();
-      const currentSocket = socketRef.current; // Use the ref for sending
+      const currentSocket = socketRef.current; // Use ref
 
-      if (
-        !contentToSend ||
-        !currentSocket?.connected ||
-        !currentUserId ||
-        !otherUserId ||
-        isSending
-      ) {
-        console.warn("Cannot send message:", {
-          contentToSend,
-          socketConnected: currentSocket?.connected,
-          isSending,
-        });
-        if (!currentSocket?.connected)
-          setError("Not connected. Cannot send message."); // Show error if not connected
+      if (!contentToSend || !currentSocket?.connected || isSending) {
+        if (!currentSocket?.connected) setError("Not connected.");
         return;
       }
 
       setIsSending(true);
-      setError(null); // Clear previous send errors
+      setError(null); // Clear previous errors on new attempt
       const messageData = {
         senderId: currentUserId,
         receiverId: otherUserId,
@@ -303,30 +263,24 @@ function ChatPage({ currentUser }) {
       };
 
       console.log("Emitting sendMessage:", messageData);
-
       currentSocket.emit("sendMessage", messageData, (ack) => {
         setIsSending(false);
         if (ack?.success) {
-          console.log("Message sent ACK received. Message ID:", ack.messageId);
-          setNewMessage(""); // Clear input only on success
-          // Message will be added via the 'newMessage' listener echo
-          // scrollToBottom(); // Scrolling handled by useEffect on messages change
+          console.log("Msg ACK:", ack.messageId);
+          setNewMessage("");
         } else {
-          const errorMsg = `Failed to send message: ${
-            ack?.error || "Server error"
-          }`;
-          console.error("Server failed to ACK message:", ack?.error);
-          setError(errorMsg); // Set error state
-          // Don't clear input on failure
+          const errorMsg = `Send failed: ${ack?.error || "Unknown error"}`;
+          console.error(errorMsg);
+          setError(errorMsg);
         }
       });
     },
     [newMessage, currentUserId, otherUserId, roomName, isSending]
-  ); // Removed socket state dependency
+  ); // Removed socket state dep
 
-  // --- Render Component ---
+  // --- Render Logic ---
 
-  // Combined Loading and Initial Error State Handling
+  // Initial Loading State
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-[calc(100vh-8rem)]">
@@ -334,35 +288,32 @@ function ChatPage({ currentUser }) {
       </div>
     );
   }
-  // If there was a critical error fetching initial data (e.g., user not found)
-  if (error && !otherUserDetails && !messages.length) {
+
+  // Fatal Error State (e.g., couldn't load user details, auth failed)
+  if (error && !otherUserDetails && messages.length === 0) {
+    // Check if messages are also empty
     return (
       <div className="p-8">
+        {" "}
         <Link
           to="/messages"
           className="text-sm text-indigo-600 hover:underline mb-4 inline-flex items-center gap-1"
         >
           <FaArrowLeft /> Back
-        </Link>
+        </Link>{" "}
         <ErrorMessage
           title="Error Loading Chat"
           message={error}
           onRetry={fetchInitialData}
-        />
+        />{" "}
       </div>
     );
   }
-  // If user details loaded (even fallback) but history fetch failed
-  if (error && otherUserDetails) {
-    // Display the error non-blockingly above the (empty) message list later
-    console.log(
-      "Non-fatal error occurred but user details loaded, will render chat shell."
-    );
-  }
 
+  // Main Chat Interface Render
   return (
     <div className="flex flex-col h-[calc(100vh-5rem)] max-w-3xl mx-auto bg-white shadow-lg rounded-b-lg border border-t-0 border-gray-200">
-      {/* Chat Header */}
+      {/* Header */}
       <div className="flex items-center p-3 border-b border-gray-200 bg-gray-50 rounded-t-lg flex-shrink-0 sticky top-0 z-10">
         <Link
           to="/messages"
@@ -374,6 +325,7 @@ function ChatPage({ currentUser }) {
         </Link>
         {otherUserDetails ? (
           <>
+            {/* Avatar */}
             <div className="flex-shrink-0 mr-2 relative">
               {otherUserDetails.profilePictureUrl ? (
                 <img
@@ -393,9 +345,20 @@ function ChatPage({ currentUser }) {
                   .toUpperCase()}{" "}
               </div>
             </div>
+            {/* Username */}
             <span className="font-semibold text-gray-800 truncate">
               {" "}
               {otherUserDetails.username || `User ${otherUserId}`}{" "}
+            </span>
+            {/* Connection Status Indicator */}
+            <span
+              className={`ml-auto text-xs font-medium px-2 py-0.5 rounded-full ${
+                isConnected
+                  ? "bg-green-100 text-green-700"
+                  : "bg-yellow-100 text-yellow-700 animate-pulse"
+              }`}
+            >
+              {isConnected ? "Live" : "Connecting..."}
             </span>
           </>
         ) : (
@@ -405,20 +368,19 @@ function ChatPage({ currentUser }) {
 
       {/* Messages Area */}
       <div className="flex-grow p-4 overflow-y-auto bg-gradient-to-br from-gray-50 to-slate-100 relative">
-        {" "}
-        {/* Added relative for sticky error */}
-        {/* Display non-fatal errors */}
+        {/* Non-fatal error display (e.g., temporary disconnect) */}
         {error && (
           <div className="p-4 sticky top-0 z-10 mb-2">
             <ErrorMessage message={error} onClose={() => setError(null)} />
           </div>
         )}
-        {/* Empty state */}
+        {/* Empty state message - Show only after loading is done and if no messages exist */}
         {!isLoading && messages.length === 0 && !error && (
           <p className="text-center text-gray-500 italic mt-10 text-sm">
             No messages yet. Send the first one!
           </p>
         )}
+
         <ul className="space-y-3">
           {messages.map((msg) => (
             <li
@@ -464,16 +426,16 @@ function ChatPage({ currentUser }) {
           type="text"
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
-          placeholder="Type your message..."
+          placeholder={isConnected ? "Type your message..." : "Connecting..."}
           className="flex-grow px-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent text-sm disabled:bg-gray-100"
-          // Disable input if socket isn't connected OR if currently sending
-          disabled={!socket?.connected || isSending}
+          // Disable input if socket isn't connected OR if currently sending message
+          disabled={!isConnected || isSending}
           autoComplete="off"
         />
         <button
           type="submit"
-          // Disable button if message empty, socket not connected, OR currently sending
-          disabled={!newMessage.trim() || !socket?.connected || isSending}
+          // Disable button if message empty, socket not connected, OR currently sending message
+          disabled={!newMessage.trim() || !isConnected || isSending}
           className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full p-2.5 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-colors flex items-center justify-center"
           aria-label="Send message"
         >
