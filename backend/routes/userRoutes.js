@@ -4,36 +4,51 @@ import { protect } from "../middleware/authMiddleware.js"; // Your auth middlewa
 
 // Correctly import all needed functions from userController
 import {
-  getUserPublicProfile, // Corrected name
+  getUserPublicProfile, // Route target for fetching profile data for chat header
   updateUserProfile,
-  updateUserEmail, // <-- Import new function
-  updateUserPassword, // <-- Import new function
-  // Import admin functions if they belong here, otherwise they should be in adminRoutes.js
-} from "../controllers/userController.js";
+  updateUserEmail,
+  updateUserPassword,
+  // Admin functions should be imported in adminRoutes.js
+  // adminGetAllUsers,
+  // adminGetPendingUsers,
+  // adminGetUserById,
+  // adminUpdateUserStatus,
+  // adminUpdateUserRole,
+  // adminDeleteUser
+} from "../controllers/userController.js"; // Adjust path if needed
 
-// Optional: Import upload middleware if used for profile picture in updateUserProfile
-// import { profileUpload } from '../middleware/uploadMiddleware.js';
+// Optional: Import upload middleware if needed for profile picture
+// import upload from '../middleware/uploadMiddleware.js';
 
 const router = express.Router();
 
 // --- Public Routes ---
-router.get("/public/:userId", getUserPublicProfile); // Route to get public profile
+// GET /api/users/public/:userId - Fetch public profile data for any user
+// This is the route your ChatPage should call
+router.get("/public/:userId", getUserPublicProfile);
 
 // --- Protected 'Me' Routes (Operations on the logged-in user's own data) ---
+// These require the user to be logged in (via 'protect' middleware)
+
+// PUT /api/users/profile - Update the logged-in user's profile details
 router.put(
   "/profile",
   protect,
-  // profileUpload.single('profileImage'), // Add upload middleware here if used
+  // upload.single('profileImage'), // Uncomment and configure if handling uploads
   updateUserProfile
-); // Route to update OWN profile (general data)
+);
 
-router.put("/me/email", protect, updateUserEmail); // Route to update OWN email (requires password verification)
+// PUT /api/users/me/email - Update the logged-in user's email
+router.put("/me/email", protect, updateUserEmail);
 
-router.put("/me/password", protect, updateUserPassword); // Route to update OWN password (requires current password verification)
+// PUT /api/users/me/password - Update the logged-in user's password
+router.put("/me/password", protect, updateUserPassword);
 
-// --- NOTE ---
-// Admin routes (like managing ANY user) should typically be in a separate
-// file (e.g., adminRoutes.js) and mounted under an /api/admin prefix
-// in your main server file (server.js or app.js).
+// --- Protected Route for Getting OWN profile (optional alternative to /public/:id) ---
+// Example: Could add a route like this if needed, uses req.user.id
+// router.get("/me", protect, getMyProfileController);
+
+// --- NOTE: Admin routes (e.g., GET /api/users/ or DELETE /api/users/:id)
+// should be defined in adminRoutes.js and mounted under /api/admin ---
 
 export default router;

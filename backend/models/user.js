@@ -41,7 +41,7 @@ const UserModel = (sequelize) => {
         allowNull: false,
         defaultValue: "pending",
       },
-      // Existing DB fields (camelCase)
+      // DB fields based on sample (camelCase)
       university: { type: DataTypes.STRING, allowNull: true },
       department: { type: DataTypes.STRING, allowNull: true },
       companyName: { type: DataTypes.STRING, allowNull: true },
@@ -50,7 +50,9 @@ const UserModel = (sequelize) => {
       hospitalName: { type: DataTypes.STRING, allowNull: true },
       profilePictureUrl: { type: DataTypes.STRING, allowNull: true },
       bio: { type: DataTypes.TEXT, allowNull: true },
-      // createdAt, updatedAt handled by timestamps: true
+      // NOTE: Assuming firstName, lastName columns DO NOT exist in your DB based on error
+      // firstName: { type: DataTypes.STRING, allowNull: true },
+      // lastName: { type: DataTypes.STRING, allowNull: true },
     },
     {
       timestamps: true, // Expects createdAt, updatedAt columns
@@ -81,7 +83,7 @@ const UserModel = (sequelize) => {
   User.prototype.matchPassword = async function (candidatePassword) {
     if (!this.password) {
       throw new Error(
-        "Password field not available for comparison (use 'withPassword' scope)."
+        "Password field not available (use 'withPassword' scope)."
       );
     }
     return await bcrypt.compare(candidatePassword, this.password);
@@ -93,10 +95,12 @@ const UserModel = (sequelize) => {
       foreignKey: "ownerId",
       as: "ownedProjects",
     });
-    User.hasMany(models.CollaborationRequest, {
-      foreignKey: "requesterId",
-      as: "sentRequests",
-    });
+    if (models.CollaborationRequest) {
+      User.hasMany(models.CollaborationRequest, {
+        foreignKey: "requesterId",
+        as: "sentRequests",
+      });
+    }
     if (models.Publication) {
       User.hasMany(models.Publication, {
         foreignKey: "authorId",
@@ -107,17 +111,29 @@ const UserModel = (sequelize) => {
       User.hasMany(models.Comment, { foreignKey: "userId", as: "comments" });
     }
 
-    User.belongsToMany(models.Project, {
-      through: models.Member,
-      foreignKey: "userId", // FK in Member model (camelCase)
-      otherKey: "projectId", // FK in Member model (camelCase)
-      as: "memberProjects",
-    });
+    // Many-to-Many with Project through Member
+    if (models.Project && models.Member) {
+      User.belongsToMany(models.Project, {
+        through: models.Member,
+        foreignKey: "userId",
+        otherKey: "projectId",
+        as: "memberProjects",
+      });
+      User.hasMany(models.Member, { foreignKey: "userId", as: "memberships" });
+    }
 
-    User.hasMany(models.Member, {
-      foreignKey: "userId", // FK in Member model (camelCase)
-      as: "memberships",
-    });
+    // *** ADDED Message Associations ***
+    if (models.Message) {
+      User.hasMany(models.Message, {
+        foreignKey: "senderId",
+        as: "sentMessages",
+      });
+      User.hasMany(models.Message, {
+        foreignKey: "receiverId",
+        as: "receivedMessages",
+      });
+    }
+    // ********************************
   };
 
   return User;

@@ -1,393 +1,409 @@
 // backend/controllers/userController.js
 import asyncHandler from "express-async-handler";
 import db from "../models/index.js";
-// Note: bcryptjs is used within the User model's instance method
+import bcrypt from "bcryptjs";
+import { Op } from "sequelize"; // Import Op for admin search if needed
 
 const { User } = db;
 
-// --- Helper: Define Fields Safe for Public/Admin Views ---
+// --- Helper: Fields Safe for Public/Admin Views ---
 const publicUserFields = [
+  /* ... as defined before ... */
+];
+// Define fields specifically for Admin view (might include more than public)
+const adminUserListFields = [
   "id",
   "username",
   "email",
   "role",
   "status",
-  // Add other fields based on your User model definition
-  "bio",
-  "profilePictureUrl",
+  "createdAt",
+  "updatedAt",
+  // Add other relevant fields for admin list view
+  "university",
+  "department",
+  "jobTitle",
+];
+const adminUserDetailFields = [
+  "id",
+  "username",
+  "email",
+  "role",
+  "status",
   "university",
   "department",
   "companyName",
   "jobTitle",
   "medicalSpecialty",
   "hospitalName",
-  "interests", // Add if exists in model
-  "socialLinks", // Add if exists in model
+  "profilePictureUrl",
+  "bio",
   "createdAt",
   "updatedAt",
+  // Avoid sending password even to admin unless absolutely necessary and handled securely
 ];
 
-// --- Public User Routes ---
-
-/**
- * @desc    Get public profile of a user by ID
- * @route   GET /api/users/public/:userId
- * @access  Public
- */
+// --- Public User Route Controller ---
+/** @desc Get public profile of a user by ID ... */
 export const getUserPublicProfile = asyncHandler(async (req, res) => {
-  const { userId } = req.params;
-
-  if (!userId || isNaN(parseInt(userId))) {
-    res.status(400).json({ message: "Valid user ID parameter is required." });
-    return;
-  }
-
-  // Use defaultScope (defined in model) which excludes password
-  const user = await User.findByPk(userId, {
-    // No need to specify attributes if defaultScope handles it correctly
-    // attributes: publicUserFields, // This might override defaultScope, test if needed
-  });
-
-  if (!user) {
-    res.status(404).json({ message: "User profile not found" });
-    return;
-  }
-
-  res.status(200).json({ success: true, data: user });
+  /* ... code from previous full version ... */
 });
 
-// --- Protected User Routes ---
-
-/**
- * @desc    Update own user profile (general data, excluding email/password)
- * @route   PUT /api/users/profile
- * @access  Private
- */
+// --- Protected User 'Me' Route Controllers ---
+/** @desc Update own user profile ... */
 export const updateUserProfile = asyncHandler(async (req, res) => {
-  const userId = req.user.id; // Get ID from authenticated user (req.user set by 'protect' middleware)
-
-  // Find the user first (using default scope initially is fine)
-  const user = await User.findByPk(userId);
-  if (!user) {
-    res.status(404).json({ message: "User not found" });
-    return;
-  }
-
-  // --- Handle Profile Picture Upload ---
-  let profilePictureUrl = user.profilePictureUrl;
-  // Check if the profilePictureUrl attribute exists in the model
-  // Use ._attributes which lists defined fields, or .rawAttributes for detailed info
-  if ("profilePictureUrl" in User.getAttributes() && req.file) {
-    // Safer check
-    console.log("New profile image file detected:", req.file.originalname);
-    // *** Replace with your actual upload logic ***
-    profilePictureUrl = `/uploads/profiles/${req.file.filename}`; // Example placeholder
-    console.log("Updated profilePictureUrl to (example):", profilePictureUrl);
-  }
-
-  // --- Update User Fields ---
-  const {
-    username,
-    bio,
-    interests,
-    socialLinks,
-    university,
-    department,
-    companyName,
-    jobTitle,
-    medicalSpecialty,
-    hospitalName,
-  } = req.body;
-
-  const updates = {};
-  const modelAttributes = User.getAttributes(); // Get defined attributes once
-
-  // Validate and update username if changed and field exists
-  if (
-    username !== undefined &&
-    username.trim() !== user.username &&
-    modelAttributes.username
-  ) {
-    const newUsername = username.trim();
-    if (newUsername.length < 3) {
-      res
-        .status(400)
-        .json({ message: "Username must be at least 3 characters." });
-      return;
-    }
-    const existingUsername = await User.findOne({
-      where: { username: newUsername },
-    });
-    if (existingUsername && existingUsername.id !== userId) {
-      res.status(400).json({ message: "Username is already taken." });
-      return;
-    }
-    updates.username = newUsername;
-  }
-
-  // Update other fields ONLY IF they exist in the model definition
-  if (bio !== undefined && modelAttributes.bio) updates.bio = bio;
-  if (
-    profilePictureUrl !== user.profilePictureUrl &&
-    modelAttributes.profilePictureUrl
-  )
-    updates.profilePictureUrl = profilePictureUrl;
-  if (university !== undefined && modelAttributes.university)
-    updates.university = university;
-  if (department !== undefined && modelAttributes.department)
-    updates.department = department;
-  if (companyName !== undefined && modelAttributes.companyName)
-    updates.companyName = companyName;
-  if (jobTitle !== undefined && modelAttributes.jobTitle)
-    updates.jobTitle = jobTitle;
-  if (medicalSpecialty !== undefined && modelAttributes.medicalSpecialty)
-    updates.medicalSpecialty = medicalSpecialty;
-  if (hospitalName !== undefined && modelAttributes.hospitalName)
-    updates.hospitalName = hospitalName;
-
-  // Handle JSON fields IF they exist
-  if (interests !== undefined && modelAttributes.interests) {
-    try {
-      // Assume frontend sends a correctly formatted array or stringified array
-      const parsedInterests =
-        typeof interests === "string" ? JSON.parse(interests) : interests;
-      if (!Array.isArray(parsedInterests))
-        throw new Error("Interests must be an array.");
-      updates.interests = parsedInterests; // Sequelize handles JSON stringification on save
-    } catch (e) {
-      res.status(400).json({
-        message: "Invalid format for interests. Must be a valid JSON array.",
-      });
-      return;
-    }
-  }
-  if (socialLinks !== undefined && modelAttributes.socialLinks) {
-    try {
-      // Assume frontend sends a correctly formatted object or stringified object
-      const parsedLinks =
-        typeof socialLinks === "string" ? JSON.parse(socialLinks) : socialLinks;
-      if (
-        typeof parsedLinks !== "object" ||
-        parsedLinks === null ||
-        Array.isArray(parsedLinks)
-      ) {
-        throw new Error("Social links must be an object.");
-      }
-      updates.socialLinks = parsedLinks; // Sequelize handles JSON stringification on save
-    } catch (e) {
-      res.status(400).json({
-        message:
-          "Invalid format for social links. Must be a valid JSON object.",
-      });
-      return;
-    }
-  }
-
-  // --- Save Updates ---
-  try {
-    if (Object.keys(updates).length > 0) {
-      Object.assign(user, updates);
-      await user.save();
-      console.log(`Profile updated for user ID ${userId}`);
-    } else {
-      console.log(`No profile changes detected for user ID ${userId}`);
-    }
-
-    // Fetch updated data using default scope (excludes password) for response
-    const updatedUserData = await User.findByPk(userId);
-
-    res.status(200).json({
-      success: true,
-      message: "Profile updated successfully",
-      data: updatedUserData,
-    });
-  } catch (error) {
-    console.error("Error saving user profile:", error);
-    if (error.name === "SequelizeValidationError") {
-      const messages = error.errors.map((err) => err.message);
-      res.status(400).json({ message: "Validation Error", errors: messages });
-    } else {
-      res.status(500).json({ message: "Server error updating profile." });
-    }
-  }
+  /* ... code from previous full version ... */
 });
-
-// --- !!! ADDED FUNCTION: Update user's own email !!! ---
-/**
- * @desc    Update own user email after verifying password
- * @route   PUT /api/users/me/email
- * @access  Private
- */
+/** @desc Update own user email ... */
 export const updateUserEmail = asyncHandler(async (req, res) => {
-  const { newEmail, currentPassword } = req.body;
-  const userId = req.user.id;
-
-  if (!newEmail || !currentPassword) {
-    res
-      .status(400)
-      .json({ message: "New email and current password are required." });
-    return;
-  }
-  if (!/\S+@\S+\.\S+/.test(newEmail)) {
-    res.status(400).json({ message: "Please enter a valid email address." });
-    return;
-  }
-
-  // Fetch user WITH password using the scope defined in the model
-  const user = await User.scope("withPassword").findByPk(userId);
-
-  if (!user) {
-    res.status(404).json({ message: "User not found." }); // Should not happen with protect middleware
-    return;
-  }
-
-  // Prevent updating to the same email
-  if (newEmail.toLowerCase() === user.email.toLowerCase()) {
-    res
-      .status(400)
-      .json({ message: "New email cannot be the same as the current email." });
-    return;
-  }
-
-  // Verify Current Password using the instance method from the model
-  const isMatch = await user.matchPassword(currentPassword);
-  if (!isMatch) {
-    res.status(401).json({ message: "Incorrect current password." });
-    return;
-  }
-
-  // Check if the new email is already taken by another user
-  const emailExists = await User.findOne({ where: { email: newEmail } });
-  if (emailExists && emailExists.id !== userId) {
-    res.status(400).json({
-      message: "This email address is already registered to another account.",
-    });
-    return;
-  }
-
-  // Update and Save
-  try {
-    user.email = newEmail;
-    // Add email verification logic here if needed (set flag, send email)
-    await user.save();
-    console.log(`Email updated successfully for user ID ${userId}`);
-
-    // Fetch updated data using default scope (excludes password) for response
-    const updatedUserData = await User.findByPk(userId);
-
-    res.status(200).json({
-      success: true,
-      message: "Email updated successfully.",
-      data: updatedUserData,
-    });
-  } catch (error) {
-    console.error("Error saving updated email:", error);
-    if (
-      error.name === "SequelizeValidationError" ||
-      error.name === "SequelizeUniqueConstraintError"
-    ) {
-      res.status(400).json({
-        message: error.errors
-          ? error.errors[0].message
-          : "Validation error updating email.",
-      });
-    } else {
-      res.status(500).json({ message: "Server error updating email." });
-    }
-  }
+  /* ... code from previous full version ... */
 });
-
-// --- !!! ADDED FUNCTION: Update user's own password !!! ---
-/**
- * @desc    Update own user password after verifying current password
- * @route   PUT /api/users/me/password
- * @access  Private
- */
+/** @desc Update own user password ... */
 export const updateUserPassword = asyncHandler(async (req, res) => {
-  const { currentPassword, newPassword } = req.body;
-  const userId = req.user.id;
+  /* ... code from previous full version ... */
+});
 
-  if (!currentPassword || !newPassword) {
-    res
-      .status(400)
-      .json({ message: "Current password and new password are required." });
-    return;
-  }
-  if (newPassword.length < 6) {
-    // Consistent with frontend validation
-    res
-      .status(400)
-      .json({ message: "New password must be at least 6 characters long." });
-    return;
-  }
+// --- !!! ADDED/UNCOMMENTED ADMIN CONTROLLERS !!! ---
 
-  // Fetch user WITH password using scope
-  const user = await User.scope("withPassword").findByPk(userId);
-  if (!user) {
-    res.status(404).json({ message: "User not found." });
-    return;
-  }
-
-  // Verify Current Password
-  const isMatch = await user.matchPassword(currentPassword);
-  if (!isMatch) {
-    res.status(401).json({ message: "Incorrect current password." });
-    return;
-  }
-
-  // Optional: Prevent setting the exact same password again
-  const isSamePassword = await bcrypt.compare(newPassword, user.password); // Compare directly here
-  if (isSamePassword) {
-    res.status(400).json({
-      message: "New password cannot be the same as the current password.",
+/**
+ * @desc    Get all users (Admin only)
+ * @route   GET /api/admin/users
+ * @access  Private/Admin
+ */
+export const adminGetAllUsers = asyncHandler(async (req, res) => {
+  console.log("--- ENTERING adminGetAllUsers ---");
+  if (!User) {
+    return res.status(500).json({
+      success: false,
+      message: "Server config error: User model not loaded.",
     });
-    return;
+  }
+  try {
+    // Optional: Add pagination and filtering for admin view
+    const { page = 1, limit = 15, search, role, status } = req.query;
+    const where = {};
+    if (search) {
+      where[Op.or] = [
+        { username: { [Op.like]: `%${search}%` } },
+        { email: { [Op.like]: `%${search}%` } },
+      ];
+    }
+    if (role) where.role = role;
+    if (status) where.status = status;
+
+    const parsedLimit = parseInt(limit, 10);
+    const parsedPage = parseInt(page, 10);
+    if (
+      isNaN(parsedLimit) ||
+      parsedLimit <= 0 ||
+      isNaN(parsedPage) ||
+      parsedPage <= 0
+    ) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid pagination parameters." });
+    }
+    const offset = (parsedPage - 1) * parsedLimit;
+
+    const { count, rows: users } = await User.findAndCountAll({
+      where,
+      attributes: adminUserListFields, // Use admin-specific fields
+      order: [["createdAt", "DESC"]],
+      limit: parsedLimit,
+      offset,
+      distinct: true,
+    });
+
+    console.log(`Admin fetched ${count} users total.`);
+    res.status(200).json({
+      success: true,
+      count,
+      totalPages: Math.ceil(count / parsedLimit),
+      currentPage: parsedPage,
+      data: users,
+    });
+  } catch (error) {
+    console.error("Admin Error fetching all users:", error);
+    if (error.original) {
+      console.error("Original DB Error:", error.original);
+    }
+    res
+      .status(500)
+      .json({ success: false, message: "Server error fetching users." });
+  }
+});
+
+/**
+ * @desc    Get pending users (Admin only)
+ * @route   GET /api/admin/pending-users
+ * @access  Private/Admin
+ */
+export const adminGetPendingUsers = asyncHandler(async (req, res) => {
+  console.log("--- ENTERING adminGetPendingUsers ---");
+  if (!User) {
+    return res.status(500).json({
+      success: false,
+      message: "Server config error: User model not loaded.",
+    });
+  }
+  try {
+    const pendingUsers = await User.findAll({
+      where: { status: "pending" },
+      attributes: adminUserListFields, // Or specific fields for pending review
+      order: [["createdAt", "ASC"]], // Show oldest pending first
+    });
+    res
+      .status(200)
+      .json({ success: true, count: pendingUsers.length, data: pendingUsers });
+  } catch (error) {
+    console.error("Admin Error fetching pending users:", error);
+    if (error.original) {
+      console.error("Original DB Error:", error.original);
+    }
+    res.status(500).json({
+      success: false,
+      message: "Server error fetching pending users.",
+    });
+  }
+});
+
+/**
+ * @desc    Get a single user's details by ID (Admin only)
+ * @route   GET /api/admin/users/:id
+ * @access  Private/Admin
+ */
+export const adminGetUserById = asyncHandler(async (req, res) => {
+  const userId = req.params.id;
+  console.log(`--- ENTERING adminGetUserById for User ID: ${userId} ---`);
+  if (!User) {
+    return res.status(500).json({
+      success: false,
+      message: "Server config error: User model not loaded.",
+    });
+  }
+  try {
+    const parsedUserId = parseInt(userId);
+    if (isNaN(parsedUserId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid User ID." });
+    }
+
+    // Use admin detail fields, still excluding password via defaultScope implicitly
+    const user = await User.findByPk(parsedUserId, {
+      attributes: adminUserDetailFields,
+    });
+
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found." });
+    }
+    res.status(200).json({ success: true, data: user });
+  } catch (error) {
+    console.error(`Admin Error fetching user ${userId}:`, error);
+    if (error.original) {
+      console.error("Original DB Error:", error.original);
+    }
+    res
+      .status(500)
+      .json({ success: false, message: "Server error fetching user." });
+  }
+});
+
+/**
+ * @desc    Update a user's status (e.g., approve/reject/suspend) (Admin only)
+ * @route   PATCH /api/admin/users/:id/status
+ * @access  Private/Admin
+ */
+export const adminUpdateUserStatus = asyncHandler(async (req, res) => {
+  const userId = req.params.id;
+  const { status } = req.body; // Expecting { "status": "approved" } etc.
+  console.log(
+    `--- ENTERING adminUpdateUserStatus for User ID: ${userId} to status: ${status} ---`
+  );
+  if (!User) {
+    return res.status(500).json({
+      success: false,
+      message: "Server config error: User model not loaded.",
+    });
   }
 
-  // Update and Save
-  try {
-    // Simply set the new password. The beforeSave hook in the model will hash it.
-    user.password = newPassword;
-    await user.save();
+  // Validate input status
+  const validStatuses = User.getAttributes().status.values; // Get ENUM values
+  if (!status || !validStatuses.includes(status)) {
+    return res.status(400).json({
+      success: false,
+      message: `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
+    });
+  }
+  const parsedUserId = parseInt(userId);
+  if (isNaN(parsedUserId)) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Invalid User ID." });
+  }
 
-    console.log(`Password updated successfully for user ID ${userId}`);
+  try {
+    const user = await User.findByPk(parsedUserId);
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found." });
+    }
+
+    if (user.status === status) {
+      return res.status(200).json({
+        success: true,
+        message: `User status is already '${status}'.`,
+        data: user,
+      });
+    } // No change needed
+
+    user.status = status;
+    await user.save();
+    console.log(`Admin updated status for user ${userId} to ${status}`);
+    // TODO: Send notification email to user?
 
     res.status(200).json({
       success: true,
-      message: "Password updated successfully.",
+      message: `User status updated to ${status}.`,
+      data: user,
     });
   } catch (error) {
-    console.error("Error saving updated password:", error);
-    if (error.name === "SequelizeValidationError") {
-      res.status(400).json({
-        message: error.errors
-          ? error.errors[0].message
-          : "Validation error updating password.",
-      });
-    } else {
-      res.status(500).json({ message: "Server error updating password." });
+    console.error(`Admin Error updating status for user ${userId}:`, error);
+    if (error.original) {
+      console.error("Original DB Error:", error.original);
     }
+    res
+      .status(500)
+      .json({ success: false, message: "Server error updating user status." });
   }
 });
 
-// --- Admin User Management Routes ---
-// (Keep your existing admin functions: adminGetAllUsers, adminGetPendingUsers, etc.)
-// Make sure these are exported if they are used in adminRoutes.js
-export const adminGetAllUsers = asyncHandler(async (req, res) => {
-  // ... implementation ...
-});
-export const adminGetPendingUsers = asyncHandler(async (req, res) => {
-  // ... implementation ...
-});
-export const adminGetUserById = asyncHandler(async (req, res) => {
-  // ... implementation ...
-});
-export const adminUpdateUserStatus = asyncHandler(async (req, res) => {
-  // ... implementation ...
-});
+/**
+ * @desc    Update a user's role (Admin only)
+ * @route   PATCH /api/admin/users/:id/role
+ * @access  Private/Admin
+ */
 export const adminUpdateUserRole = asyncHandler(async (req, res) => {
-  // ... implementation ...
+  const userId = req.params.id;
+  const { role } = req.body; // Expecting { "role": "admin" } etc.
+  console.log(
+    `--- ENTERING adminUpdateUserRole for User ID: ${userId} to role: ${role} ---`
+  );
+  if (!User) {
+    return res.status(500).json({
+      success: false,
+      message: "Server config error: User model not loaded.",
+    });
+  }
+
+  // Validate input role
+  const validRoles = User.getAttributes().role.values; // Get ENUM values
+  if (!role || !validRoles.includes(role)) {
+    return res.status(400).json({
+      success: false,
+      message: `Invalid role. Must be one of: ${validRoles.join(", ")}`,
+    });
+  }
+  const parsedUserId = parseInt(userId);
+  if (isNaN(parsedUserId)) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Invalid User ID." });
+  }
+
+  try {
+    const user = await User.findByPk(parsedUserId);
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found." });
+    }
+
+    if (user.role === role) {
+      return res.status(200).json({
+        success: true,
+        message: `User role is already '${role}'.`,
+        data: user,
+      });
+    }
+
+    user.role = role;
+    await user.save();
+    console.log(`Admin updated role for user ${userId} to ${role}`);
+
+    res.status(200).json({
+      success: true,
+      message: `User role updated to ${role}.`,
+      data: user,
+    });
+  } catch (error) {
+    console.error(`Admin Error updating role for user ${userId}:`, error);
+    if (error.original) {
+      console.error("Original DB Error:", error.original);
+    }
+    res
+      .status(500)
+      .json({ success: false, message: "Server error updating user role." });
+  }
 });
+
+/**
+ * @desc    Delete a user (Admin only)
+ * @route   DELETE /api/admin/users/:id
+ * @access  Private/Admin
+ */
 export const adminDeleteUser = asyncHandler(async (req, res) => {
-  // ... implementation ...
+  const userIdToDelete = req.params.id;
+  const adminUserId = req.user.id; // Admin performing the action
+  console.log(
+    `--- ENTERING adminDeleteUser for User ID: ${userIdToDelete} by Admin: ${adminUserId} ---`
+  );
+  if (!User) {
+    return res.status(500).json({
+      success: false,
+      message: "Server config error: User model not loaded.",
+    });
+  }
+
+  const parsedUserIdToDelete = parseInt(userIdToDelete);
+  if (isNaN(parsedUserIdToDelete)) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Invalid User ID." });
+  }
+
+  // Prevent admin from deleting themselves
+  if (parsedUserIdToDelete === adminUserId) {
+    return res.status(400).json({
+      success: false,
+      message: "Admin cannot delete their own account.",
+    });
+  }
+
+  try {
+    const user = await User.findByPk(parsedUserIdToDelete);
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found." });
+    }
+
+    await user.destroy(); // Triggers hooks and potential CASCADE deletes
+    console.log(`Admin ${adminUserId} deleted user ${userIdToDelete}`);
+
+    res
+      .status(200)
+      .json({ success: true, message: "User deleted successfully." });
+  } catch (error) {
+    console.error(`Admin Error deleting user ${userIdToDelete}:`, error);
+    if (error.original) {
+      console.error("Original DB Error:", error.original);
+    }
+    res
+      .status(500)
+      .json({ success: false, message: "Server error deleting user." });
+  }
 });

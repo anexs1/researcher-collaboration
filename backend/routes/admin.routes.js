@@ -1,16 +1,10 @@
-// backend/routes/adminRoutes.js
-
+// backend/routes/admin.routes.js
 import express from "express";
-// Ensure correct middleware import names
-import { protect, adminOnly } from "../middleware/authMiddleware.js"; // Assuming adminOnly is your admin check middleware
+import { protect, adminOnly } from "../middleware/authMiddleware.js"; // Auth & Admin check middleware
 
-// --- Import Controllers ---
-import {
-  getDashboardStats,
-  getAdminPublications, // <-- Import the new publications controller
-} from "../controllers/adminController.js";
-
-// Import user management functions (confirm these should be handled here vs. userRoutes with admin check)
+// --- Import ONLY the admin-specific controllers ---
+// Assuming they are defined and exported from userController for now
+// If you move them to adminController.js, update the import path
 import {
   adminGetAllUsers,
   adminGetPendingUsers,
@@ -18,30 +12,34 @@ import {
   adminUpdateUserStatus,
   adminUpdateUserRole,
   adminDeleteUser,
-} from "../controllers/userController.js"; // Assuming these remain in userController for now
+} from "../controllers/userController.js"; // <<< Ensure path is correct
+
+// Import other admin controllers if needed (e.g., for projects, publications)
+// import { adminGetAllProjects } from "../controllers/projectController.js";
 
 const router = express.Router();
 
-// --- Middleware for all admin routes ---
-// Apply authentication and admin authorization check to all routes defined below
-router.use(protect, adminOnly);
+// --- Apply global middleware for ALL admin routes ---
+router.use(protect); // 1. Ensure user is logged in
+router.use(adminOnly); // 2. Ensure user has 'admin' role
 
-// --- Dashboard Route ---
-router.get("/dashboard", getDashboardStats);
+// --- User Management Routes ---
+router.get("/users", adminGetAllUsers); // GET /api/admin/users
+router.get("/pending-users", adminGetPendingUsers); // GET /api/admin/pending-users
+router.get("/users/:id", adminGetUserById); // GET /api/admin/users/:id
+router.patch("/users/:id/status", adminUpdateUserStatus); // PATCH /api/admin/users/:id/status
+router.patch("/users/:id/role", adminUpdateUserRole); // PATCH /api/admin/users/:id/role
+router.delete("/users/:id", adminDeleteUser); // DELETE /api/admin/users/:id
 
-// --- User Management Routes (from userController) ---
-// Consider if these should be moved to adminController or stay in userController but be routed here
-router.get("/users", adminGetAllUsers);
-router.get("/users/pending", adminGetPendingUsers);
-router.get("/users/:id", adminGetUserById);
-router.patch("/users/:id/status", adminUpdateUserStatus);
-router.patch("/users/:id/role", adminUpdateUserRole);
-router.delete("/users/:id", adminDeleteUser);
+// --- Project Management Routes (Example) ---
+// router.get("/projects", adminGetAllProjects); // GET /api/admin/projects
+// router.delete("/projects/:id", adminDeleteProject); // Need controller
 
-// --- Publication Management Route (from adminController) ---
-router.get("/publications", getAdminPublications); // <-- ADD THIS ROUTE
+// --- Publication Management Routes (Example) ---
+// router.get("/publications", adminGetAllPublications);
+// router.patch("/publications/:id/status", adminUpdatePublicationStatus);
+// router.delete("/publications/:id", adminDeletePublication);
 
-// --- Add other admin-specific routes here ---
-// e.g., Project management, Settings, Reports
+// Add other admin routes as needed (settings, reports etc.)
 
 export default router;

@@ -5,7 +5,7 @@ const ProjectModel = (sequelize) => {
   const Project = sequelize.define(
     "Project",
     {
-      // --- Fields (camelCase in Model - MUST MATCH DB COLUMNS) ---
+      // --- Fields (camelCase in Model) ---
       id: {
         type: DataTypes.INTEGER.UNSIGNED,
         primaryKey: true,
@@ -22,7 +22,7 @@ const ProjectModel = (sequelize) => {
         validate: { notEmpty: true },
       },
       ownerId: {
-        // <<< Model field (camelCase)
+        // <<< Model uses camelCase, should map to ownerId in DB
         type: DataTypes.INTEGER.UNSIGNED,
         allowNull: false,
         references: { model: "Users", key: "id" }, // References Users table's 'id' (camelCase)
@@ -34,13 +34,13 @@ const ProjectModel = (sequelize) => {
         allowNull: false,
         defaultValue: 1,
         validate: { isInt: true, min: 0 },
-      },
+      }, // should map to requiredCollaborators
       status: {
         type: DataTypes.ENUM("Planning", "Active", "Completed", "On Hold"),
         allowNull: false,
         defaultValue: "Planning",
-      },
-      // createdAt, updatedAt (Sequelize expects camelCase columns by default when underscored: false)
+      }, // should map to status
+      // createdAt, updatedAt should map to createdAt, updatedAt
     },
     {
       tableName: "Projects",
@@ -58,31 +58,37 @@ const ProjectModel = (sequelize) => {
   Project.associate = (models) => {
     // Associations use MODEL field names (camelCase) for foreign keys
     Project.belongsTo(models.User, { foreignKey: "ownerId", as: "owner" }); // ownerId in Project model matches ownerId in DB
-    Project.hasMany(models.CollaborationRequest, {
-      foreignKey: "projectId",
-      as: "joinRequests",
-      onDelete: "CASCADE",
-    }); // projectId in Request model
 
-    // Many-to-Many with User through Member
-    Project.belongsToMany(models.User, {
-      through: models.Member,
-      foreignKey: "projectId", // FK in Member model (camelCase)
-      otherKey: "userId", // FK in Member model (camelCase)
-      as: "members",
-    });
-
-    Project.hasMany(models.Member, {
-      foreignKey: "projectId", // FK in Member model (camelCase)
-      as: "memberships",
-    });
-
+    // Check if models exist before associating
+    if (models.CollaborationRequest) {
+      Project.hasMany(models.CollaborationRequest, {
+        foreignKey: "projectId",
+        as: "joinRequests",
+        onDelete: "CASCADE",
+      });
+    }
+    if (models.Member && models.User) {
+      Project.belongsToMany(models.User, {
+        through: models.Member,
+        foreignKey: "projectId",
+        otherKey: "userId",
+        as: "members",
+      }); // projectId/userId in Member model
+      Project.hasMany(models.Member, {
+        foreignKey: "projectId",
+        as: "memberships",
+      }); // projectId in Member model
+    }
     if (models.Comment) {
       Project.hasMany(models.Comment, {
         foreignKey: "projectId",
         as: "comments",
         onDelete: "CASCADE",
       });
+    }
+    if (models.Message) {
+      // Add if projects can have messages directly (less common)
+      // Project.hasMany(models.Message, { foreignKey: 'projectId', as: 'projectMessages' });
     }
   };
 

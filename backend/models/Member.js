@@ -11,7 +11,7 @@ const MemberModel = (sequelize) => {
         type: DataTypes.INTEGER.UNSIGNED,
         allowNull: false,
         primaryKey: true,
-        references: { model: "Users", key: "id" },
+        references: { model: "Users", key: "id" }, // <<< Define reference for constraint
         onDelete: "CASCADE",
         onUpdate: "CASCADE",
       },
@@ -20,7 +20,7 @@ const MemberModel = (sequelize) => {
         type: DataTypes.INTEGER.UNSIGNED,
         allowNull: false,
         primaryKey: true,
-        references: { model: "Projects", key: "id" },
+        references: { model: "Projects", key: "id" }, // <<< Define reference for constraint
         onDelete: "CASCADE",
         onUpdate: "CASCADE",
       },
@@ -43,7 +43,7 @@ const MemberModel = (sequelize) => {
       // updatedAt maps to updated_at
     },
     {
-      tableName: "project_members",
+      tableName: "project_members", // <<< Ensure this matches your DB table
       timestamps: true, // Expects created_at, updated_at columns
       underscored: true, // <<< Set to TRUE because DB uses snake_case
       freezeTableName: true,
@@ -55,11 +55,11 @@ const MemberModel = (sequelize) => {
 
   Member.associate = (models) => {
     // Associations use MODEL field names (camelCase) for foreign keys
-    Member.belongsTo(models.User, { foreignKey: "userId", as: "user" }); // userId in Member maps to user_id
+    Member.belongsTo(models.User, { foreignKey: "userId", as: "user" }); // userId maps to user_id
     Member.belongsTo(models.Project, {
       foreignKey: "projectId",
       as: "project",
-    }); // projectId in Member maps to project_id
+    }); // projectId maps to project_id
   };
 
   return Member;
