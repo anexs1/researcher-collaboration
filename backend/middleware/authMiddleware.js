@@ -1,72 +1,103 @@
 // backend/middleware/authMiddleware.js
 import jwt from "jsonwebtoken";
-import db from "../models/index.js";
+import db from "../models/index.js"; // Adjust path if needed
 const { User } = db;
 
-const JWT_SECRET = process.env.JWT_SECRET || "your_fallback_secret";
+// Use environment variable, provide a fallback ONLY for immediate local testing if needed
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.warn(
+    "⚠️ WARNING: JWT_SECRET environment variable not set. Using insecure fallback for authMiddleware."
+  );
+  // It's better to throw an error or exit in server.js, but add fallback here just in case
+  // process.env.JWT_SECRET = 'your_insecure_fallback_secret_for_testing_only';
+}
 
 // Middleware to protect routes
+// <<< Use EXPORT directly on the function >>>
 export const protect = async (req, res, next) => {
   let token;
+  console.log("Protect Middleware: Checking authorization header..."); // Add entry log
 
   if (req.headers.authorization?.startsWith("Bearer")) {
     try {
       token = req.headers.authorization.split(" ")[1];
-      const decoded = jwt.verify(token, JWT_SECRET);
+      console.log("Protect Middleware: Token found.");
+      const decoded = jwt.verify(token, process.env.JWT_SECRET); // Use process.env directly
+      console.log(
+        `Protect Middleware: Token verified for User ID: ${decoded.id}`
+      );
 
-      const user = await User.findByPk(decoded.id, {
-        attributes: { exclude: ["password"] },
-      });
+      // Fetch user using default scope (should exclude password)
+      const user = await User.findByPk(decoded.id); // No need for explicit attributes if defaultScope is correct
 
       if (!user) {
-        return res.status(401).json({
-          success: false,
-          message: "User not found",
-        });
+        console.warn(
+          `Protect Middleware: User ID ${decoded.id} not found in DB.`
+        );
+        // Keep response generic for security
+        return res
+          .status(401)
+          .json({ success: false, message: "Not authorized" });
       }
 
+      // Attach user to the request object (excluding password is handled by defaultScope)
       req.user = user;
-      next();
+      console.log(`Protect Middleware: User ${user.id} attached to req.user.`);
+      next(); // Proceed to the next middleware/route handler
     } catch (error) {
-      console.error("Authentication error:", error.message);
+      console.error("Protect Middleware Error:", error.message);
       let message = "Not authorized";
-      if (error.name === "TokenExpiredError") message = "Token expired";
-      if (error.name === "JsonWebTokenError") message = "Invalid token";
+      // Provide more specific (but still safe) messages
+      if (error.name === "TokenExpiredError")
+        message = "Not authorized, token expired";
+      else if (error.name === "JsonWebTokenError")
+        message = "Not authorized, invalid token";
+      // Avoid sending detailed internal errors to the client
 
-      return res.status(401).json({
-        success: false,
-        message,
-      });
+      return res.status(401).json({ success: false, message });
     }
   } else {
-    return res.status(401).json({
-      success: false,
-      message: "No authorization token",
-    });
+    console.log("Protect Middleware: No Bearer token found in header.");
+    return res
+      .status(401)
+      .json({ success: false, message: "Not authorized, no token" });
   }
 };
 
 // Middleware for admin-only access
+// <<< Use EXPORT directly on the function >>>
 export const adminOnly = (req, res, next) => {
+  // This middleware MUST run AFTER 'protect', so req.user should exist
   if (!req.user) {
-    return res.status(401).json({
-      success: false,
-      message: "Not authorized",
-    });
+    // This case indicates a setup error (adminOnly used before protect)
+    console.error(
+      "AdminOnly Middleware Error: req.user not found. Ensure 'protect' runs first."
+    );
+    return res.status(401).json({ success: false, message: "Not authorized" });
   }
+
+  console.log(
+    `AdminOnly Middleware: Checking role for User ID ${req.user.id}. Role: ${req.user.role}`
+  );
 
   if (req.user.role === "admin") {
-    next();
+    console.log(
+      `AdminOnly Middleware: Access granted for User ID ${req.user.id}.`
+    );
+    next(); // User is admin, proceed
   } else {
-    res.status(403).json({
-      success: false,
-      message: "Admin access required",
-    });
+    console.warn(
+      `AdminOnly Middleware: Access denied for User ID ${req.user.id} (Role: ${req.user.role}).`
+    );
+    res
+      .status(403)
+      .json({ success: false, message: "Forbidden: Admin access required" }); // 403 Forbidden is more appropriate
   }
 };
 
-// Make sure to export both middleware functions
-export default {
-  protect,
-  adminOnly,
-};
+// REMOVE the default export object
+// export default {
+//   protect,
+//   adminOnly,
+// };
