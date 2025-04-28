@@ -1,5 +1,4 @@
 // src/Page/ChatPage.jsx
-
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -13,65 +12,75 @@ import {
   FaExclamationCircle,
   FaWifi,
   FaLock,
-  FaComments, // Added for empty state
+  FaComments,
+  FaCalendarAlt,
 } from "react-icons/fa";
+import { AnimatePresence, motion } from "framer-motion";
+import { format, isToday, isYesterday, parseISO } from "date-fns";
 
-// Adjust import paths as needed
 import LoadingSpinner from "../Component/Common/LoadingSpinner";
 import ErrorMessage from "../Component/Common/ErrorMessage";
-// import { useAuth } from '../context/AuthContext'; // Example if using context
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
-const SOCKET_TIMEOUT = 15000; // Increased timeout slightly
+const SOCKET_TIMEOUT = 15000;
 
-// Helper to generate a consistent room name
-const getRoomName = (projectId) => {
-  if (!projectId) return null;
-  return `project-${projectId}`;
+const getRoomName = (projectId) => (projectId ? `project-${projectId}` : null);
+
+const formatMessageTime = (isoString) => {
+  if (!isoString) return "";
+  try {
+    return format(parseISO(isoString), "p");
+  } catch (e) {
+    return "Invalid Date";
+  }
 };
 
-// --- ChatPage Component ---
+const formatDateSeparator = (isoString) => {
+  if (!isoString) return null;
+  try {
+    const date = parseISO(isoString);
+    if (isToday(date)) return "Today";
+    if (isYesterday(date)) return "Yesterday";
+    return format(date, "MMMM d, yyyy");
+  } catch (e) {
+    return null;
+  }
+};
+
 function ChatPage({ currentUser }) {
   const { projectId: projectIdParam } = useParams();
   const navigate = useNavigate();
 
-  // --- State Definitions ---
-  const [messages, setMessages] = useState([]); // Holds the array of message objects
-  const [newMessage, setNewMessage] = useState(""); // Input field content
-  const [projectDetails, setProjectDetails] = useState(null); // { id, name } fetched from API
-  const [isLoading, setIsLoading] = useState(true); // True while fetching initial data
-  const [isSending, setIsSending] = useState(false); // True while emitting a message via socket
-  const [fetchError, setFetchError] = useState(null); // Stores errors from initial data fetching (can be fatal)
-  const [socketError, setSocketError] = useState(null); // Stores transient socket errors (connection, send failure)
-  const [isConnected, setIsConnected] = useState(false); // Tracks live socket connection status
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState("");
+  const [projectDetails, setProjectDetails] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSending, setIsSending] = useState(false);
+  const [fetchError, setFetchError] = useState(null);
+  const [socketError, setSocketError] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [typingUsers, setTypingUsers] = useState(new Map());
 
-  // --- Refs ---
-  const socketRef = useRef(null); // Holds the current socket instance
-  const messagesEndRef = useRef(null); // Target element for auto-scrolling
+  const socketRef = useRef(null);
+  const messagesEndRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
 
-  // --- Derived Values ---
   const currentUserId = currentUser?.id;
   const projectId = projectIdParam ? parseInt(projectIdParam, 10) : null;
-  const roomName = projectId ? getRoomName(projectId) : null;
+  const roomName = getRoomName(projectId);
 
-  // --- Auto-scroll Logic ---
   const scrollToBottom = useCallback((behavior = "smooth") => {
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
-    }, 150); // Small delay for render
+    }, 150);
   }, []);
 
-  // Scroll when new messages arrive
   useEffect(() => {
-    if (messages.length > 0) {
-      scrollToBottom("smooth");
-    }
+    if (messages.length > 0) scrollToBottom("smooth");
   }, [messages, scrollToBottom]);
 
-  // --- Fetch Initial Data (Project Details & Chat History) ---
   const fetchInitialData = useCallback(async () => {
-    // Validate prerequisites
     if (!currentUserId) {
       setFetchError("User not identified.");
       setIsLoading(false);
@@ -87,10 +96,9 @@ function ChatPage({ currentUser }) {
       `ChatPage: Fetching initial data for project chat ${projectId}`
     );
     setIsLoading(true);
-    setFetchError(null); // Clear previous fetch errors
-    setSocketError(null); // Clear previous socket errors
+    setFetchError(null);
+    setSocketError(null);
     const token = localStorage.getItem("authToken");
-
     if (!token) {
       setFetchError("Authentication token not found.");
       setIsLoading(false);
@@ -102,7 +110,6 @@ function ChatPage({ currentUser }) {
     let errorMsg = null;
 
     try {
-      // Fetch history and details concurrently
       const [historyResponse, projectInfoResponse] = await Promise.all([
         axios.get(
           `${API_BASE_URL}/api/messaging/history/project/${projectId}`,
@@ -118,34 +125,29 @@ function ChatPage({ currentUser }) {
               err.response?.data?.message || err.message
             );
             return null;
-          }), // Gracefully handle project detail fetch failure
+          }),
       ]);
 
-      // Process Project Details Response
+      // Process Project Details
       if (projectInfoResponse?.data?.success) {
-        // Prioritize the structure that worked (`.data.data`) based on previous logs, but keep fallback
         const projectData =
           projectInfoResponse.data.data || projectInfoResponse.data.project;
-        if (projectData && projectData.id && projectData.title) {
+        if (projectData?.id && projectData?.title) {
           fetchedDetails = { id: projectData.id, name: projectData.title };
-          console.log(
-            `Processed project details: ID=${fetchedDetails.id}, Name=${fetchedDetails.name}`
-          );
+          console.log(`Processed project details: ID=${fetchedDetails.id}`);
         } else {
           console.warn(
-            "Project details structure unexpected, using fallback.",
+            "Project details structure unexpected.",
             projectInfoResponse.data
           );
           fetchedDetails = { id: projectId, name: `Project ${projectId}` };
         }
       } else {
-        console.warn(
-          `Project details fetch unsuccessful or structure unknown, using fallback.`
-        );
+        console.warn(`Project details fetch unsuccessful.`);
         fetchedDetails = { id: projectId, name: `Project ${projectId}` };
       }
 
-      // Process Message History Response
+      // Process Messages
       if (
         historyResponse.data?.success &&
         Array.isArray(historyResponse.data.data)
@@ -153,12 +155,14 @@ function ChatPage({ currentUser }) {
         fetchedMsgs = historyResponse.data.data;
         console.log(`Fetched ${fetchedMsgs.length} messages.`);
       } else {
-        console.log(`No message history found or non-success response.`);
+        console.log(`No message history.`);
         fetchedMsgs = [];
       }
+
+      errorMsg = null; // Clear error on success
     } catch (err) {
       console.error(`Error fetching initial chat data:`, err);
-      // Determine error message and check for fatal errors (403, 404)
+      // --- Determine Error Message ---
       if (err.response) {
         errorMsg = err.response.data?.message || `Error ${err.response.status}`;
         if (err.response.status === 403)
@@ -167,89 +171,60 @@ function ChatPage({ currentUser }) {
           errorMsg = "Project or chat not found.";
         else if (err.response.status === 401)
           errorMsg = "Authentication session expired.";
-      } else if (err.request)
+      } else if (err.request) {
         errorMsg = "Network Error: Unable to reach server.";
-      else if (err instanceof TypeError && err.message.includes("undefined")) {
+      } else if (
+        err instanceof TypeError &&
+        err.message.includes("undefined")
+      ) {
         errorMsg = "Internal Error: Processing server response failed.";
         console.error("Check API response structure.", err);
-      } else errorMsg = err.message || "Unknown error during data load.";
+      } else {
+        errorMsg = err.message || "Unknown error during data load.";
+      }
+      // --- End Error Message Determination ---
 
-      // Use existing details only if fetch failed, otherwise use fallback
       fetchedDetails = projectDetails || {
         id: projectId,
         name: `Project ${projectId}`,
-      };
+      }; // Keep existing/fallback details on error
       fetchedMsgs = []; // Clear messages on critical fetch error
     } finally {
       console.log("Applying fetched data to state.");
-      setProjectDetails(fetchedDetails); // Update project details state
-      setMessages(fetchedMsgs); // Update messages state
-      setFetchError(errorMsg); // Set potential fetch error
-      setIsLoading(false); // Mark loading as complete
-      // Scroll only if data was loaded successfully
+      setProjectDetails(fetchedDetails);
+      setMessages(fetchedMsgs);
+      setFetchError(errorMsg); // Set the determined fetch error state
+      setIsLoading(false);
       if (fetchedMsgs.length > 0 && !errorMsg) {
         scrollToBottom("auto");
       }
     }
-  }, [currentUserId, projectId, scrollToBottom]); // Dependencies for the data fetching logic
+    // Removed projectDetails from deps to avoid re-fetching just because fallback was used
+  }, [currentUserId, projectId, scrollToBottom]);
 
-  // Effect to fetch data on mount or when critical IDs change
   useEffect(() => {
     fetchInitialData();
-  }, [fetchInitialData]); // Relies on the memoized fetchInitialData
+  }, [fetchInitialData]);
 
-  // --- WebSocket Connection and Event Handling ---
   useEffect(() => {
-    // --- Guard Clauses: Conditions to PREVENT connection ---
-    // 1. Don't connect until project details are loaded (essential for checks/room name)
-    if (!projectDetails) {
-      console.log("Socket Effect: Skipping - Project details not loaded yet.");
+    // Guards
+    if (!projectDetails || !currentUserId || !projectId || !roomName) return;
+    if (
+      fetchError &&
+      !isLoading &&
+      (fetchError.includes("Access Denied") || fetchError.includes("not found"))
+    )
       return;
-    }
-    // 2. Don't connect if essential IDs are missing
-    if (!currentUserId || !projectId || !roomName) {
-      console.log(
-        "Socket Effect: Skipping - Missing user/project ID or room name."
-      );
-      return;
-    }
-    // 3. Don't connect if initial fetch had a fatal error (Access Denied/Not Found)
-    if (fetchError && !isLoading) {
-      // Check isLoading to ensure fetch attempt finished
-      const isFatalError =
-        fetchError.includes("Access Denied") ||
-        fetchError.includes("not found");
-      if (isFatalError) {
-        console.log("Socket Effect: Skipping - Fatal fetch error:", fetchError);
-        return;
-      }
-    }
-    // 4. Don't connect if no auth token
     const token = localStorage.getItem("authToken");
-    if (!token) {
-      console.log("Socket Effect: Skipping - No auth token.");
-      return;
-    }
-
-    // --- *** CRITICAL CHECK: Prevent Duplicate Connections *** ---
-    // If socketRef already holds an instance, DO NOT create a new one.
+    if (!token) return;
     if (socketRef.current) {
-      console.log(
-        `Socket Effect: Skipping - Socket ref exists (ID: ${socketRef.current.id}, Connected: ${socketRef.current.connected}).`
-      );
-      // Sync UI state if needed (e.g., if connection dropped without state update)
       if (isConnected !== socketRef.current.connected)
         setIsConnected(socketRef.current.connected);
       return;
     }
-    // --- End Duplicate Connection Check ---
 
-    // --- Proceed with Establishing Connection ---
-    console.log(
-      `Socket Effect: Conditions met, Attempting connection to room: ${roomName}`
-    );
-    setSocketError(null); // Clear previous socket errors
-
+    console.log(`Socket Effect: Attempting connection to room: ${roomName}`);
+    setSocketError(null);
     const newSocket = io(API_BASE_URL, {
       auth: { token },
       transports: ["websocket"],
@@ -257,115 +232,88 @@ function ChatPage({ currentUser }) {
       reconnectionAttempts: 3,
       timeout: SOCKET_TIMEOUT,
     });
-    // --- Store the new socket instance in the ref IMMEDIATELY ---
     socketRef.current = newSocket;
 
-    // --- Event Listeners ---
     newSocket.on("connect", () => {
       console.log(">>> Socket CONNECTED:", newSocket.id);
-      setIsConnected(true); // Update connection state
-      setSocketError(null); // Clear any previous connection errors
-      // Join the specific project chat room
+      setIsConnected(true);
+      setSocketError(null);
       newSocket.emit("joinChatRoom", { roomName }, (ack) => {
-        if (ack?.success) console.log(`Successfully joined room: ${roomName}`);
-        else {
-          console.error(`Failed to join room ${roomName}:`, ack?.error);
-          setSocketError(`Join Error: ${ack?.error || "Server error"}`);
+        if (!ack?.success)
+          setSocketError(`Join Error: ${ack?.error || "Server issue"}`);
+      });
+    });
+    newSocket.on("disconnect", (reason) => {
+      console.log(">>> Socket DISCONNECTED:", newSocket.id, reason);
+      setIsConnected(false);
+      if (reason !== "io client disconnect") setSocketError("Disconnected...");
+      if (socketRef.current?.id === newSocket.id) socketRef.current = null;
+    });
+    newSocket.on("connect_error", (err) => {
+      console.error(">>> Socket CONNECTION ERROR:", err.message);
+      setIsConnected(false);
+      setSocketError(`Connection Failed.`);
+      if (socketRef.current?.id === newSocket.id) socketRef.current = null;
+    });
+    newSocket.on("newMessage", (message) => {
+      if (message?.projectId?.toString() === projectId?.toString()) {
+        const msg = {
+          ...message,
+          sender: message.sender || { id: message.senderId },
+        };
+        setMessages((prev) =>
+          prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]
+        );
+      }
+    });
+    newSocket.on("userTyping", ({ userId, username }) => {
+      if (userId?.toString() === currentUserId?.toString()) return;
+      setTypingUsers((prev) => {
+        const newMap = new Map(prev);
+        if (newMap.has(userId)) clearTimeout(newMap.get(userId).timerId);
+        const timerId = setTimeout(() => {
+          setTypingUsers((curr) => {
+            const mapAfter = new Map(curr);
+            mapAfter.delete(userId);
+            return mapAfter;
+          });
+        }, 3000);
+        newMap.set(userId, { username, timerId });
+        return newMap;
+      });
+    });
+    newSocket.on("userStopTyping", ({ userId }) => {
+      if (userId?.toString() === currentUserId?.toString()) return;
+      setTypingUsers((prev) => {
+        const newMap = new Map(prev);
+        if (newMap.has(userId)) {
+          clearTimeout(newMap.get(userId).timerId);
+          newMap.delete(userId);
         }
+        return newMap;
       });
     });
 
-    newSocket.on("disconnect", (reason) => {
-      console.log(">>> Socket DISCONNECTED:", newSocket.id, "Reason:", reason);
-      setIsConnected(false); // Update connection state
-      if (reason !== "io client disconnect") {
-        setSocketError("Disconnected. Trying to reconnect...");
-      }
-      // Ensure ref is cleared only if the disconnected instance is the one stored
-      if (socketRef.current?.id === newSocket.id) {
-        socketRef.current = null;
-      }
-    });
-
-    newSocket.on("connect_error", (err) => {
-      console.error(">>> Socket CONNECTION ERROR:", err.message);
-      setIsConnected(false); // Update connection state
-      setSocketError(`Connection Failed: ${err.message}.`);
-      // Ensure ref is cleared only if the failing instance is the one stored
-      if (socketRef.current?.id === newSocket.id) {
-        socketRef.current = null;
-      }
-    });
-
-    // Listen for incoming messages for this project
-    newSocket.on("newMessage", (message) => {
-      console.log("Socket 'newMessage' received:", message);
-      if (message?.content && message.senderId && message.projectId) {
-        // Make sure the message is for the project currently being viewed
-        if (message.projectId?.toString() === projectId?.toString()) {
-          // Add sender details if missing (backend should ideally send this)
-          const messageWithSender = {
-            ...message,
-            sender: message.sender || { id: message.senderId },
-          };
-          // Add to message list, preventing duplicates
-          setMessages((prev) =>
-            prev.some((m) => m.id === messageWithSender.id)
-              ? prev
-              : [...prev, messageWithSender]
-          );
-        } else {
-          console.log(
-            `Ignoring msg for different project (${message.projectId}).`
-          );
-        }
-      } else {
-        console.warn("Invalid message structure received:", message);
-      }
-    });
-
-    // --- Cleanup Function for this specific effect instance ---
     return () => {
-      // Use the instance created in *this* effect run for cleanup
       const socketInstanceToClean = newSocket;
-      console.log(
-        "Socket Cleanup: Cleaning up listeners and disconnecting socket instance:",
-        socketInstanceToClean.id
-      );
+      console.log("Socket Cleanup:", socketInstanceToClean.id);
       try {
-        // Remove listeners to prevent memory leaks
         socketInstanceToClean.off("connect");
         socketInstanceToClean.off("disconnect");
         socketInstanceToClean.off("connect_error");
         socketInstanceToClean.off("newMessage");
-
-        // Leave room and disconnect
-        if (socketInstanceToClean.connected) {
+        socketInstanceToClean.off("userTyping");
+        socketInstanceToClean.off("userStopTyping");
+        if (socketInstanceToClean.connected)
           socketInstanceToClean.emit("leaveChatRoom", { roomName });
-        }
         socketInstanceToClean.disconnect();
       } catch (cleanupErr) {
-        console.error("Error during socket cleanup:", cleanupErr);
+        console.error("Socket cleanup error:", cleanupErr);
       } finally {
-        // --- IMPORTANT: Nullify ref ONLY if it holds this instance ---
-        if (
-          socketRef.current &&
-          socketRef.current.id === socketInstanceToClean.id
-        ) {
-          socketRef.current = null; // Clear the ref
-          console.log(
-            "Socket Cleanup: socketRef nullified for cleaned instance."
-          );
-        } else {
-          console.log(
-            "Socket Cleanup: socketRef did not hold the instance being cleaned, ref not changed."
-          );
-        }
-        // We don't set isConnected to false here, the 'disconnect' listener handles that state update.
+        if (socketRef.current?.id === socketInstanceToClean.id)
+          socketRef.current = null;
       }
     };
-    // --- Dependencies for the socket effect ---
-    // It runs when IDs/room change, OR when projectDetails load, OR if fetchError/isLoading changes (to re-evaluate guards)
   }, [
     currentUserId,
     projectId,
@@ -376,70 +324,66 @@ function ChatPage({ currentUser }) {
     isLoading,
   ]);
 
-  // --- Send Message Handler ---
   const handleSendMessage = useCallback(
     (e) => {
       e.preventDefault();
       const contentToSend = newMessage.trim();
       const currentSocket = socketRef.current;
-
-      if (!contentToSend) return;
-      if (!currentSocket?.connected) {
-        setSocketError("Cannot send: Not connected.");
+      if (
+        !contentToSend ||
+        !currentSocket?.connected ||
+        isSending ||
+        !projectId ||
+        !currentUserId
+      )
         return;
-      }
-      if (isSending) return;
-      if (!projectId || !currentUserId) {
-        setFetchError("Internal Error: Missing IDs.");
-        return;
-      } // Use fetchError for this critical state issue
-
       setIsSending(true);
-      setSocketError(null); // Clear transient socket errors
-
+      setSocketError(null);
       const messageData = {
         senderId: currentUserId,
         projectId,
         content: contentToSend,
         roomName,
       };
-      console.log("Emitting 'sendMessage':", messageData);
-
       currentSocket
         .timeout(SOCKET_TIMEOUT)
         .emit("sendMessage", messageData, (err, ack) => {
-          setIsSending(false); // Mark sending as complete
-          if (err) {
-            console.error("Send message timeout/error:", err);
-            setSocketError("Error: Message failed to send (timeout).");
-          } else if (ack?.success) {
-            console.log("Send ACK success:", ack);
-            setNewMessage("");
-          } // Clear input on success
-          else {
-            const errorMsg = `Send failed: ${ack?.error || "Server error"}`;
-            console.error(errorMsg);
-            setSocketError(errorMsg);
-          }
+          setIsSending(false);
+          if (err) setSocketError("Error: Message timed out.");
+          else if (ack?.success) setNewMessage("");
+          else setSocketError(`Send failed: ${ack?.error || "Server error"}`);
         });
     },
     [newMessage, currentUserId, projectId, roomName, isSending]
   );
 
+  const handleTyping = useCallback(() => {
+    const currentSocket = socketRef.current;
+    if (!currentSocket?.connected || !roomName) return;
+    clearTimeout(typingTimeoutRef.current);
+    currentSocket.emit("typing", { roomName });
+    typingTimeoutRef.current = setTimeout(() => {
+      /* Optional: Emit stopTyping */
+    }, 2000);
+  }, [roomName]);
+
+  const handleStopTyping = useCallback(() => {
+    const currentSocket = socketRef.current;
+    if (!currentSocket?.connected || !roomName) return;
+    clearTimeout(typingTimeoutRef.current);
+    currentSocket.emit("stopTyping", { roomName });
+  }, [roomName]);
+
   // --- Render Logic ---
 
-  // Initial Loading Screen
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-[calc(100vh-8rem)] p-4">
-        {" "}
-        <LoadingSpinner size="xl" message="Loading Chat..." />{" "}
+        <LoadingSpinner size="xl" message="Loading Chat..." />
       </div>
     );
   }
 
-  // Fatal Error Screen (Access Denied, Not Found, etc.)
-  // Check fetchError state AFTER isLoading is false
   const isFatalError = fetchError && !isLoading;
   if (isFatalError) {
     const isForbidden = fetchError.includes("Access Denied");
@@ -450,8 +394,7 @@ function ChatPage({ currentUser }) {
           to="/messages"
           className="text-sm text-indigo-600 hover:underline mb-6 inline-flex items-center gap-1.5"
         >
-          {" "}
-          <FaArrowLeft /> Back to Chats{" "}
+          <FaArrowLeft /> Back to Chats
         </Link>
         <div className="mt-4 p-6 bg-white rounded-lg shadow border border-red-200">
           {isForbidden ? (
@@ -461,6 +404,7 @@ function ChatPage({ currentUser }) {
           ) : (
             <FaExclamationCircle className="text-red-500 h-12 w-12 mx-auto mb-4" />
           )}
+          {/* --- CORRECTED ErrorMessage props --- */}
           <ErrorMessage
             title={
               isForbidden
@@ -469,59 +413,64 @@ function ChatPage({ currentUser }) {
                 ? "Chat Not Found"
                 : "Error Loading Chat"
             }
-            message={fetchError} // Show the specific fetch error
-            onRetry={!isForbidden && !isNotFound ? fetchInitialData : undefined} // Allow retry only for non-fatal errors
+            message={fetchError}
+            onRetry={!isForbidden && !isNotFound ? fetchInitialData : undefined}
           />
+          {/* --- END CORRECTION --- */}
         </div>
       </div>
     );
   }
 
-  // Main Chat Interface (Rendered if no fatal error and not loading)
+  const otherTypingUsers = Array.from(typingUsers.values())
+    .filter((user) => user.username)
+    .map((user) => user.username);
+
   return (
-    <div className="flex flex-col h-[calc(100vh-5rem)] max-w-4xl mx-auto bg-white shadow-xl rounded-b-lg border border-t-0 border-gray-200 overflow-hidden">
-      {/* Chat Header */}
-      <div className="flex items-center p-3 border-b border-gray-200 bg-gray-50 flex-shrink-0 sticky top-0 z-20">
+    <div className="flex flex-col h-[calc(100vh-5rem)] max-w-5xl mx-auto bg-white shadow-2xl rounded-b-lg border border-t-0 border-gray-200 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center p-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100 flex-shrink-0 sticky top-0 z-20 shadow-sm">
         <Link
           to="/messages"
-          className="text-gray-500 hover:text-gray-700 mr-3 p-2 rounded-full hover:bg-gray-200"
+          className="text-gray-500 hover:text-indigo-600 mr-4 p-2 rounded-full hover:bg-gray-200 transition-colors"
           aria-label="Back to Chats"
         >
-          <FaArrowLeft />
+          <FaArrowLeft size="1.1em" />
         </Link>
         {projectDetails ? (
           <>
-            <div className="flex-shrink-0 mr-3 h-8 w-8 bg-indigo-100 rounded-full flex items-center justify-center">
-              <FaProjectDiagram className="w-4 h-4 text-indigo-600" />
+            <div className="flex-shrink-0 mr-3 h-10 w-10 bg-indigo-100 border border-indigo-200 rounded-full flex items-center justify-center shadow-inner">
+              <FaProjectDiagram className="w-5 h-5 text-indigo-600" />
             </div>
-            <span
-              className="font-semibold text-gray-800 truncate text-lg"
-              title={projectDetails.name}
-            >
-              {projectDetails.name || `Project ${projectId}`}
-            </span>
+            <div className="flex-grow overflow-hidden">
+              <h2
+                className="font-semibold text-gray-800 truncate text-xl"
+                title={projectDetails.name}
+              >
+                {projectDetails.name || `Project ${projectId}`}
+              </h2>
+              <p className="text-xs text-gray-500">Group Chat</p>
+            </div>
           </>
         ) : (
-          <span className="font-semibold text-gray-800 text-lg">Chat</span>
+          <h2 className="font-semibold text-gray-800 text-xl">Chat</h2>
         )}
-        {/* Connection Status */}
-        <span
-          className={`ml-auto text-xs font-medium px-2.5 py-1 rounded-full flex items-center gap-1.5 ${
+        <div
+          className={`ml-auto text-xs font-medium px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm ${
             isConnected
-              ? "bg-green-100 text-green-700"
-              : "bg-yellow-100 text-yellow-700 animate-pulse"
+              ? "bg-green-100 text-green-800 border border-green-200"
+              : "bg-yellow-100 text-yellow-800 border border-yellow-200 animate-pulse"
           }`}
           title={isConnected ? "Connected" : "Connecting..."}
         >
           <FaWifi className="w-3 h-3" /> {isConnected ? "Online" : "Connecting"}
-        </span>
+        </div>
       </div>
 
       {/* Messages Area */}
-      <div className="flex-grow p-4 overflow-y-auto bg-gradient-to-br from-gray-100 to-slate-200 relative custom-scrollbar">
-        {/* Display Transient Socket Errors */}
+      <div className="flex-grow p-4 md:p-6 overflow-y-auto bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 relative custom-scrollbar">
         {socketError && (
-          <div className="p-1 sticky top-0 z-10 mb-2">
+          <div className="p-1 sticky top-1 z-10 mb-2">
             <ErrorMessage
               message={socketError}
               onClose={() => setSocketError(null)}
@@ -530,116 +479,182 @@ function ChatPage({ currentUser }) {
             />
           </div>
         )}
-        {/* Empty Chat Message */}
-        {messages.length === 0 &&
-          !isLoading &&
-          !fetchError && ( // Check isLoading/fetchError again
-            <div className="text-center py-16 px-6 text-gray-500">
-              <FaComments className="mx-auto h-12 w-12 text-gray-300 mb-4" />
-              <p className="text-base italic">
-                No messages in this project yet.
-              </p>
-              <p className="text-sm mt-1">Start the conversation!</p>
-            </div>
-          )}
-        {/* List of Messages */}
-        <ul className="space-y-4 pb-2">
-          {messages.map((msg) => {
+        {messages.length === 0 && !fetchError && (
+          <div className="text-center py-20 px-6 text-gray-500">
+            <FaComments className="mx-auto h-16 w-16 text-gray-300 mb-5" />
+            <p className="text-lg italic">No messages yet.</p>
+            <p className="text-base mt-1">Start the conversation!</p>
+          </div>
+        )}
+        <ul className="space-y-1">
+          {messages.map((msg, index) => {
             const isCurrentUserSender =
               msg.senderId?.toString() === currentUserId?.toString();
+            const prevMessage = messages[index - 1];
+            const showDateSeparator =
+              !prevMessage ||
+              formatDateSeparator(msg.createdAt) !==
+                formatDateSeparator(prevMessage.createdAt);
             return (
-              <li
+              <React.Fragment
                 key={msg.id || `msg-${msg.senderId}-${msg.createdAt}`}
-                className={`flex ${
-                  isCurrentUserSender ? "justify-end" : "justify-start"
-                } items-end gap-2 group`}
               >
-                {!isCurrentUserSender && (
-                  <div
-                    className="flex-shrink-0 self-start relative"
-                    title={msg.sender?.username || "User"}
+                {showDateSeparator && formatDateSeparator(msg.createdAt) && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex justify-center items-center my-6"
                   >
-                    {msg.sender?.profilePictureUrl ? (
-                      <img
-                        src={msg.sender.profilePictureUrl}
-                        alt={msg.sender.username || ""}
-                        className="w-8 h-8 rounded-full object-cover border border-gray-200 shadow-sm"
-                      />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-sm font-semibold text-white shadow-sm">
-                        {(msg.sender?.username || "?").charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                  </div>
+                    {" "}
+                    <span className="px-3 py-1 bg-white text-gray-500 text-xs font-semibold rounded-full shadow border border-gray-200 flex items-center gap-1.5">
+                      {" "}
+                      <FaCalendarAlt className="w-3 h-3" />{" "}
+                      {formatDateSeparator(msg.createdAt)}{" "}
+                    </span>{" "}
+                  </motion.div>
                 )}
-                <div
-                  className={`max-w-[75%] px-4 py-2.5 rounded-xl shadow-md break-words ${
-                    isCurrentUserSender
-                      ? "bg-indigo-600 text-white rounded-br-none"
-                      : "bg-white text-gray-800 border border-gray-200 rounded-bl-none"
+                <motion.li
+                  initial={{ opacity: 0, y: isCurrentUserSender ? 10 : -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className={`flex items-end gap-2.5 my-2 ${
+                    isCurrentUserSender ? "justify-end" : "justify-start"
                   }`}
                 >
                   {!isCurrentUserSender && (
-                    <p className="text-xs font-bold mb-1 text-indigo-700">
+                    <div
+                      className="flex-shrink-0 self-start relative mt-1"
+                      title={msg.sender?.username || "User"}
+                    >
                       {" "}
-                      {msg.sender?.username || `User ${msg.senderId}`}{" "}
-                    </p>
+                      {msg.sender?.profilePictureUrl ? (
+                        <img
+                          src={msg.sender.profilePictureUrl}
+                          alt={msg.sender.username || ""}
+                          className="w-9 h-9 rounded-full object-cover border-2 border-white shadow"
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-base font-semibold text-white shadow border-2 border-white">
+                          {(msg.sender?.username || "?")
+                            .charAt(0)
+                            .toUpperCase()}
+                        </div>
+                      )}{" "}
+                    </div>
                   )}
-                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                  <p
-                    className={`text-xs mt-1.5 opacity-70 ${
-                      isCurrentUserSender ? "text-indigo-200" : "text-gray-500"
-                    } text-right`}
-                    title={
-                      msg.createdAt
-                        ? new Date(msg.createdAt).toLocaleString()
-                        : ""
-                    }
+                  <div
+                    className={`max-w-[70%] md:max-w-[65%] px-4 py-2.5 rounded-t-xl ${
+                      isCurrentUserSender
+                        ? "bg-gradient-to-br from-indigo-600 to-purple-600 text-white rounded-l-xl shadow-lg"
+                        : "bg-white text-gray-800 border border-gray-200 rounded-r-xl shadow-md"
+                    }`}
                   >
-                    {msg.createdAt
-                      ? new Date(msg.createdAt).toLocaleTimeString([], {
-                          hour: "numeric",
-                          minute: "2-digit",
-                          hour12: true,
-                        })
-                      : "Sending..."}
-                  </p>
-                </div>
-              </li>
+                    {!isCurrentUserSender && (
+                      <p className="text-xs font-bold mb-1 text-indigo-700">
+                        {" "}
+                        {msg.sender?.username || `User ${msg.senderId}`}{" "}
+                      </p>
+                    )}
+                    <p className="text-sm whitespace-pre-wrap break-words">
+                      {msg.content}
+                    </p>
+                    <p
+                      className={`text-xs mt-1.5 opacity-80 ${
+                        isCurrentUserSender
+                          ? "text-indigo-100"
+                          : "text-gray-400"
+                      } text-right`}
+                      title={
+                        msg.createdAt
+                          ? new Date(msg.createdAt).toLocaleString()
+                          : ""
+                      }
+                    >
+                      {" "}
+                      {formatMessageTime(msg.createdAt) || "Sending..."}{" "}
+                    </p>
+                  </div>
+                  {isCurrentUserSender && (
+                    <div
+                      className="flex-shrink-0 self-start relative mt-1"
+                      title={currentUser?.username || "You"}
+                    >
+                      {" "}
+                      {currentUser?.profilePictureUrl ? (
+                        <img
+                          src={currentUser.profilePictureUrl}
+                          alt={currentUser.username || ""}
+                          className="w-9 h-9 rounded-full object-cover border-2 border-white shadow"
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-base font-semibold text-white shadow border-2 border-white">
+                          {(currentUser?.username || "?")
+                            .charAt(0)
+                            .toUpperCase()}
+                        </div>
+                      )}{" "}
+                    </div>
+                  )}
+                </motion.li>
+              </React.Fragment>
             );
           })}
+          {/* Typing Indicator */}
+          <AnimatePresence>
+            {" "}
+            {otherTypingUsers.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="text-left pl-12 pr-4 pt-1 pb-2"
+              >
+                {" "}
+                <span className="text-xs italic text-gray-600 bg-gray-200 px-2 py-1 rounded-full shadow-sm">
+                  {" "}
+                  {otherTypingUsers.join(", ")}{" "}
+                  {otherTypingUsers.length === 1 ? "is" : "are"} typing...{" "}
+                </span>{" "}
+              </motion.div>
+            )}{" "}
+          </AnimatePresence>
           <div ref={messagesEndRef} style={{ height: "1px" }} />
         </ul>
       </div>
-
-      {/* Message Input Form */}
+      {/* Input Form */}
       <form
         onSubmit={handleSendMessage}
-        className="p-3 border-t border-gray-200 bg-white flex-shrink-0 flex items-center gap-2"
+        className="p-4 border-t border-gray-200 bg-white flex-shrink-0 flex items-center gap-3"
       >
+        {" "}
         <input
           type="text"
           value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          placeholder={isConnected ? "Type your message..." : "Connecting..."}
-          className="flex-grow px-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
-          disabled={!isConnected || isSending} // Input disabled if not connected OR sending
+          onChange={(e) => {
+            setNewMessage(e.target.value);
+            handleTyping();
+          }}
+          onBlur={handleStopTyping}
+          placeholder={isConnected ? "Send a message..." : "Connecting..."}
+          className="flex-grow px-5 py-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-base disabled:bg-gray-100 disabled:cursor-not-allowed transition duration-150 ease-in-out shadow-sm"
+          disabled={!isConnected || isSending}
           autoComplete="off"
           aria-label="Message input"
-        />
+        />{" "}
         <button
           type="submit"
-          disabled={!newMessage.trim() || !isConnected || isSending} // Button disabled if no text OR not connected OR sending
-          className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full p-3 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-all flex items-center justify-center shadow-sm"
+          disabled={!newMessage.trim() || !isConnected || isSending}
+          className="bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-full p-3.5 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all flex items-center justify-center shadow-md hover:shadow-lg transform active:scale-95"
           aria-label="Send message"
           title="Send message"
         >
+          {" "}
           {isSending ? (
             <FaSpinner className="animate-spin h-5 w-5" />
           ) : (
             <FaPaperPlane className="h-5 w-5" />
-          )}
-        </button>
+          )}{" "}
+        </button>{" "}
       </form>
     </div>
   );
