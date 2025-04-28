@@ -1,27 +1,40 @@
 // backend/routes/admin.routes.js
 import express from "express";
-import { protect, adminOnly } from "../middleware/authMiddleware.js"; // Auth & Admin check middleware
+import { protect, adminOnly } from "../middleware/authMiddleware.js";
 
-// --- Import ONLY the admin-specific controllers ---
-// Assuming they are defined and exported from userController for now
-// If you move them to adminController.js, update the import path
+// --- Import Admin-Specific Controllers ---
+// User Management (Assuming these are ONLY for admin use now)
 import {
   adminGetAllUsers,
   adminGetPendingUsers,
   adminGetUserById,
-  adminUpdateUserStatus,
+  adminUpdateUserStatus, // Corrected typo from previous version if any
   adminUpdateUserRole,
   adminDeleteUser,
-} from "../controllers/userController.js"; // <<< Ensure path is correct
+} from "../controllers/userController.js"; // Adjust path if needed, or move to adminController
 
-// Import other admin controllers if needed (e.g., for projects, publications)
-// import { adminGetAllProjects } from "../controllers/projectController.js";
+// Import from adminController
+import {
+  getDashboardStats, // <<< IMPORTED Dashboard controller
+  getAdminPublications,
+  adminGetProjectMessages,
+  adminDeleteMessage,
+  // Import other admin controllers as needed
+} from "../controllers/adminController.js"; // <<< Ensure path is correct
+
+// Project Management (Example - Requires controller functions in adminController or projectController)
+// import { adminGetAllProjects, adminDeleteProject } from "../controllers/adminController.js";
 
 const router = express.Router();
 
 // --- Apply global middleware for ALL admin routes ---
-router.use(protect); // 1. Ensure user is logged in
-router.use(adminOnly); // 2. Ensure user has 'admin' role
+// Ensures only logged-in administrators can access these endpoints
+router.use(protect);
+router.use(adminOnly);
+
+// --- Dashboard Route ---
+// Defines the endpoint the frontend will call to get dashboard statistics
+router.get("/dashboard/stats", getDashboardStats); // GET /api/admin/dashboard/stats
 
 // --- User Management Routes ---
 router.get("/users", adminGetAllUsers); // GET /api/admin/users
@@ -31,15 +44,19 @@ router.patch("/users/:id/status", adminUpdateUserStatus); // PATCH /api/admin/us
 router.patch("/users/:id/role", adminUpdateUserRole); // PATCH /api/admin/users/:id/role
 router.delete("/users/:id", adminDeleteUser); // DELETE /api/admin/users/:id
 
+// --- Publication Management Routes ---
+router.get("/publications", getAdminPublications); // GET /api/admin/publications
+// Example: router.patch("/publications/:id/status", adminUpdatePublicationStatus);
+// Example: router.delete("/publications/:id", adminDeletePublication);
+
 // --- Project Management Routes (Example) ---
-// router.get("/projects", adminGetAllProjects); // GET /api/admin/projects
-// router.delete("/projects/:id", adminDeleteProject); // Need controller
+// Example: router.get("/projects", adminGetAllProjects); // GET /api/admin/projects
+// Example: router.delete("/projects/:id", adminDeleteProject);
 
-// --- Publication Management Routes (Example) ---
-// router.get("/publications", adminGetAllPublications);
-// router.patch("/publications/:id/status", adminUpdatePublicationStatus);
-// router.delete("/publications/:id", adminDeletePublication);
+// --- Message Management Routes ---
+router.get("/messages/project/:projectId", adminGetProjectMessages); // GET /api/admin/messages/project/:projectId
+router.delete("/messages/:messageId", adminDeleteMessage); // DELETE /api/admin/messages/:messageId
 
-// Add other admin routes as needed (settings, reports etc.)
+// Add other admin-specific routes here (e.g., settings, reports)
 
 export default router;

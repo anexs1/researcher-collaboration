@@ -1,71 +1,59 @@
 // backend/controllers/adminController.js
-
-import db from "../models/index.js";
-const { User, Publication, Project, sequelize } = db; // Ensure Publication and Project are included
+import db from "../models/index.js"; // Ensure path is correct and all models are loaded
 import { Op } from "sequelize";
 import asyncHandler from "express-async-handler";
 
-// Helper function for safe counting
+// Destructure all necessary models
+const {
+  User,
+  Publication,
+  Project,
+  Member,
+  Message,
+  sequelize /*, AuditLog */,
+} = db;
+
+// --- Helper Functions (Keep as is) ---
 async function safeCount(model, options = {}) {
+  /* ... */
   try {
-    // Add a check to ensure the model exists before counting
-    if (!model || typeof model.count !== "function") {
-      console.error(`Error: Attempted to count non-model or undefined model.`);
-      return 0;
-    }
+    if (!model?.count) return 0;
     const count = await model.count(options);
     return Number.isInteger(count) ? count : 0;
   } catch (error) {
-    // Use optional chaining for safer access to model name
-    console.error(`Error counting ${model?.name || "Unknown Model"}:`, error);
-    return 0; // Return 0 on error
+    console.error(`Count Error ${model?.name || "?"}:`, error);
+    return 0;
   }
 }
-
-// Helper function for safe querying
 async function safeFindAll(model, options = {}) {
+  /* ... */
   try {
-    // Add a check to ensure the model exists before querying
-    if (!model || typeof model.findAll !== "function") {
-      console.error(
-        `Error: Attempted to findAll on non-model or undefined model.`
-      );
-      return [];
-    }
+    if (!model?.findAll) return [];
     const results = await model.findAll(options);
     return Array.isArray(results) ? results : [];
   } catch (error) {
-    // Use optional chaining for safer access to model name
-    console.error(`Error finding ${model?.name || "Unknown Model"}:`, error);
-    return []; // Return empty array on error
+    console.error(`FindAll Error ${model?.name || "?"}:`, error);
+    return [];
   }
 }
+const userPublicSelectFields = ["id", "username", "profilePictureUrl"]; // Reusable public fields
 
-// --- Dashboard Stats Controller ---
+// --- Dashboard Stats Controller (Keep as is) ---
 export const getDashboardStats = asyncHandler(async (req, res) => {
+  /* ... */
   try {
-    // 1. Validate models exist
     if (!User || !Publication || !Project) {
-      console.error("Dashboard Error: Models not initialized correctly.");
-      throw new Error("Required models are not available");
+      throw new Error("Models not available");
     }
-
-    // 3. Get counts
-    // Adjust indices based on which counts are actually performed
-    const countPromises = [
-      safeCount(User), // 0: Total users
-      safeCount(User, { where: { status: "approved" } }), // 1: Approved users
-      safeCount(User, { where: { status: "pending" } }), // 2: Pending users
-      safeCount(Publication), // 3: Total publications
-      // safeCount(Publication, { where: { status: "published" } }), // 4: Published Pubs (If status exists)
-      safeCount(Project), // 4 (or 5 if pub status): Total projects
-      safeCount(Project, { where: { status: "active" } }), // 5 (or 6): Active projects
-      safeCount(User, { where: { role: "admin" } }), // 6 (or 7): Admin users
-    ];
-    // Make sure to await all promises
-    const counts = await Promise.all(countPromises);
-
-    // 4. Get recent activities
+    const counts = await Promise.all([
+      safeCount(User),
+      safeCount(User, { where: { status: "approved" } }),
+      safeCount(User, { where: { status: "pending" } }),
+      safeCount(Publication),
+      safeCount(Project),
+      safeCount(Project, { where: { status: "active" } }),
+      safeCount(User, { where: { role: "admin" } }),
+    ]);
     const [recentUsers, recentPublications] = await Promise.all([
       safeFindAll(User, {
         attributes: ["id", "username", "email", "role", "status", "createdAt"],
@@ -73,73 +61,56 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
         limit: 5,
       }),
       safeFindAll(Publication, {
-        // Select specific attributes needed for the dashboard display
         attributes: [
           "id",
           "title",
-          /* 'status', */ "createdAt",
           "author",
           "collaborationStatus",
+          "createdAt",
         ],
         include: [
           {
             model: User,
-            as: "owner", // Correct alias based on Publication model association
-            attributes: ["id", "username"], // Select only necessary user fields
-            required: false, // Use LEFT JOIN
+            as: "owner",
+            attributes: ["id", "username"],
+            required: false,
           },
         ],
         order: [["createdAt", "DESC"]],
         limit: 5,
       }),
     ]);
-
-    // 5. Construct response - Use correct indices based on countPromises array
     const responseData = {
       counts: {
         users: {
-          total: counts[0] || 0,
-          active: counts[1] || 0,
-          pending: counts[2] || 0,
-          admins: counts[6] || 0,
-        }, // Index 6 for admins
-        publications: {
-          total: counts[3] || 0 /* , published: counts[?] || 0 */,
-        }, // Index 3 for total pubs
-        projects: { total: counts[4] || 0, active: counts[5] || 0 }, // Index 4 for total projects, 5 for active
+          total: counts[0],
+          active: counts[1],
+          pending: counts[2],
+          admins: counts[6],
+        },
+        publications: { total: counts[3] },
+        projects: { total: counts[4], active: counts[5] },
       },
       recentActivities: {
-        users: recentUsers || [],
-        publications: recentPublications || [],
+        users: recentUsers,
+        publications: recentPublications,
       },
     };
-
     res.status(200).json({ success: true, data: responseData });
   } catch (error) {
-    console.error("Dashboard controller error:", error.message, error.stack);
-    res.status(500).json({
-      success: false,
-      message: "Failed to load dashboard data",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined,
-    });
+    console.error("Dashboard error:", error);
+    res.status(500).json({ success: false, message: "Failed dashboard data" });
   }
 });
 
-// --- Admin Publications Controller ---
-/**
- * @desc    Get all publications (for Admin panel with pagination/sorting)
- * @route   GET /api/admin/publications
- * @access  Private/Admin
- */
+// --- Admin Publications Controller (Keep as is) ---
 export const getAdminPublications = asyncHandler(async (req, res) => {
-  // --- Pagination and Sorting ---
-  const page = parseInt(req.query.page, 10) || 1;
-  const limit = parseInt(req.query.limit, 10) || 15;
-  const sortBy = req.query.sortBy || "createdAt";
-  const sortOrder = req.query.sortOrder || "desc";
-  const offset = (page - 1) * limit;
-
-  // Validate sort parameters
+  /* ... */
+  const page = parseInt(req.query.page, 10) || 1,
+    limit = parseInt(req.query.limit, 10) || 15,
+    sortBy = req.query.sortBy || "createdAt",
+    sortOrder = req.query.sortOrder || "desc",
+    offset = (page - 1) * limit;
   const allowedSortBy = [
     "id",
     "title",
@@ -152,45 +123,24 @@ export const getAdminPublications = asyncHandler(async (req, res) => {
     "updatedAt",
   ];
   if (!allowedSortBy.includes(sortBy)) {
-    res.status(400).json({
-      success: false,
-      message: `Invalid sortBy parameter. Allowed: ${allowedSortBy.join(", ")}`,
-    });
-    return;
+    res.status(400);
+    throw new Error(`Invalid sortBy.`);
   }
   if (!["asc", "desc"].includes(sortOrder.toLowerCase())) {
-    res.status(400).json({
-      success: false,
-      message: "Invalid sortOrder parameter. Use 'asc' or 'desc'.",
-    });
-    return;
+    res.status(400);
+    throw new Error(`Invalid sortOrder.`);
   }
-
-  // Validate models are loaded
-  if (
-    !Publication ||
-    typeof Publication.findAndCountAll !== "function" ||
-    !User
-  ) {
-    console.error(
-      "Admin Publications Error: Models not initialized correctly."
-    );
-    // Throwing error here will be caught by asyncHandler and result in 500
-    throw new Error(
-      "Required models (Publication, User) are not available or not initialized."
-    );
+  if (!Publication || !User) {
+    throw new Error("Models not available.");
   }
-
   try {
     const { count, rows } = await Publication.findAndCountAll({
-      // --- EXPLICITLY LIST Publication ATTRIBUTES ---
-      // List all columns from your Publication model/table that you want to return
       attributes: [
         "id",
         "title",
         "summary",
-        "author", // The string author field from the Publication table
-        "ownerId", // The foreign key field
+        "author",
+        "ownerId",
         "document_link",
         "tags",
         "area",
@@ -198,46 +148,203 @@ export const getAdminPublications = asyncHandler(async (req, res) => {
         "collaborationStatus",
         "createdAt",
         "updatedAt",
-        // DO NOT list 'authorId' here as it doesn't exist in the table/model
       ],
-      // --- END EXPLICIT ATTRIBUTES ---
-      limit: limit,
-      offset: offset,
-      order: [[sortBy, sortOrder.toUpperCase()]], // Apply sorting
+      limit,
+      offset,
+      order: [[sortBy, sortOrder.toUpperCase()]],
       include: [
-        {
-          model: User,
-          as: "owner", // MUST match the alias defined in Publication.associate
-          attributes: ["id", "username", "email"], // Select only needed owner fields
-        },
+        { model: User, as: "owner", attributes: ["id", "username", "email"] },
       ],
-      distinct: true, // Important for correct count when using include
+      distinct: true,
     });
-
-    // Construct pagination object
     const paginationData = {
       totalItems: count,
       totalPages: Math.ceil(count / limit),
       currentPage: page,
-      limit: limit,
+      limit,
     };
-
-    res.status(200).json({
-      success: true,
-      data: rows,
-      pagination: paginationData,
-    });
+    res
+      .status(200)
+      .json({ success: true, data: rows, pagination: paginationData });
   } catch (error) {
-    console.error("Admin: Error fetching publications:", error);
-    // Log the generated SQL in development for debugging database errors
-    if (process.env.NODE_ENV === "development" && error.sql) {
-      console.error("Offending SQL:", error.sql);
-    }
+    console.error("Admin Pub fetch error:", error);
     res
       .status(500)
       .json({ success: false, message: "Server error fetching publications." });
   }
 });
 
-// --- Add other admin-specific controllers here if needed ---
-// e.g., getAdminProjects, updateAdminSettings, etc.
+// --- *** NEW: Admin Message Management Controllers *** ---
+
+/**
+ * @desc    Admin: Get all messages for a specific project chat (paginated)
+ * @route   GET /api/admin/messages/project/:projectId
+ * @access  Private (Admin Only)
+ */
+export const adminGetProjectMessages = asyncHandler(async (req, res) => {
+  const projectIdParam = req.params.projectId;
+  const adminUserId = req.user.id; // Admin performing the action
+
+  console.log(
+    `ADMIN API: adminGetProjectMessages invoked for Project ${projectIdParam} by Admin ${adminUserId}`
+  );
+
+  const projectId = parseInt(projectIdParam, 10);
+  if (isNaN(projectId) || projectId <= 0) {
+    res.status(400);
+    throw new Error("Invalid Project ID format.");
+  }
+
+  try {
+    // 1. Verify Project Exists (Optional but good practice)
+    const project = await Project.findByPk(projectId, {
+      attributes: ["id", "title"],
+    });
+    if (!project) {
+      res.status(404);
+      throw new Error("Project not found.");
+    }
+
+    // 2. Fetch messages (Admin bypasses membership check)
+    const { page = 1, limit = 50 } = req.query; // Add pagination
+    const parsedLimit = parseInt(limit, 10);
+    const parsedPage = parseInt(page, 10);
+    if (
+      isNaN(parsedLimit) ||
+      parsedLimit <= 0 ||
+      isNaN(parsedPage) ||
+      parsedPage <= 0
+    ) {
+      res.status(400);
+      throw new Error("Invalid pagination parameters.");
+    }
+    const offset = (parsedPage - 1) * parsedLimit;
+
+    const { count, rows: messages } = await Message.findAndCountAll({
+      where: { projectId: projectId }, // Filter by project
+      include: [
+        {
+          // Include sender details
+          model: User,
+          as: "sender", // Use alias defined in Message.associate
+          attributes: userPublicSelectFields, // Use public fields
+        },
+      ],
+      order: [["createdAt", "DESC"]], // Show newest first for admin view usually
+      limit: parsedLimit,
+      offset,
+      distinct: true, // Needed for accurate count with includes
+    });
+
+    console.log(
+      `Admin ${adminUserId} fetched ${messages.length} messages (page ${parsedPage}) for project ${projectId}. Total: ${count}`
+    );
+    res.status(200).json({
+      success: true,
+      projectTitle: project.title, // Provide context
+      count,
+      totalPages: Math.ceil(count / parsedLimit),
+      currentPage: parsedPage,
+      messages: messages, // Send the messages array
+    });
+  } catch (error) {
+    console.error(
+      `ADMIN API Error in adminGetProjectMessages for Project ${projectIdParam}:`,
+      error
+    );
+    const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
+    res.status(statusCode).json({
+      success: false,
+      message: error.message || "Server error fetching project messages.",
+    });
+  }
+});
+
+/**
+ * @desc    Admin: Delete a specific message by its ID
+ * @route   DELETE /api/admin/messages/:messageId
+ * @access  Private (Admin Only)
+ */
+export const adminDeleteMessage = asyncHandler(async (req, res) => {
+  const messageIdParam = req.params.messageId;
+  const adminUserId = req.user.id; // Admin performing the action
+
+  console.log(
+    `ADMIN API: adminDeleteMessage invoked for Message ID ${messageIdParam} by Admin ${adminUserId}`
+  );
+
+  const messageId = parseInt(messageIdParam, 10);
+  if (isNaN(messageId) || messageId <= 0) {
+    res.status(400);
+    throw new Error("Invalid message ID format.");
+  }
+
+  try {
+    // 1. Find the message
+    const message = await Message.findByPk(messageId, {
+      attributes: ["id", "projectId", "senderId", "content"], // Get info needed before deleting
+    });
+    if (!message) {
+      res.status(404);
+      throw new Error("Message not found.");
+    }
+
+    const projectId = message.projectId; // Store projectId for socket emit
+
+    // 2. Optional (Recommended): Audit Logging
+    console.log(
+      `AUDIT LOG Placeholder: Admin ${adminUserId} deleting Message ${messageId} (Project ${projectId}, Sender ${message.senderId}).`
+    );
+    /*
+        if (AuditLog) { // Check if AuditLog model exists/is configured
+            await AuditLog.create({
+                adminUserId: adminUserId,
+                actionType: 'DELETE_MESSAGE',
+                targetType: 'Message',
+                targetId: messageId,
+                details: { projectId, senderId: message.senderId, contentSnippet: message.content.substring(0, 100) },
+                timestamp: new Date()
+            });
+        }
+        */
+
+    // 3. Delete the message from the database
+    await message.destroy();
+    console.log(
+      `Message ${messageId} deleted successfully by Admin ${adminUserId}.`
+    );
+
+    // 4. Emit a real-time event for UI updates
+    const io = req.app.get("socketio"); // Access Socket.IO instance (ensure it's set in server.js)
+    if (io) {
+      const room = `project-${projectId}`;
+      const deletePayload = { messageId: messageId, projectId: projectId };
+      console.log(`Emitting 'messageDeleted' to room ${room}:`, deletePayload);
+      io.to(room).emit("messageDeleted", deletePayload); // Notify clients in that project room
+    } else {
+      console.warn(
+        "Socket.IO instance ('socketio') not found on app object. Cannot emit real-time delete update."
+      );
+    }
+
+    // 5. Respond to the Admin request
+    res
+      .status(200)
+      .json({ success: true, message: "Message deleted successfully." });
+  } catch (error) {
+    console.error(
+      `ADMIN API Error in adminDeleteMessage for Message ${messageIdParam}:`,
+      error
+    );
+    const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
+    res.status(statusCode).json({
+      success: false,
+      message: error.message || "Server error deleting message.",
+    });
+  }
+});
+
+// --- *** END: Admin Message Management Controllers *** ---
+
+// --- Add other admin controller functions here if needed ---
+// e.g., adminGetAllProjects, adminDeleteProject, adminUpdatePublicationStatus, etc.
