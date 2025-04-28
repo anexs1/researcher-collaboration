@@ -1,83 +1,49 @@
+// src/Page/Admin/AdminSettingsPage.jsx
+// VERSION WITHOUT BACKEND INTERACTION FOR SETTINGS
+
 import React, { useState, useEffect, useCallback } from "react";
-import axios from "axios";
-import AdminPageHeader from "../../Component/Admin/AdminPageHeader";
-import LoadingSpinner from "../../Component/Common/LoadingSpinner";
-import ErrorMessage from "../../Component/Common/ErrorMessage";
-import Notification from "../../Component/Common/Notification";
-import useConfirm from "../../hooks/useConfirm";
+// Removed axios as it's no longer needed for this page's core functionality
+// Removed useNavigate if not used for other actions
+// Removed useConfirm hook
+
+import AdminPageHeader from "../../Component/Admin/AdminPageHeader"; // Verify path
+import LoadingSpinner from "../../Component/Common/LoadingSpinner"; // Keep for potential future use? (Optional)
+import ErrorMessage from "../../Component/Common/ErrorMessage"; // Keep for potential future use? (Optional)
+import Notification from "../../Component/Common/Notification"; // Keep for potential future use? (Optional)
+import { motion, AnimatePresence } from "framer-motion"; // Keep for animations
+
+// NOTE: API_BASE_URL is no longer needed for settings operations on this page
+// const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 const AdminSettingsPage = () => {
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-
-  const [state, setState] = useState({
-    settings: {
-      siteName: "",
-      allowPublicSignup: false,
-      maintenanceMode: false,
-      defaultUserRole: "user",
-      emailNotifications: true,
-      itemsPerPage: 10,
-      themeColor: "#3b82f6",
-    },
-    initialSettings: {},
-    loading: true,
-    saving: false,
-    error: null,
-    notification: { message: "", type: "", show: false },
-    activeTab: "general",
-  });
-
-  const { confirm, ConfirmDialog } = useConfirm();
-
-  const apiCall = async (method, endpoint, data = null) => {
-    const token = localStorage.getItem("authToken");
-    if (!token) throw new Error("Authentication required");
-
-    try {
-      const response = await axios({
-        method,
-        url: `${API_URL}${endpoint}`,
-        data,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-      return response.data;
-    } catch (err) {
-      console.error(`API Error [${method} ${endpoint}]:`, {
-        message: err.message,
-        response: err.response?.data,
-        config: err.config,
-      });
-      throw err;
-    }
+  // Default settings structure - these are now the *only* source
+  const defaultSettingsState = {
+    siteName: "Research Platform (Local)", // Indicate locality
+    allowPublicSignup: true,
+    maintenanceMode: false,
+    defaultUserRole: "user",
+    emailNotifications: true,
+    itemsPerPage: 10,
+    themeColor: "#3b82f6", // Default blue
   };
 
-  const fetchSettings = useCallback(async () => {
-    setState((prev) => ({ ...prev, loading: true, error: null }));
-    try {
-      const data = await apiCall("get", "/admin/settings");
-      setState((prev) => ({
-        ...prev,
-        settings: data,
-        initialSettings: JSON.parse(JSON.stringify(data)),
-        loading: false,
-      }));
-    } catch (err) {
-      setState((prev) => ({
-        ...prev,
-        error: err.response?.data?.message || "Failed to load settings",
-        loading: false,
-      }));
-    }
-  }, [API_URL]);
+  // --- State ---
+  // Settings state now initialized directly with defaults
+  const [settings, setSettings] = useState({ ...defaultSettingsState });
+  // Removed initialSettings, loading, saving states
+  const [error, setError] = useState(null); // Kept for potential future non-API errors
+  const [notification, setNotification] = useState({
+    message: "",
+    type: "",
+    show: false,
+  });
+  const [activeTab, setActiveTab] = useState("general");
 
-  useEffect(() => {
-    fetchSettings();
-  }, [fetchSettings]);
+  // --- Functions ---
 
-  const showNotification = (message, type = "success") => {
+  // Notification helper (can still be used for UI feedback if needed)
+  const showNotification = (message, type = "info") => {
+    // Default type info
     setState((prev) => ({
       ...prev,
       notification: { message, type, show: true },
@@ -92,71 +58,37 @@ const AdminSettingsPage = () => {
     );
   };
 
+  // Handle input changes - updates local state only
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setState((prev) => ({
-      ...prev,
-      settings: {
-        ...prev.settings,
-        [name]: type === "checkbox" ? checked : value,
-      },
+    setSettings((prevSettings) => ({
+      // Use functional update for settings
+      ...prevSettings,
+      [name]:
+        type === "checkbox"
+          ? checked
+          : type === "number"
+          ? parseInt(value, 10) || 0
+          : value,
     }));
   };
 
-  const handleSaveSettings = async (e) => {
-    e.preventDefault();
+  // --- Removed fetchSettings and handleSaveSettings ---
 
-    try {
-      const shouldProceed = await confirm(
-        "Save Settings",
-        "Are you sure you want to save these changes?"
-      );
-      if (!shouldProceed) return;
+  // Apply theme color changes directly via useEffect when state changes
+  useEffect(() => {
+    console.log("Applying theme color:", settings.themeColor);
+    document.documentElement.style.setProperty(
+      "--primary-color",
+      settings.themeColor
+    );
+    // Define --primary-color in your CSS: e.g., button { background-color: var(--primary-color); }
+  }, [settings.themeColor]);
 
-      setState((prev) => ({ ...prev, saving: true, error: null }));
-
-      const changedSettings = Object.keys(state.settings).reduce((acc, key) => {
-        if (
-          JSON.stringify(state.settings[key]) !==
-          JSON.stringify(state.initialSettings[key])
-        ) {
-          acc[key] = state.settings[key];
-        }
-        return acc;
-      }, {});
-
-      if (Object.keys(changedSettings).length === 0) {
-        showNotification("No changes to save", "info");
-        return;
-      }
-
-      await apiCall("put", "/admin/settings", changedSettings);
-
-      setState((prev) => ({
-        ...prev,
-        initialSettings: JSON.parse(JSON.stringify(prev.settings)),
-        saving: false,
-      }));
-      showNotification("Settings saved successfully!");
-
-      if (changedSettings.themeColor) {
-        document.documentElement.style.setProperty(
-          "--primary-color",
-          changedSettings.themeColor
-        );
-      }
-    } catch (err) {
-      setState((prev) => ({ ...prev, saving: false }));
-      showNotification(
-        err.response?.data?.message || "Failed to save settings",
-        "error"
-      );
-    }
-  };
-
-  const hasChanges =
-    JSON.stringify(state.settings) !== JSON.stringify(state.initialSettings);
-  const breadcrumbs = [{ label: "Settings", link: "/admin/settings" }];
+  // Structure for tabs
+  const breadcrumbs = [
+    { label: "Settings (Local Preview)", link: "/admin/settings" },
+  ]; // Indicate local
   const tabs = [
     { id: "general", label: "General" },
     { id: "appearance", label: "Appearance" },
@@ -164,108 +96,273 @@ const AdminSettingsPage = () => {
     { id: "email", label: "Email Settings" },
   ];
 
+  // --- Render ---
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8 bg-gray-50 min-h-screen">
-      <ConfirmDialog />
-      <AdminPageHeader title="System Settings" breadcrumbs={breadcrumbs} />
-
-      {state.error && (
-        <ErrorMessage
-          message={state.error}
-          onClose={() => setState((prev) => ({ ...prev, error: null }))}
-        />
-      )}
-
-      <Notification
-        message={state.notification.message}
-        type={state.notification.type}
-        show={state.notification.show}
-        onClose={() =>
-          setState((prev) => ({
-            ...prev,
-            notification: { ...prev.notification, show: false },
-          }))
-        }
+      {/* Confirmation Dialog removed as save is removed */}
+      <AdminPageHeader
+        title="System Settings (Local Preview)"
+        breadcrumbs={breadcrumbs}
       />
 
-      {state.loading ? (
-        <div className="flex justify-center py-10">
-          <LoadingSpinner />
+      {/* Display local errors if any logic introduces them */}
+      {error && <ErrorMessage message={error} onClose={() => setError(null)} />}
+
+      {/* Notification display remains useful */}
+      <div className="relative h-10 mb-4">
+        <AnimatePresence>
+          {notification.show && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="absolute top-0 left-0 right-0 z-40"
+            >
+              <Notification
+                message={notification.message}
+                type={notification.type}
+                show={notification.show}
+                onClose={() =>
+                  setNotification((prev) => ({ ...prev, show: false }))
+                }
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Removed Loading state display */}
+
+      {/* Use a simple div instead of form if no submission */}
+      <div className="space-y-8">
+        {/* Tab Navigation */}
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button" // No longer submitting a form
+                onClick={() => setActiveTab(tab.id)} // Just change local state
+                className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out ${
+                  activeTab === tab.id
+                    ? "border-indigo-500 text-indigo-600 focus:outline-none"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none focus:text-gray-700 focus:border-gray-300"
+                }`}
+                aria-current={activeTab === tab.id ? "page" : undefined}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
         </div>
-      ) : (
-        <form onSubmit={handleSaveSettings}>
-          {/* Tab Navigation */}
-          <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() =>
-                    setState((prev) => ({ ...prev, activeTab: tab.id }))
-                  }
-                  className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
-                    state.activeTab === tab.id
-                      ? "border-indigo-500 text-indigo-600"
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                  }`}
+
+        {/* Tab Content Panels */}
+        <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200 space-y-6 min-h-[300px]">
+          <p className="text-sm text-orange-600 bg-orange-50 p-3 rounded border border-orange-200">
+            Note: Settings changed here are for **local preview only** and will
+            **not be saved** permanently.
+          </p>
+
+          {/* General Settings Tab */}
+          {activeTab === "general" && (
+            <motion.div
+              key="general"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="space-y-6"
+            >
+              <h3 className="text-lg font-medium leading-6 text-gray-900">
+                General Settings
+              </h3>
+              <div>
+                <label
+                  htmlFor="siteName"
+                  className="block text-sm font-medium text-gray-700 mb-1"
                 >
-                  {tab.label}
-                </button>
-              ))}
-            </nav>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow space-y-6">
-            {state.activeTab === "general" && (
-              <div className="space-y-6">
-                <div>
-                  <label
-                    htmlFor="siteName"
-                    className="block text-sm font-medium text-gray-700"
-                  >
-                    Site Name
-                  </label>
-                  <input
-                    type="text"
-                    id="siteName"
-                    name="siteName"
-                    value={state.settings.siteName}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full max-w-lg rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                    disabled={state.saving}
-                  />
-                </div>
-                {/* Add more fields as needed */}
+                  Site Name
+                </label>
+                <input
+                  type="text"
+                  id="siteName"
+                  name="siteName"
+                  value={settings.siteName}
+                  onChange={handleInputChange}
+                  className="mt-1 block w-full max-w-xl rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Displayed in the browser tab and emails.
+                </p>
               </div>
-            )}
-          </div>
+              <div>
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="maintenanceMode"
+                    name="maintenanceMode"
+                    checked={settings.maintenanceMode}
+                    onChange={handleInputChange}
+                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="ml-2 block text-sm text-gray-900">
+                    Enable Maintenance Mode
+                  </span>
+                </label>
+                <p className="mt-1 text-xs text-gray-500">
+                  Puts the site offline for non-admins.
+                </p>
+              </div>
+            </motion.div>
+          )}
 
-          {/* Action Buttons */}
-          <div className="pt-5 mt-6 border-t border-gray-200 flex justify-between">
-            <button
-              type="button"
-              onClick={() =>
-                setState((prev) => ({
-                  ...prev,
-                  settings: JSON.parse(JSON.stringify(prev.initialSettings)),
-                }))
-              }
-              disabled={state.saving || !hasChanges}
-              className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+          {/* Appearance Settings Tab */}
+          {activeTab === "appearance" && (
+            <motion.div
+              key="appearance"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="space-y-6"
             >
-              Discard Changes
-            </button>
-            <button
-              type="submit"
-              disabled={state.saving || !hasChanges}
-              className="inline-flex justify-center py-2 px-6 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              <h3 className="text-lg font-medium leading-6 text-gray-900">
+                Appearance
+              </h3>
+              <div>
+                <label
+                  htmlFor="itemsPerPage"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Items Per Page
+                </label>
+                <input
+                  type="number"
+                  id="itemsPerPage"
+                  name="itemsPerPage"
+                  min="1"
+                  max="100"
+                  value={settings.itemsPerPage}
+                  onChange={handleInputChange}
+                  className="mt-1 block w-24 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Default number of items in lists.
+                </p>
+              </div>
+              <div>
+                <label
+                  htmlFor="themeColor"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Primary Theme Color
+                </label>
+                <input
+                  type="color"
+                  id="themeColor"
+                  name="themeColor"
+                  value={settings.themeColor}
+                  onChange={handleInputChange}
+                  className="mt-1 block h-10 w-16 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-1"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Main accent color (applied locally).
+                </p>
+              </div>
+            </motion.div>
+          )}
+
+          {/* User Management Settings Tab */}
+          {activeTab === "users" && (
+            <motion.div
+              key="users"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="space-y-6"
             >
-              {state.saving ? "Saving..." : "Save Changes"}
-            </button>
-          </div>
-        </form>
-      )}
+              <h3 className="text-lg font-medium leading-6 text-gray-900">
+                User Management
+              </h3>
+              <div>
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="allowPublicSignup"
+                    name="allowPublicSignup"
+                    checked={settings.allowPublicSignup}
+                    onChange={handleInputChange}
+                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="ml-2 block text-sm text-gray-900">
+                    Allow Public Signups
+                  </span>
+                </label>
+                <p className="mt-1 text-xs text-gray-500">
+                  Allow users to register accounts.
+                </p>
+              </div>
+              <div>
+                <label
+                  htmlFor="defaultUserRole"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Default Role for New Users
+                </label>
+                <select
+                  id="defaultUserRole"
+                  name="defaultUserRole"
+                  value={settings.defaultUserRole}
+                  onChange={handleInputChange}
+                  className="mt-1 block w-full max-w-xs rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                >
+                  <option value="user">User</option>
+                  <option value="medical">Medical</option>
+                  <option value="academic">Academic</option>
+                </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  Role assigned upon registration.
+                </p>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Email Settings Tab */}
+          {activeTab === "email" && (
+            <motion.div
+              key="email"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="space-y-6"
+            >
+              <h3 className="text-lg font-medium leading-6 text-gray-900">
+                Email Notifications
+              </h3>
+              <div>
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="emailNotifications"
+                    name="emailNotifications"
+                    checked={settings.emailNotifications}
+                    onChange={handleInputChange}
+                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="ml-2 block text-sm text-gray-900">
+                    Enable Email Notifications
+                  </span>
+                </label>
+                <p className="mt-1 text-xs text-gray-500">
+                  Simulate email preference (no actual emails sent).
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </div>
+
+        {/* Action Buttons Removed */}
+        {/*
+        <div className="pt-5 mt-6 border-t border-gray-200 flex justify-end gap-3">
+           <button type="button" onClick={handleDiscardChanges} disabled={!hasChanges} ... > Discard </button>
+           <button type="submit" disabled={!hasChanges} ... > Save Changes </button>
+        </div>
+        */}
+      </div>
     </div>
   );
 };

@@ -4,12 +4,14 @@ import { Op } from "sequelize";
 import asyncHandler from "express-async-handler";
 
 // Destructure all necessary models used in this controller
+// *** ADD 'Setting' Model if using database approach ***
 const {
   User,
   Publication,
   Project,
   Member,
   Message,
+  Setting,
   sequelize /*, AuditLog */,
 } = db;
 
@@ -34,24 +36,34 @@ async function safeFindAll(model, options = {}) {
     return [];
   }
 }
-const userPublicSelectFields = ["id", "username", "profilePictureUrl"]; // Reusable public fields
+const userPublicSelectFields = ["id", "username", "profilePictureUrl"];
+
+// Default settings structure - used if DB record doesn't exist yet
+const defaultSettings = {
+  siteName: "Research Platform",
+  allowPublicSignup: true,
+  maintenanceMode: false,
+  defaultUserRole: "user",
+  emailNotifications: true,
+  itemsPerPage: 10,
+  themeColor: "#3b82f6",
+};
 
 // --- Dashboard Stats Controller ---
 export const getDashboardStats = asyncHandler(async (req, res) => {
   console.log(`ADMIN API: getDashboardStats invoked by Admin ${req.user.id}`);
   try {
     if (!User || !Publication || !Project) {
-      throw new Error("Required models not available");
+      throw new Error("Models not available");
     }
-    // Ensure counts align with the response structure indices
     const counts = await Promise.all([
-      safeCount(User), // Index 0: Total users
-      safeCount(User, { where: { status: "approved" } }), // Index 1: Approved users
-      safeCount(User, { where: { status: "pending" } }), // Index 2: Pending users
-      safeCount(Publication), // Index 3: Total publications
-      safeCount(Project), // Index 4: Total projects
-      safeCount(Project, { where: { status: "active" } }), // Index 5: Active projects
-      safeCount(User, { where: { role: "admin" } }), // Index 6: Admin users
+      safeCount(User),
+      safeCount(User, { where: { status: "approved" } }),
+      safeCount(User, { where: { status: "pending" } }),
+      safeCount(Publication),
+      safeCount(Project),
+      safeCount(Project, { where: { status: "active" } }),
+      safeCount(User, { where: { role: "admin" } }),
     ]);
     const [recentUsers, recentPublications, recentProjects] = await Promise.all(
       [
@@ -86,7 +98,6 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
           order: [["createdAt", "DESC"]],
           limit: 5,
         }),
-        // Add fetch for recent projects if needed by dashboard
         safeFindAll(Project, {
           attributes: ["id", "title", "status", "createdAt", "ownerId"],
           order: [["createdAt", "DESC"]],
@@ -109,14 +120,12 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
         users: recentUsers,
         publications: recentPublications,
         projects: recentProjects,
-      }, // Include projects
+      },
     };
     res.status(200).json({ success: true, data: responseData });
   } catch (error) {
     console.error("ADMIN API Error in getDashboardStats:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "Failed to load dashboard data" });
+    res.status(500).json({ success: false, message: "Failed dashboard data" });
   }
 });
 
@@ -143,11 +152,11 @@ export const getAdminPublications = asyncHandler(async (req, res) => {
   ];
   if (!allowedSortBy.includes(sortBy)) {
     res.status(400);
-    throw new Error(`Invalid sortBy.`);
+    throw new Error("Invalid sortBy.");
   }
   if (!["asc", "desc"].includes(sortOrder.toLowerCase())) {
     res.status(400);
-    throw new Error(`Invalid sortOrder.`);
+    throw new Error("Invalid sortOrder.");
   }
   if (!Publication || !User) {
     throw new Error("Models not available.");
@@ -193,26 +202,19 @@ export const getAdminPublications = asyncHandler(async (req, res) => {
   }
 });
 
-// --- *** NEW: Admin Get All Projects Controller *** ---
-/**
- * @desc    Admin: Get all projects (paginated, searchable)
- * @route   GET /api/admin/projects
- * @access  Private (Admin Only)
- */
+// --- Admin Projects Controller ---
 export const adminGetAllProjects = asyncHandler(async (req, res) => {
   console.log(`ADMIN API: adminGetAllProjects invoked by Admin ${req.user.id}`);
   try {
-    const { status, search, page = 1, limit = 20 } = req.query; // Default limit for admin view
+    const { status, search, page = 1, limit = 20 } = req.query;
     const where = {};
     if (status) where.status = status;
     if (search) {
       where[Op.or] = [
         { title: { [Op.like]: `%${search}%` } },
         { description: { [Op.like]: `%${search}%` } },
-        // Add search by owner username if needed (requires join)
       ];
     }
-
     const parsedLimit = parseInt(limit, 10);
     const parsedPage = parseInt(page, 10);
     if (
@@ -222,10 +224,9 @@ export const adminGetAllProjects = asyncHandler(async (req, res) => {
       parsedPage <= 0
     ) {
       res.status(400);
-      throw new Error("Invalid pagination parameters.");
+      throw new Error("Invalid pagination.");
     }
     const offset = (parsedPage - 1) * parsedLimit;
-
     const { count, rows: projects } = await Project.findAndCountAll({
       where,
       attributes: [
@@ -235,13 +236,13 @@ export const adminGetAllProjects = asyncHandler(async (req, res) => {
         "ownerId",
         "createdAt",
         "updatedAt",
-      ], // Select specific fields
+      ],
       include: [
         {
           model: User,
           as: "owner",
-          attributes: userPublicSelectFields, // Public owner info
-          required: false, // LEFT JOIN
+          attributes: userPublicSelectFields,
+          required: false,
         },
       ],
       order: [["createdAt", "DESC"]],
@@ -249,17 +250,18 @@ export const adminGetAllProjects = asyncHandler(async (req, res) => {
       offset,
       distinct: true,
     });
-
     console.log(
-      `ADMIN: Found ${count} projects total, returning page ${parsedPage} (${projects.length} items).`
+      `ADMIN: Found ${count} projects total, returning page ${parsedPage} (${projects.length}).`
     );
-    res.status(200).json({
-      success: true,
-      count,
-      totalPages: Math.ceil(count / parsedLimit),
-      currentPage: parsedPage,
-      data: projects, // Send the projects array
-    });
+    res
+      .status(200)
+      .json({
+        success: true,
+        count,
+        totalPages: Math.ceil(count / parsedLimit),
+        currentPage: parsedPage,
+        data: projects,
+      });
   } catch (error) {
     console.error("ADMIN API Error fetching all projects:", error);
     res
@@ -267,15 +269,8 @@ export const adminGetAllProjects = asyncHandler(async (req, res) => {
       .json({ success: false, message: "Server error fetching projects." });
   }
 });
-// --- *** END: Admin Get All Projects Controller *** ---
 
-// --- Admin Message Management Controllers ---
-
-/**
- * @desc    Admin: Get all messages for a specific project chat (paginated)
- * @route   GET /api/admin/messages/project/:projectId
- * @access  Private (Admin Only)
- */
+// --- Admin Message Controllers ---
 export const adminGetProjectMessages = asyncHandler(async (req, res) => {
   const projectIdParam = req.params.projectId;
   const adminUserId = req.user.id;
@@ -285,9 +280,8 @@ export const adminGetProjectMessages = asyncHandler(async (req, res) => {
   const projectId = parseInt(projectIdParam, 10);
   if (isNaN(projectId) || projectId <= 0) {
     res.status(400);
-    throw new Error("Invalid Project ID format.");
+    throw new Error("Invalid Project ID.");
   }
-
   try {
     const project = await Project.findByPk(projectId, {
       attributes: ["id", "title"],
@@ -296,7 +290,6 @@ export const adminGetProjectMessages = asyncHandler(async (req, res) => {
       res.status(404);
       throw new Error("Project not found.");
     }
-
     const { page = 1, limit = 50 } = req.query;
     const parsedLimit = parseInt(limit, 10);
     const parsedPage = parseInt(page, 10);
@@ -310,44 +303,37 @@ export const adminGetProjectMessages = asyncHandler(async (req, res) => {
       throw new Error("Invalid pagination.");
     }
     const offset = (parsedPage - 1) * parsedLimit;
-
     const { count, rows: messages } = await Message.findAndCountAll({
       where: { projectId: projectId },
       include: [
         { model: User, as: "sender", attributes: userPublicSelectFields },
       ],
-      order: [["createdAt", "DESC"]], // Newest first for admin typically
+      order: [["createdAt", "DESC"]],
       limit: parsedLimit,
       offset,
       distinct: true,
     });
-
     console.log(
       `ADMIN: Fetched ${messages.length}/${count} messages page ${parsedPage} for project ${projectId}.`
     );
-    res.status(200).json({
-      success: true,
-      projectTitle: project.title,
-      count,
-      totalPages: Math.ceil(count / parsedLimit),
-      currentPage: parsedPage,
-      messages: messages,
-    });
+    res
+      .status(200)
+      .json({
+        success: true,
+        projectTitle: project.title,
+        count,
+        totalPages: Math.ceil(count / parsedLimit),
+        currentPage: parsedPage,
+        messages: messages,
+      });
   } catch (error) {
-    console.error(`ADMIN API Error in adminGetProjectMessages:`, error);
-    const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
-    res.status(statusCode).json({
-      success: false,
-      message: error.message || "Server error fetching messages.",
-    });
+    console.error(`ADMIN API Error adminGetProjectMessages:`, error);
+    const sc = res.statusCode >= 400 ? res.statusCode : 500;
+    res
+      .status(sc)
+      .json({ success: false, message: error.message || "Server error." });
   }
 });
-
-/**
- * @desc    Admin: Delete a specific message by its ID
- * @route   DELETE /api/admin/messages/:messageId
- * @access  Private (Admin Only)
- */
 export const adminDeleteMessage = asyncHandler(async (req, res) => {
   const messageIdParam = req.params.messageId;
   const adminUserId = req.user.id;
@@ -357,9 +343,8 @@ export const adminDeleteMessage = asyncHandler(async (req, res) => {
   const messageId = parseInt(messageIdParam, 10);
   if (isNaN(messageId) || messageId <= 0) {
     res.status(400);
-    throw new Error("Invalid message ID format.");
+    throw new Error("Invalid message ID.");
   }
-
   try {
     const message = await Message.findByPk(messageId, {
       attributes: ["id", "projectId", "senderId", "content"],
@@ -369,40 +354,201 @@ export const adminDeleteMessage = asyncHandler(async (req, res) => {
       throw new Error("Message not found.");
     }
     const projectId = message.projectId;
-
-    // Optional: Audit Logging
     console.log(
-      `AUDIT LOG Placeholder: Admin ${adminUserId} deleting Message ${messageId} (Project ${projectId}, Sender ${message.senderId}).`
+      `AUDIT Placeholder: Admin ${adminUserId} deleting Msg ${messageId} (Project ${projectId})`
     );
     // if (AuditLog) { await AuditLog.create({ ... }); }
-
     await message.destroy();
-    console.log(
-      `Message ${messageId} deleted successfully by Admin ${adminUserId}.`
-    );
-
-    // Emit real-time update
+    console.log(`Message ${messageId} deleted by Admin ${adminUserId}.`);
     const io = req.app.get("socketio");
     if (io) {
       const room = `project-${projectId}`;
-      const deletePayload = { messageId: messageId, projectId: projectId };
-      console.log(`Emitting 'messageDeleted' to room ${room}:`, deletePayload);
-      io.to(room).emit("messageDeleted", deletePayload);
+      const payload = { messageId: messageId, projectId: projectId };
+      console.log(`Emitting 'messageDeleted' to room ${room}:`, payload);
+      io.to(room).emit("messageDeleted", payload);
     } else {
-      console.warn("Socket.IO instance not found, cannot emit delete.");
+      console.warn("Socket.IO not found, cannot emit delete.");
     }
-
-    res
-      .status(200)
-      .json({ success: true, message: "Message deleted successfully." });
+    res.status(200).json({ success: true, message: "Message deleted." });
   } catch (error) {
-    console.error(`ADMIN API Error deleting Message ${messageIdParam}:`, error);
-    const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
-    res.status(statusCode).json({
-      success: false,
-      message: error.message || "Server error deleting message.",
-    });
+    console.error(`ADMIN API Error deleting Msg ${messageIdParam}:`, error);
+    const sc = res.statusCode >= 400 ? res.statusCode : 500;
+    res
+      .status(sc)
+      .json({ success: false, message: error.message || "Server error." });
   }
 });
+
+// --- *** NEW: Admin Settings Controllers *** ---
+
+/**
+ * @desc    Admin: Get current application settings
+ * @route   GET /api/admin/settings
+ * @access  Private (Admin Only)
+ */
+export const getAdminSettings = asyncHandler(async (req, res) => {
+  const adminUserId = req.user.id;
+  console.log(`ADMIN API: getAdminSettings invoked by Admin ${adminUserId}`);
+
+  // Ensure the Setting model is loaded
+  if (!Setting) {
+    console.error(
+      "ADMIN Settings Error: Setting model not found. Ensure it's defined and loaded via db index."
+    );
+    throw new Error("Server configuration error: Settings model unavailable.");
+  }
+
+  try {
+    // Attempt to find the settings record (assuming only one row, e.g., with id=1 or a specific key)
+    // Adjust 'where' clause if you have multiple setting groups
+    let settingsRecord = await Setting.findOne({ where: { id: 1 } }); // Example: Find by primary key 1
+
+    let settingsData;
+
+    if (!settingsRecord) {
+      console.warn(
+        "ADMIN Settings: No settings record found in DB, creating/returning defaults."
+      );
+      // Option 1: Create default settings if they don't exist
+      // settingsRecord = await Setting.create({ ...defaultSettings, id: 1 }); // Ensure ID is set if using findByPk(1) later
+      // settingsData = settingsRecord.toJSON();
+
+      // Option 2: Just return defaults without creating in DB yet
+      settingsData = { ...defaultSettings }; // Return a copy
+    } else {
+      settingsData = settingsRecord.toJSON(); // Convert Sequelize instance to plain object
+    }
+
+    // Ensure all default keys are present in the response, even if null in DB
+    const dataToSend = { ...defaultSettings, ...settingsData };
+
+    console.log("ADMIN: Returning current settings.");
+    // Return the combined settings data
+    res.status(200).json(dataToSend); // Send the settings object directly
+  } catch (error) {
+    console.error(`ADMIN API Error in getAdminSettings:`, error);
+    res
+      .status(500)
+      .json({
+        success: false,
+        message: error.message || "Server error fetching settings.",
+      });
+  }
+});
+
+/**
+ * @desc    Admin: Update application settings
+ * @route   PUT /api/admin/settings
+ * @access  Private (Admin Only)
+ */
+export const updateAdminSettings = asyncHandler(async (req, res) => {
+  const adminUserId = req.user.id;
+  const updatedSettings = req.body; // Get settings fields to update from request body
+
+  console.log(
+    `ADMIN API: updateAdminSettings invoked by Admin ${adminUserId} with data:`,
+    updatedSettings
+  );
+
+  if (!Setting) {
+    throw new Error("Server configuration error: Settings model unavailable.");
+  }
+
+  // --- Input Validation (Example - Expand as needed) ---
+  const validatedUpdates = {};
+  const allowedKeys = Object.keys(defaultSettings); // Use keys from default object
+
+  for (const key of allowedKeys) {
+    if (updatedSettings.hasOwnProperty(key)) {
+      // Check if key was sent in request
+      const value = updatedSettings[key];
+      // Basic type checks based on default settings structure
+      if (
+        key === "itemsPerPage" &&
+        (typeof value !== "number" || !Number.isInteger(value) || value < 1)
+      ) {
+        res.status(400);
+        throw new Error(
+          `Invalid value for ${key}. Must be a positive integer.`
+        );
+      }
+      if (
+        typeof defaultSettings[key] === "boolean" &&
+        typeof value !== "boolean"
+      ) {
+        res.status(400);
+        throw new Error(`Invalid value for ${key}. Must be true or false.`);
+      }
+      if (
+        typeof defaultSettings[key] === "string" &&
+        typeof value !== "string"
+      ) {
+        res.status(400);
+        throw new Error(`Invalid value for ${key}. Must be a string.`);
+      }
+      // Add more specific validation (e.g., themeColor format, defaultUserRole options)
+      validatedUpdates[key] = value;
+    }
+  }
+
+  if (Object.keys(validatedUpdates).length === 0) {
+    return res
+      .status(400)
+      .json({
+        success: false,
+        message: "No valid settings fields provided for update.",
+      });
+  }
+  // --- End Validation ---
+
+  try {
+    // Find or Create the settings record (using findOrCreate is robust)
+    const [settingsRecord, created] = await Setting.findOrCreate({
+      where: { id: 1 }, // Assuming single settings row with id 1
+      defaults: { ...defaultSettings, ...validatedUpdates, id: 1 }, // Provide defaults if creating
+    });
+
+    if (!created) {
+      // If record existed, update it with the validated fields
+      await settingsRecord.update(validatedUpdates);
+    }
+
+    // --- Optional: Audit Logging ---
+    console.log(
+      `AUDIT LOG Placeholder: Admin ${adminUserId} updated settings:`,
+      validatedUpdates
+    );
+    // if(AuditLog) { await AuditLog.create({ adminUserId, actionType: 'UPDATE_SETTINGS', details: validatedUpdates }); }
+
+    console.log("ADMIN: Settings updated successfully in DB.");
+
+    // Fetch the latest settings to return the complete, updated object
+    const latestSettings = await Setting.findByPk(1); // Fetch the updated record
+    const dataToSend = latestSettings
+      ? { ...defaultSettings, ...latestSettings.toJSON() }
+      : { ...defaultSettings };
+
+    res.status(200).json({
+      success: true,
+      message: "Settings updated successfully.",
+      data: dataToSend, // Return the full updated settings object
+    });
+  } catch (error) {
+    console.error(`ADMIN API Error in updateAdminSettings:`, error);
+    if (error.name === "SequelizeValidationError") {
+      const messages = error.errors.map((err) => err.message).join(". ");
+      res.status(400).json({ success: false, message: messages });
+    } else {
+      const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
+      res
+        .status(statusCode)
+        .json({
+          success: false,
+          message: error.message || "Server error updating settings.",
+        });
+    }
+  }
+});
+// --- *** END: Admin Settings Controllers *** ---
 
 // --- Add other admin controller functions below ---

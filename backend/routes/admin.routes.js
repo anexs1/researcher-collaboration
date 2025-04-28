@@ -16,17 +16,17 @@ import {
 import {
   getDashboardStats,
   getAdminPublications,
-  adminGetAllProjects, // <<< IMPORTED Admin Project List controller
+  adminGetAllProjects, // <<< IMPORTED
   adminGetProjectMessages,
   adminDeleteMessage,
-  // adminDeleteProject, // Import if implemented
-  // adminUpdatePublicationStatus, // Import if implemented
-  // adminDeletePublication // Import if implemented
-} from "../controllers/adminController.js";
+  getAdminSettings, // <<< IMPORTED
+  updateAdminSettings, // <<< IMPORTED
+  // ... other admin controllers
+} from "../controllers/adminController.js"; // <<< Ensure path is correct
 
 const router = express.Router();
 
-// --- Apply global admin protection ---
+// Apply global admin protection
 router.use(protect);
 router.use(adminOnly);
 
@@ -34,26 +34,29 @@ router.use(adminOnly);
 router.get("/dashboard/stats", getDashboardStats); // GET /api/admin/dashboard/stats
 
 // --- User Management Routes ---
-router.get("/users", adminGetAllUsers); // GET /api/admin/users
-router.get("/pending-users", adminGetPendingUsers); // GET /api/admin/pending-users
-router.get("/users/:id", adminGetUserById); // GET /api/admin/users/:id
-router.patch("/users/:id/status", adminUpdateUserStatus); // PATCH /api/admin/users/:id/status
-router.patch("/users/:id/role", adminUpdateUserRole); // PATCH /api/admin/users/:id/role
-router.delete("/users/:id", adminDeleteUser); // DELETE /api/admin/users/:id
+router.get("/users", adminGetAllUsers);
+router.get("/pending-users", adminGetPendingUsers);
+router.get("/users/:id", adminGetUserById);
+router.patch("/users/:id/status", adminUpdateUserStatus);
+router.patch("/users/:id/role", adminUpdateUserRole);
+router.delete("/users/:id", adminDeleteUser);
 
 // --- Publication Management Routes ---
-router.get("/publications", getAdminPublications); // GET /api/admin/publications
+router.get("/publications", getAdminPublications);
 // Example: router.patch("/publications/:id/status", adminUpdatePublicationStatus);
-// Example: router.delete("/publications/:id", adminDeletePublication);
 
 // --- Project Management Routes ---
 router.get("/projects", adminGetAllProjects); // GET /api/admin/projects
 // Example: router.delete("/projects/:id", adminDeleteProject);
 
 // --- Message Management Routes ---
-router.get("/messages/project/:projectId", adminGetProjectMessages); // GET /api/admin/messages/project/:projectId
-router.delete("/messages/:messageId", adminDeleteMessage); // DELETE /api/admin/messages/:messageId
+router.get("/messages/project/:projectId", adminGetProjectMessages);
+router.delete("/messages/:messageId", adminDeleteMessage);
 
-// --- Add other admin routes (Settings, Reports, etc.) ---
+// --- Settings Routes ---
+router.get("/settings", getAdminSettings); // GET /api/admin/settings
+router.put("/settings", updateAdminSettings); // PUT /api/admin/settings
+
+// Add other admin routes (Reports, etc.)
 
 export default router;
