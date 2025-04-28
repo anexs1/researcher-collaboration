@@ -8,31 +8,46 @@ import {
   FaProjectDiagram,
   FaNewspaper,
   FaUserClock,
-  FaClipboardList, // Added for Projects
+  FaClipboardList,
+  FaCog, // Added settings icon
 } from "react-icons/fa";
 import { ChartBarIcon } from "@heroicons/react/24/outline";
-// --- *** ADDED IMPORT for framer-motion *** ---
 import { motion, AnimatePresence } from "framer-motion";
-// -------------------------------------------
 
-// Adjust import paths as needed
-import StatCard from "../../Component/Admin/StatCard";
-import AdminPageHeader from "../../Component/Admin/AdminPageHeader";
-import ErrorMessage from "../../Component/Common/ErrorMessage";
-import LoadingSkeleton from "../../Component/Common/LoadingSkeleton";
-import Notification from "../../Component/Common/Notification"; // Assuming used for feedback
+// src/Page/Admin/AdminDashboardPage.jsx
 
+// --- Adjust imports based on the image ---
+import StatCard from "./StatCard"; // It's in the same folder
+import AdminPageHeader from "../../Component/Admin/AdminPageHeader"; // Verify THIS path - is it in Component/Admin?
+import ErrorMessage from "../../Component/Common/ErrorMessage"; // Verify path
+import LoadingSpinner from "../../Component/Common/LoadingSpinner"; // Verify path
+import Notification from "../../Component/Common/Notification"; // Verify path
+import RecentActivityCard from "./RecentActivityCard"; // <<< CORRECTED PATH: Use ./
+import LoadingSkeleton from "../../Component/Common/LoadingSkeleton"; // Verify path
+// --- End Adjustments ---
+
+// ... other imports (React, axios, icons, framer-motion) ...
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+
+// Animation variants
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1, delayChildren: 0.2 },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 100 } },
+};
 
 const AdminDashboardPage = () => {
   // --- State ---
   const [dashboardData, setDashboardData] = useState({
-    counts: {
-      users: { total: 0, active: 0, pending: 0, admins: 0 },
-      publications: { total: 0 },
-      projects: { total: 0, active: 0 },
-    },
+    counts: { users: {}, publications: {}, projects: {} }, // Init empty for safety
     recentActivities: { users: [], publications: [], projects: [] },
   });
   const [loading, setLoading] = useState(true);
@@ -45,8 +60,8 @@ const AdminDashboardPage = () => {
   const navigate = useNavigate();
 
   // --- Functions ---
-
   const showNotification = (message, type = "success") => {
+    /* ... show notification logic ... */
     setNotification({ message, type, show: true });
     setTimeout(
       () => setNotification((prev) => ({ ...prev, show: false })),
@@ -55,12 +70,13 @@ const AdminDashboardPage = () => {
   };
 
   const fetchDashboardData = useCallback(async () => {
+    /* ... data fetching logic (no changes needed from previous version) ... */
     setLoading(true);
     setError(null);
     console.log("Fetching admin dashboard data...");
     try {
       const token = localStorage.getItem("authToken");
-      if (!token) throw new Error("Authentication required");
+      if (!token) throw new Error("Auth required");
       const response = await axios.get(
         `${API_BASE_URL}/api/admin/dashboard/stats`,
         { headers: { Authorization: `Bearer ${token}` }, timeout: 10000 }
@@ -68,7 +84,7 @@ const AdminDashboardPage = () => {
       if (response.data?.success && response.data?.data) {
         console.log("Dashboard data received:", response.data.data);
         setDashboardData({
-          // Use nullish coalescing for safety
+          // Use nullish coalescing for safer defaults
           counts: {
             users: response.data.data.counts?.users ?? {
               total: 0,
@@ -116,227 +132,242 @@ const AdminDashboardPage = () => {
 
   // --- Render Helper Functions ---
 
+  // Skeleton remains mostly the same, but maybe use it more granularly
   const renderLoadingState = () => (
-    /* ... loading skeleton JSX ... */
-    <div className="space-y-6 animate-pulse">
-      {" "}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-        {" "}
+    <div className="space-y-8">
+      {/* Stat Card Skeletons */}
+      <motion.div
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
         {[...Array(8)].map((_, i) => (
-          <LoadingSkeleton key={`stat-skel-${i}`} height="h-32" />
-        ))}{" "}
-      </div>{" "}
-      <div className="mt-8 space-y-4">
-        {" "}
-        <LoadingSkeleton height="h-8" width="w-1/3" />{" "}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-          {" "}
-          <LoadingSkeleton key="recent-u" height="h-48" />{" "}
-          <LoadingSkeleton key="recent-p" height="h-48" />{" "}
-          <LoadingSkeleton key="recent-pr" height="h-48" />{" "}
-        </div>{" "}
-      </div>{" "}
-      <div className="mt-8 space-y-4">
-        {" "}
-        <LoadingSkeleton height="h-8" width="w-1/4" />{" "}
-        <LoadingSkeleton height="h-24" />{" "}
-      </div>{" "}
+          <motion.div key={`stat-skel-${i}`} variants={itemVariants}>
+            <LoadingSkeleton height="h-36" rounded="rounded-xl" />
+          </motion.div>
+        ))}
+      </motion.div>
+      {/* Recent Activities Skeletons */}
+      <motion.div className="mt-10" variants={itemVariants}>
+        <LoadingSkeleton height="h-8" width="w-1/4" className="mb-4" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <LoadingSkeleton
+            key="recent-u-skel"
+            height="h-48"
+            rounded="rounded-xl"
+          />
+          <LoadingSkeleton
+            key="recent-p-skel"
+            height="h-48"
+            rounded="rounded-xl"
+          />
+          <LoadingSkeleton
+            key="recent-pr-skel"
+            height="h-48"
+            rounded="rounded-xl"
+          />
+        </div>
+      </motion.div>
+      {/* Quick Actions Skeleton */}
+      <motion.div className="mt-10" variants={itemVariants}>
+        <LoadingSkeleton height="h-8" width="w-1/4" className="mb-4" />
+        <LoadingSkeleton height="h-24" rounded="rounded-xl" />
+      </motion.div>
     </div>
   );
 
+  // Stat Cards - Use data safely with nullish coalescing
   const renderStatCards = () => (
-    /* ... stat card JSX ... */
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-      {" "}
-      <StatCard
-        title="Total Users"
-        value={dashboardData.counts.users.total}
-        icon={<FaUsers className="text-indigo-500" />}
-        linkTo="/admin/users"
-        linkText="Manage Users"
-      />{" "}
-      <StatCard
-        title="Active Users"
-        value={dashboardData.counts.users.active}
-        icon={<FaUserCheck className="text-green-500" />}
-      />{" "}
-      <StatCard
-        title="Pending Users"
-        value={dashboardData.counts.users.pending}
-        icon={<FaUserClock className="text-amber-500" />}
-        linkTo="/admin/pending-users"
-        linkText="Review Users"
-      />{" "}
-      <StatCard
-        title="Admin Users"
-        value={dashboardData.counts.users.admins}
-        icon={<FaUsers className="text-red-500" />}
-      />{" "}
-      <StatCard
-        title="Total Projects"
-        value={dashboardData.counts.projects.total}
-        icon={<FaProjectDiagram className="text-purple-500" />}
-        linkTo="/admin/projects"
-        linkText="Manage Projects"
-      />{" "}
-      <StatCard
-        title="Active Projects"
-        value={dashboardData.counts.projects.active}
-        icon={<FaClipboardList className="text-teal-500" />}
-      />{" "}
-      <StatCard
-        title="Total Publications"
-        value={dashboardData.counts.publications.total}
-        icon={<FaNewspaper className="text-sky-500" />}
-        linkTo="/admin/publications"
-        linkText="Manage Pubs"
-      />{" "}
-    </div>
+    <motion.div
+      className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 sm:gap-6"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+    >
+      <motion.div variants={itemVariants}>
+        <StatCard
+          title="Total Users"
+          value={dashboardData.counts?.users?.total ?? 0}
+          icon={<FaUsers className="text-indigo-500" />}
+          linkTo="/admin/users"
+          linkText="Manage Users"
+        />
+      </motion.div>
+      <motion.div variants={itemVariants}>
+        <StatCard
+          title="Active Users"
+          value={dashboardData.counts?.users?.active ?? 0}
+          icon={<FaUserCheck className="text-green-500" />}
+        />
+      </motion.div>
+      <motion.div variants={itemVariants}>
+        <StatCard
+          title="Pending Approvals"
+          value={dashboardData.counts?.users?.pending ?? 0}
+          icon={<FaUserClock className="text-amber-500" />}
+          linkTo="/admin/pending-users"
+          linkText="Review Users"
+        />
+      </motion.div>
+      <motion.div variants={itemVariants}>
+        <StatCard
+          title="Admin Accounts"
+          value={dashboardData.counts?.users?.admins ?? 0}
+          icon={<FaUsers className="text-red-500" />}
+        />
+      </motion.div>
+      <motion.div variants={itemVariants}>
+        <StatCard
+          title="Total Projects"
+          value={dashboardData.counts?.projects?.total ?? 0}
+          icon={<FaProjectDiagram className="text-purple-500" />}
+          linkTo="/admin/projects"
+          linkText="Manage Projects"
+        />
+      </motion.div>
+      <motion.div variants={itemVariants}>
+        <StatCard
+          title="Active Projects"
+          value={dashboardData.counts?.projects?.active ?? 0}
+          icon={<FaClipboardList className="text-teal-500" />}
+        />
+      </motion.div>
+      <motion.div variants={itemVariants}>
+        <StatCard
+          title="Total Publications"
+          value={dashboardData.counts?.publications?.total ?? 0}
+          icon={<FaNewspaper className="text-sky-500" />}
+          linkTo="/admin/publications"
+          linkText="Manage Pubs"
+        />
+      </motion.div>
+      {/* Add placeholder or other relevant card */}
+      <motion.div variants={itemVariants}>
+        <StatCard
+          title="Settings"
+          value={"Configure"}
+          icon={<FaCog className="text-gray-500" />}
+          linkTo="/admin/settings"
+          linkText="Go to Settings"
+        />
+      </motion.div>
+    </motion.div>
   );
 
-  const formatDate = (dateString) => {
-    /* ... date formatting helper ... */
-    if (!dateString) return "-";
-    try {
-      return new Date(dateString).toLocaleDateString();
-    } catch {
-      return "-";
-    }
-  };
-
+  // Use the new RecentActivityCard component
   const renderRecentActivities = () => (
-    /* ... recent activities JSX ... */
-    <div className="mt-8">
-      {" "}
-      <h2 className="text-2xl font-semibold text-gray-800 mb-4">
+    <motion.div
+      className="mt-10"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+    >
+      <h2 className="text-2xl font-semibold text-gray-800 mb-5">
         Recent Activities
-      </h2>{" "}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-        {" "}
-        {/* Users */}{" "}
-        <div className="bg-white p-5 rounded-lg shadow border border-gray-200">
-          {" "}
-          <h3 className="font-semibold text-lg text-gray-700 mb-3 border-b pb-2">
-            New Users
-          </h3>{" "}
-          <div className="max-h-60 overflow-y-auto custom-scrollbar pr-2">
-            {" "}
-            {dashboardData.recentActivities.users?.length > 0 ? (
-              <ul className="space-y-2.5 text-sm">
-                {dashboardData.recentActivities.users.map((user) => (
-                  <li key={`user-${user.id}`} className="...">
-                    <Link to={`/admin/users/${user.id}`} className="...">
-                      {user.username}
-                    </Link>
-                    <span className="...">{formatDate(user.createdAt)}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>No recent users.</p>
-            )}{" "}
-          </div>{" "}
-        </div>{" "}
-        {/* Publications */}{" "}
-        <div className="bg-white p-5 rounded-lg shadow border border-gray-200">
-          {" "}
-          <h3 className="font-semibold text-lg text-gray-700 mb-3 border-b pb-2">
-            Recent Publications
-          </h3>{" "}
-          <div className="max-h-60 overflow-y-auto custom-scrollbar pr-2">
-            {" "}
-            {dashboardData.recentActivities.publications?.length > 0 ? (
-              <ul className="space-y-2.5 text-sm">
-                {dashboardData.recentActivities.publications.map((pub) => (
-                  <li key={`pub-${pub.id}`} className="...">
-                    <Link to={`/admin/publications/${pub.id}`} className="...">
-                      {pub.title}
-                    </Link>
-                    <span className="...">{formatDate(pub.createdAt)}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>No recent publications.</p>
-            )}{" "}
-          </div>{" "}
-        </div>{" "}
-        {/* Projects */}{" "}
-        <div className="bg-white p-5 rounded-lg shadow border border-gray-200">
-          {" "}
-          <h3 className="font-semibold text-lg text-gray-700 mb-3 border-b pb-2">
-            Recent Projects
-          </h3>{" "}
-          <div className="max-h-60 overflow-y-auto custom-scrollbar pr-2">
-            {" "}
-            {dashboardData.recentActivities.projects?.length > 0 ? (
-              <ul className="space-y-2.5 text-sm">
-                {dashboardData.recentActivities.projects.map((proj) => (
-                  <li key={`proj-${proj.id}`} className="...">
-                    <Link to={`/admin/projects/${proj.id}`} className="...">
-                      {proj.title}
-                    </Link>
-                    <span className="...">{formatDate(proj.createdAt)}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>No recent projects.</p>
-            )}{" "}
-          </div>{" "}
-        </div>{" "}
-      </div>{" "}
-    </div>
+      </h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <motion.div variants={itemVariants}>
+          <RecentActivityCard
+            title="New Users"
+            items={dashboardData.recentActivities?.users ?? []}
+            linkPrefix="/admin/users"
+            keyPrefix="user"
+            isLoading={loading} // Pass loading state if needed per card
+          />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <RecentActivityCard
+            title="Recent Publications"
+            items={dashboardData.recentActivities?.publications ?? []}
+            linkPrefix="/admin/publications"
+            keyPrefix="pub"
+            isLoading={loading}
+          />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <RecentActivityCard
+            title="Recent Projects"
+            items={dashboardData.recentActivities?.projects ?? []}
+            linkPrefix="/admin/projects" // Assuming this is the detail route
+            keyPrefix="proj"
+            isLoading={loading}
+          />
+        </motion.div>
+      </div>
+    </motion.div>
   );
 
+  // Quick actions section - enhanced styling
   const renderQuickActions = () => (
-    /* ... quick actions JSX ... */
-    <div className="bg-white p-6 rounded-lg shadow border border-gray-200 mt-8">
-      {" "}
-      <h2 className="text-xl font-semibold mb-4 pb-2 border-b border-gray-200 text-gray-700">
+    <motion.div
+      className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 mt-10"
+      variants={itemVariants}
+    >
+      <h2 className="text-xl font-semibold mb-5 pb-3 border-b border-gray-200 text-gray-800">
+        Quick Actions
+      </h2>
+      <div className="flex flex-wrap gap-4">
         {" "}
-        Quick Actions{" "}
-      </h2>{" "}
-      <div className="flex flex-wrap gap-3">
-        {" "}
-        <Link to="/admin/users" className="inline-flex ...">
+        {/* Increased gap */}
+        {/* Example Button Style */}
+        <Link
+          to="/admin/users"
+          className="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out"
+        >
           {" "}
-          <FaUsers /> Manage Users{" "}
-        </Link>{" "}
-        <Link to="/admin/pending-users" className="inline-flex ...">
+          <FaUsers className="-ml-1 mr-2 h-5 w-5" /> Manage Users{" "}
+        </Link>
+        <Link
+          to="/admin/pending-users"
+          className="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition duration-150 ease-in-out"
+        >
           {" "}
-          <FaUserClock /> Review Pending{" "}
-        </Link>{" "}
-        <Link to="/admin/projects" className="inline-flex ...">
+          <FaUserClock className="-ml-1 mr-2 h-5 w-5" /> Review Pending{" "}
+        </Link>
+        <Link
+          to="/admin/projects"
+          className="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition duration-150 ease-in-out"
+        >
           {" "}
-          <FaProjectDiagram /> Manage Projects{" "}
-        </Link>{" "}
-        <Link to="/admin/publications" className="inline-flex ...">
+          <FaProjectDiagram className="-ml-1 mr-2 h-5 w-5" /> Manage Projects{" "}
+        </Link>
+        <Link
+          to="/admin/publications"
+          className="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-sky-600 hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 transition duration-150 ease-in-out"
+        >
           {" "}
-          <FaNewspaper /> Publications{" "}
-        </Link>{" "}
-        <Link to="/admin/reports" className="inline-flex ...">
+          <FaNewspaper className="-ml-1 mr-2 h-5 w-5" /> Publications{" "}
+        </Link>
+        {/* <Link to="/admin/reports" className="inline-flex items-center px-5 py-2.5 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out"> <ChartBarIcon className="-ml-1 mr-2 h-5 w-5" /> View Reports </Link> */}
+        <Link
+          to="/admin/settings"
+          className="inline-flex items-center px-5 py-2.5 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out"
+        >
           {" "}
-          <ChartBarIcon /> View Reports{" "}
-        </Link>{" "}
-      </div>{" "}
-    </div>
+          <FaCog className="-ml-1 mr-2 h-5 w-5" /> System Settings{" "}
+        </Link>
+      </div>
+    </motion.div>
   );
 
   // --- Main Render ---
   return (
-    <div className="container mx-auto px-4 py-6 space-y-6">
-      <AdminPageHeader title="Dashboard Overview" />
-      {/* Position Notification */}
-      <div className="relative h-12 mb-4">
-        {/* --- USE AnimatePresence HERE --- */}
+    // Added container for better padding control
+    <div className="container mx-auto px-4 py-8 sm:px-6 lg:px-8 space-y-8">
+      <AdminPageHeader
+        title="Dashboard Overview"
+        subtitle="System statistics and recent activity"
+      />
+      {/* Position Notification Fixed or Relative */}
+      {/* Using fixed positioning for global notifications often works well */}
+      <div className="fixed top-20 right-6 z-50 w-full max-w-sm">
         <AnimatePresence>
           {notification.show && (
             <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="absolute top-0 left-0 right-0 z-40" // Positioned within relative parent
+              initial={{ opacity: 0, x: 50 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 50 }}
             >
               <Notification
                 message={notification.message}
@@ -349,26 +380,35 @@ const AdminDashboardPage = () => {
             </motion.div>
           )}
         </AnimatePresence>
-        {/* ------------------------------ */}
       </div>
-
+      {/* Display Error Message if fetch failed */}
       {error && !loading && (
-        <ErrorMessage
-          message={error}
-          onClose={() => setError(null)}
-          isDismissible={true}
-        />
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+          <ErrorMessage
+            message={error}
+            onClose={() => setError(null)}
+            isDismissible={true}
+          />
+        </motion.div>
       )}
-
+      {/* Display Loading Skeleton or Content */}
       {loading ? (
         renderLoadingState()
-      ) : !error ? (
-        <div className="space-y-8">
+      ) : !error ? ( // Render content only if no error AND not loading
+        <motion.div
+          className="space-y-10"
+          initial="hidden"
+          animate="visible"
+          variants={containerVariants}
+        >
+          {" "}
+          {/* Added spacing */}
           {renderStatCards()}
           {renderRecentActivities()}
           {renderQuickActions()}
-        </div>
-      ) : null}
+        </motion.div>
+      ) : null}{" "}
+      {/* Don't render content sections if there was a fetch error */}
     </div>
   );
 };
