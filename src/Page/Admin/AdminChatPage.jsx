@@ -1,432 +1,715 @@
-// src/Page/Admin/AdminChatPage.jsx
-
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import axios from "axios"; // Using Axios
+// src/Page/Admin/AdminChatPage.jsx (or AdminProjectChatViewer.jsx)
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { Link, useNavigate } from "react-router-dom"; // Added Link
+import axios from "axios";
+import { io } from "socket.io-client";
 import {
-  MagnifyingGlassIcon,
-  PaperAirplaneIcon,
-} from "@heroicons/react/24/solid";
-import LoadingSpinner from "../../Component/Common/LoadingSpinner"; // Verify path
-import ErrorMessage from "../../Component/Common/ErrorMessage"; // Verify path
+  FaSearch,
+  FaSpinner,
+  FaTrash,
+  FaProjectDiagram,
+  FaComments,
+  FaCheck,
+  FaTimes,
+  FaUserCircle,
+  FaCalendarAlt,
+  FaWifi,
+  FaExclamationCircle,
+  FaLock,
+  FaUsers,
+} from "react-icons/fa";
+import { AnimatePresence, motion } from "framer-motion";
+import { format, isToday, isYesterday, parseISO } from "date-fns";
 
-// Consistent API Base URL - Make sure this is correctly configured (e.g., via .env file)
+// Adjust import paths as needed
+import LoadingSpinner from "../../Component/Common/LoadingSpinner";
+import ErrorMessage from "../../Component/Common/ErrorMessage";
+import AdminPageHeader from "../../Component/Admin/AdminPageHeader";
+import MemberListModal from "../../Component/chat/MemberListModal";
+
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const SOCKET_TIMEOUT = 15000;
 
-// Helper to format timestamps
-const formatTimestamp = (timestamp) => {
-  if (!timestamp) return "";
+// Helpers
+const getRoomName = (projectId) => (projectId ? `project-${projectId}` : null);
+const formatMessageTime = (isoString) => {
+  if (!isoString) return "";
   try {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return format(parseISO(isoString), "p");
   } catch (e) {
-    console.warn("Invalid timestamp for formatting:", timestamp);
     return "";
   }
 };
+const formatDateSeparator = (isoString) => {
+  if (!isoString) return null;
+  try {
+    const d = parseISO(isoString);
+    if (isToday(d)) return "Today";
+    if (isYesterday(d)) return "Yesterday";
+    return format(d, "MMMM d, yyyy");
+  } catch (e) {
+    return null;
+  }
+};
 
-const AdminChatPage = () => {
+// --- Component Renamed ---
+function AdminProjectChatViewer({ currentUser }) {
+  const navigate = useNavigate(); // Keep if needed
+
   // --- State ---
-  const [allUsers, setAllUsers] = useState([]); // All fetched approved users the admin can chat with
-  const [filteredUsers, setFilteredUsers] = useState([]); // Users displayed after search
-  const [searchTerm, setSearchTerm] = useState(""); // Search input value
-
-  const [selectedUser, setSelectedUser] = useState(null); // Full object of the selected user for chat
-  const [messages, setMessages] = useState([]); // Messages for the selected chat
-  const [newMessage, setNewMessage] = useState(""); // Input field state
-
-  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
+  const [projects, setProjects] = useState([]);
+  const [filteredProjects, setFilteredProjects] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedProject, setSelectedProject] = useState(null); // Stores { projectId, projectName }
+  const [messages, setMessages] = useState([]);
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    count: 0,
+  });
+  const [isLoadingProjects, setIsLoadingProjects] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
-  const [isSendingMessage, setIsSendingMessage] = useState(false);
-  const [error, setError] = useState(""); // General error display
+  const [error, setError] = useState(null); // Combined error state
+  const [messageToDelete, setMessageToDelete] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [socketError, setSocketError] = useState(null);
+  const [showMembersModal, setShowMembersModal] = useState(false);
+  const [memberList, setMemberList] = useState([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [membersError, setMembersError] = useState(null);
+  // No longer need canAttemptConnect, socket useEffect guards handle it
 
-  const messagesEndRef = useRef(null); // Ref for scrolling to bottom of messages
+  // --- Refs ---
+  const socketRef = useRef(null);
+  const messagesEndRef = useRef(null);
 
-  // --- Helper: Scroll to bottom of messages ---
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  // --- Derived Values ---
+  const currentAdminId = currentUser?.id;
+  // Get projectId ONLY from the selectedProject state when needed
+  const selectedProjectId = selectedProject?.projectId;
+  const roomName = getRoomName(selectedProjectId); // Room name depends on selection
 
-  // --- Fetch Approved Users the Admin can Chat With ---
-  const fetchChatUsers = useCallback(async () => {
-    setIsLoadingUsers(true);
-    setError("");
-    setAllUsers([]);
-    setFilteredUsers([]);
-
-    const token = localStorage.getItem("authToken");
-    if (!token) {
-      setError("Authentication required.");
-      setIsLoadingUsers(false);
-      return;
-    }
-
-    try {
-      // **ASSUMED ENDPOINT**: Fetches users admin can chat with (e.g., approved users)
-      // The backend should return users with { id, username, name?, profilePicUrl?, ... }
-      const url = `${API_BASE_URL}/api/admin/chat/users`;
-      const response = await axios.get(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (response.data?.success && Array.isArray(response.data.data)) {
-        setAllUsers(response.data.data);
-        setFilteredUsers(response.data.data); // Initially show all
-      } else {
-        setError(
-          response.data?.message || "Failed to load user list for chat."
-        );
-      }
-    } catch (err) {
-      console.error("Fetch chat users error:", err);
-      const errMsg =
-        err.response?.data?.message || "An error occurred fetching chat users.";
-      setError(errMsg);
-    } finally {
-      setIsLoadingUsers(false);
-    }
+  // --- Callbacks & Effects ---
+  const scrollToBottom = useCallback((behavior = "smooth") => {
+    /* ... */
   }, []);
-
-  // --- Initial User Fetch ---
   useEffect(() => {
-    fetchChatUsers();
-  }, [fetchChatUsers]);
+    if (messages.length > 0) scrollToBottom("smooth");
+  }, [messages, scrollToBottom]);
 
-  // --- Filter Users based on Search Term ---
+  // Fetch Projects List (Admin View) - Runs once on mount
   useEffect(() => {
-    const lowerSearchTerm = searchTerm.toLowerCase();
-    if (!searchTerm) {
-      setFilteredUsers(allUsers); // Show all if search is empty
-    } else {
-      const filtered = allUsers.filter(
-        (user) =>
-          user.username?.toLowerCase().includes(lowerSearchTerm) ||
-          user.name?.toLowerCase().includes(lowerSearchTerm) // Add more fields if needed
-      );
-      setFilteredUsers(filtered);
-    }
-  }, [searchTerm, allUsers]);
-
-  // --- Fetch Messages for Selected User ---
-  const fetchMessagesForUser = useCallback(async (userId) => {
-    if (!userId) return;
-    setIsLoadingMessages(true);
-    // Keep existing error or clear specific message error? Decide based on UX preference
-    // setError('');
-    setMessages([]); // Clear previous messages
-
-    const token = localStorage.getItem("authToken");
-    if (!token) {
-      setError("Authentication required to fetch messages.");
-      setIsLoadingMessages(false);
-      return;
-    }
-
-    try {
-      // **ASSUMED ENDPOINT**: Fetches message history for a specific user
-      // Backend should return messages like { id, senderId, receiverId, text, timestamp, isAdminSender }
-      const url = `${API_BASE_URL}/api/admin/chat/messages/${userId}`;
-      const response = await axios.get(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (response.data?.success && Array.isArray(response.data.data)) {
-        // Sort messages by timestamp just in case they aren't ordered
-        const sortedMessages = response.data.data.sort(
-          (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
-        );
-        setMessages(sortedMessages);
-      } else {
-        setError(
-          response.data?.message || "Failed to load messages for this user."
-        );
-        setMessages([]); // Ensure messages are cleared on error
+    const fetchAdminProjects = async () => {
+      console.log("ADMIN: Fetching projects list...");
+      setIsLoadingProjects(true);
+      setError(null);
+      setProjects([]);
+      setFilteredProjects([]);
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        setError("Auth required.");
+        setIsLoadingProjects(false);
+        return;
       }
-    } catch (err) {
-      console.error(`Fetch messages error for user ${userId}:`, err);
-      const errMsg =
-        err.response?.data?.message || "An error occurred fetching messages.";
-      setError(errMsg);
-      setMessages([]);
-    } finally {
-      setIsLoadingMessages(false);
-    }
-  }, []);
-
-  // --- Effect to Fetch Messages on User Selection ---
-  useEffect(() => {
-    if (selectedUser?.id) {
-      fetchMessagesForUser(selectedUser.id);
-    } else {
-      setMessages([]); // Clear messages if no user selected
-    }
-  }, [selectedUser, fetchMessagesForUser]);
-
-  // --- Effect to Scroll to Bottom ---
-  useEffect(() => {
-    // Scroll after messages are rendered/updated
-    const timer = setTimeout(() => {
-      scrollToBottom();
-    }, 100); // Small delay might help ensure rendering is complete
-    return () => clearTimeout(timer);
-  }, [messages]);
-
-  // --- Handlers ---
-  const handleSelectUser = (user) => {
-    if (selectedUser?.id === user.id) return; // Don't re-select same user
-    setError(""); // Clear errors when switching users
-    setSelectedUser(user);
-    // Fetching messages is handled by the useEffect watching selectedUser
-  };
-
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !selectedUser?.id || isSendingMessage) return;
-
-    setIsSendingMessage(true);
-    setError(""); // Clear previous errors
-
-    const token = localStorage.getItem("authToken");
-    if (!token) {
-      setError("Authentication required to send message.");
-      setIsSendingMessage(false);
-      return;
-    }
-
-    // Optimistic UI update
-    const tempId = `temp-${Date.now()}`;
-    const optimisticMessage = {
-      id: tempId,
-      senderId: "admin", // Use a placeholder or fetch admin ID if needed
-      receiverId: selectedUser.id,
-      text: newMessage,
-      timestamp: new Date().toISOString(),
-      isAdminSender: true, // Message sent BY admin
+      try {
+        const url = `${API_BASE_URL}/api/admin/projects`; // Use admin projects route
+        const response = await axios.get(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (response.data?.success && Array.isArray(response.data.data)) {
+          const projectList = response.data.data.map((p) => ({
+            projectId: p.id,
+            projectName: p.title,
+          }));
+          projectList.sort((a, b) =>
+            (a.projectName || "").localeCompare(b.projectName || "")
+          );
+          setProjects(projectList);
+          setFilteredProjects(projectList);
+        } else {
+          throw new Error(response.data?.message || "Failed to load projects.");
+        }
+      } catch (err) {
+        console.error("ADMIN: Fetch projects error:", err);
+        let eMsg = "Could not load projects.";
+        /* ... error msg determination ... */ setError(eMsg);
+        setProjects([]);
+        setFilteredProjects([]);
+      } finally {
+        setIsLoadingProjects(false);
+      }
     };
-    setMessages((prev) => [...prev, optimisticMessage]);
-    const messageToSend = newMessage;
-    setNewMessage("");
-    scrollToBottom(); // Scroll after adding optimistic message
+    fetchAdminProjects();
+  }, []); // Empty dependency array - runs once
 
+  // Filter Projects based on search term
+  useEffect(() => {
+    if (!searchTerm) setFilteredProjects(projects);
+    else
+      setFilteredProjects(
+        projects.filter((p) =>
+          p.projectName?.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      );
+  }, [searchTerm, projects]);
+
+  // Fetch Messages for the *Selected* Project
+  const fetchProjectMessages = useCallback(
+    async (projectIdToFetch, page = 1) => {
+      if (!projectIdToFetch) return; // Need a project ID
+      console.log(
+        `ADMIN: Fetching messages page ${page} for project ${projectIdToFetch}`
+      );
+      setIsLoadingMessages(true);
+      setError(null);
+      if (page === 1) setMessages([]); // Clear only on first page load
+
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        setError("Auth required.");
+        setIsLoadingMessages(false);
+        return;
+      }
+      try {
+        const url = `${API_BASE_URL}/api/admin/messages/project/${projectIdToFetch}?page=${page}&limit=50`;
+        const response = await axios.get(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (response.data?.success && Array.isArray(response.data.messages)) {
+          const fetched = response.data.messages.sort(
+            (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+          );
+          setMessages(fetched); // Replace messages for simplicity
+          setPagination({
+            currentPage: response.data.currentPage || 1,
+            totalPages: response.data.totalPages || 1,
+            count: response.data.count || 0,
+          });
+        } else {
+          throw new Error(response.data?.message || "Failed to load messages.");
+        }
+      } catch (err) {
+        console.error(`Fetch messages error project ${projectIdToFetch}:`, err);
+        setError(err.response?.data?.message || "Error fetching messages.");
+        setMessages([]);
+      } finally {
+        setIsLoadingMessages(false);
+      }
+    },
+    []
+  ); // No dependencies needed as projectId is passed as arg
+
+  // Fetch Members for the *Selected* Project
+  const fetchMembers = useCallback(async () => {
+    // --- *** USE selectedProjectId from state *** ---
+    if (!selectedProjectId) {
+      setMembersError("No project selected.");
+      return;
+    }
+    console.log(`MEMBERS: Fetching members for project ${selectedProjectId}`);
+    // -----------------------------------------------
+    setLoadingMembers(true);
+    setMembersError(null);
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+      /* ... */ setLoadingMembers(false);
+      return;
+    }
     try {
-      // **ASSUMED ENDPOINT**: Sends a message from admin to user
-      const url = `${API_BASE_URL}/api/admin/chat/messages`;
-      const response = await axios.post(
-        url,
-        { receiverId: selectedUser.id, text: messageToSend },
+      // *** Use selectedProjectId in URL ***
+      const res = await axios.get(
+        `${API_BASE_URL}/api/projects/${selectedProjectId}/members`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-
-      // Optionally replace optimistic message with confirmed one from backend
-      // This helps if the backend assigns the final ID or timestamp
-      if (response.data?.success && response.data?.data?.id) {
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === tempId
-              ? { ...response.data.data, isAdminSender: true }
-              : msg
-          )
-        );
-      }
-      // If backend doesn't return the new message, the optimistic one just stays
+      if (res.data?.success && Array.isArray(res.data.members)) {
+        /* ... process members ... */
+        const owner = res.data.owner;
+        let members = res.data.members.map((m) => ({
+          ...m,
+          id: m.user?.id || m.id,
+          username: m.user?.username || m.username,
+          profilePictureUrl: m.user?.profilePictureUrl || m.profilePictureUrl,
+          role: m.role || "Member",
+        }));
+        if (owner && !members.some((m) => m.id === owner.id))
+          members.unshift({ ...owner, role: "Owner" });
+        else
+          members = members.map((m) =>
+            m.id === owner?.id ? { ...m, role: "Owner" } : m
+          );
+        members.sort((a, b) => {
+          if (a.role === "Owner" && b.role !== "Owner") return -1;
+          if (a.role !== "Owner" && b.role === "Owner") return 1;
+          return (a.username || "").localeCompare(b.username || "");
+        });
+        setMemberList(members);
+      } else throw new Error(res.data?.message || "Failed load members.");
     } catch (err) {
-      console.error("Send message error:", err);
-      const errMsg = err.response?.data?.message || "Failed to send message.";
-      setError(errMsg);
-      // Remove optimistic message on failure
-      setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
-      setNewMessage(messageToSend); // Restore message to input on error
+      /* ... handle error ... */
     } finally {
-      setIsSendingMessage(false);
+      setLoadingMembers(false);
+    }
+    // --- *** Depend on selectedProjectId *** ---
+  }, [selectedProjectId]);
+
+  // Open Members Modal - uses fetchMembers which now uses selectedProjectId
+  const handleOpenMembersModal = () => {
+    setShowMembersModal(true);
+    if (
+      memberList.length === 0 &&
+      !loadingMembers &&
+      !membersError &&
+      selectedProjectId
+    ) {
+      fetchMembers();
     }
   };
 
-  // --- Render ---
+  // Effect to Fetch Messages & Join/Leave Room on Project Selection Change
+  useEffect(() => {
+    const currentSelectedId = selectedProject?.projectId; // Get ID for this render
+    const currentRoomName = getRoomName(currentSelectedId);
+
+    if (currentSelectedId) {
+      console.log(
+        `ADMIN: Project selected: ${currentSelectedId}. Fetching messages.`
+      );
+      fetchProjectMessages(currentSelectedId); // Fetch for the selected project
+      // Join room if socket connected
+      if (socketRef.current?.connected && currentRoomName) {
+        console.log(`ADMIN Socket: Joining room ${currentRoomName}`);
+        socketRef.current.emit("joinChatRoom", { roomName: currentRoomName });
+      }
+    } else {
+      setMessages([]); // Clear messages if no project is selected
+    }
+
+    // Cleanup function: Leave the room associated with the project selected *before* this effect ran
+    return () => {
+      if (socketRef.current?.connected && currentRoomName) {
+        // Use room name captured in effect closure
+        console.log(
+          `ADMIN Socket: Leaving room ${currentRoomName} on project change/unmount.`
+        );
+        socketRef.current.emit("leaveChatRoom", { roomName: currentRoomName });
+      }
+    };
+    // Run when selectedProject changes OR fetchProjectMessages callback changes (should be stable)
+  }, [selectedProject, fetchProjectMessages]);
+
+  // --- WebSocket Connection & Global Listeners (Runs once per admin session) ---
+  useEffect(() => {
+    // Guards
+    if (!currentAdminId) return;
+    const token = localStorage.getItem("authToken");
+    if (!token) return;
+    if (socketRef.current) return; // Connect only once
+
+    console.log("ADMIN CHAT: Initializing Global Socket Connection...");
+    const newSocket = io(API_BASE_URL, {
+      auth: { token },
+      transports: ["websocket"],
+      query: { userId: currentAdminId },
+      reconnectionAttempts: 3,
+      timeout: SOCKET_TIMEOUT,
+    });
+    socketRef.current = newSocket;
+
+    newSocket.on("connect", () => {
+      console.log("ADMIN CHAT: Socket CONNECTED:", newSocket.id);
+      setIsConnected(true);
+      setSocketError(null);
+      const currentRoom = getRoomName(selectedProject?.projectId);
+      if (currentRoom)
+        newSocket.emit("joinChatRoom", { roomName: currentRoom });
+    }); // Join current room on connect/reconnect
+    newSocket.on("disconnect", (reason) => {
+      console.log("ADMIN CHAT: Socket DISCONNECTED:", reason);
+      setIsConnected(false);
+      if (socketRef.current?.id === newSocket.id) socketRef.current = null;
+      if (reason !== "io client disconnect") setSocketError("Disconnected");
+    });
+    newSocket.on("connect_error", (err) => {
+      console.error("ADMIN CHAT: Socket Connect Error:", err.message);
+      setIsConnected(false);
+      setSocketError("Connection Failed.");
+      if (socketRef.current?.id === newSocket.id) socketRef.current = null;
+    });
+
+    // Listen for NEW messages
+    newSocket.on("newMessage", (message) => {
+      console.log("ADMIN CHAT: newMessage event received:", message);
+      // Check if the message belongs to the *currently selected* project
+      if (
+        message?.projectId?.toString() ===
+        selectedProject?.projectId?.toString()
+      ) {
+        const msg = {
+          ...message,
+          sender: message.sender || { id: message.senderId },
+        };
+        setMessages((prev) => [...prev, msg]); // Append new messages for the current view
+      } else {
+        // Message is for a different project, maybe update a notification count elsewhere?
+        console.log(
+          `ADMIN CHAT: Received message for other project (${message.projectId})`
+        );
+      }
+    });
+
+    // Listen for DELETED messages
+    newSocket.on("messageDeleted", (payload) => {
+      console.log("ADMIN CHAT: messageDeleted event received:", payload);
+      if (
+        payload?.projectId?.toString() ===
+        selectedProject?.projectId?.toString()
+      ) {
+        setMessages((prev) =>
+          prev.filter((msg) => msg.id !== payload.messageId)
+        ); // Remove deleted message
+      }
+    });
+
+    // Cleanup on component unmount
+    return () => {
+      const socketInstanceToClean = newSocket;
+      console.log("ADMIN CHAT: Unmount Cleanup", socketInstanceToClean.id);
+      try {
+        socketInstanceToClean.off();
+        socketInstanceToClean.disconnect();
+      } catch (e) {
+        /* ignore */
+      } finally {
+        if (socketRef.current?.id === socketInstanceToClean.id)
+          socketRef.current = null;
+      }
+    };
+    // Only depends on the admin ID to establish the connection
+  }, [currentAdminId, API_BASE_URL]);
+
+  // --- Delete Message Handlers ---
+  const handleDeleteClick = (message) => {
+    setMessageToDelete(message);
+  };
+  const cancelDeleteMessage = () => {
+    setMessageToDelete(null);
+  };
+  const confirmDeleteMessage = useCallback(async () => {
+    if (!messageToDelete || !currentAdminId) return;
+    const msgIdToDelete = messageToDelete.id;
+    setMessageToDelete(null); // Close modal
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+      setError("Auth required.");
+      return;
+    }
+    console.log(`ADMIN: Attempting delete for message ID: ${msgIdToDelete}`);
+    try {
+      const url = `${API_BASE_URL}/api/admin/messages/${msgIdToDelete}`;
+      const response = await axios.delete(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.data?.success) {
+        throw new Error(response.data?.message || "API deletion failed.");
+      }
+      console.log(
+        `ADMIN: API confirmed deletion for message ${msgIdToDelete}. Socket event should update UI.`
+      );
+      // UI update primarily relies on the messageDeleted socket event now
+    } catch (err) {
+      console.error(`ADMIN: Delete message error for ${msgIdToDelete}:`, err);
+      setError(err.response?.data?.message || "Error deleting message.");
+    }
+  }, [messageToDelete, currentAdminId]);
+
+  // --- Render Logic ---
+
+  // Loading state for initial project list fetch
+  if (isLoadingProjects) {
+    return (
+      <div className="p-6">
+        <AdminPageHeader title="Project Chat Viewer" />
+        <LoadingSpinner message="Loading Projects..." />
+      </div>
+    );
+  }
+
+  // Fatal project list fetch error state
+  if (error && projects.length === 0 && !isLoadingProjects) {
+    return (
+      <div className="p-6">
+        <AdminPageHeader title="Project Chat Viewer" />
+        <ErrorMessage message={error} onRetry={fetchInitialData} />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl md:text-3xl font-semibold text-gray-800">
-        Admin Chat
-      </h1>
+    <>
+      <div className="space-y-6">
+        <AdminPageHeader title="Project Chat Viewer" />
 
-      {/* General Error Display (e.g., for failed user fetch) */}
-      {error && !selectedUser && (
-        <ErrorMessage message={error} onClose={() => setError("")} />
-      )}
+        {/* Display General Errors (e.g., non-fatal fetch errors after initial load) */}
+        {error && (
+          <ErrorMessage
+            message={error}
+            onClose={() => setError("")}
+            isDismissible={true}
+          />
+        )}
 
-      <div className="bg-white rounded-lg shadow-md border border-gray-200 h-[calc(100vh-14rem)] flex overflow-hidden">
-        {/* Left Panel: User List & Search */}
-        <div className="w-1/3 border-r border-gray-200 flex flex-col">
-          <div className="p-4 border-b border-gray-200 sticky top-0 bg-white z-10">
-            {" "}
-            {/* Sticky header */}
-            <h2 className="font-semibold text-gray-700 mb-3">Conversations</h2>
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search users..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full border border-gray-300 rounded-md pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-              />
-              <MagnifyingGlassIcon className="h-5 w-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none" />
-            </div>
-          </div>
-          <div className="flex-1 overflow-y-auto">
-            {isLoadingUsers ? (
-              <div className="flex justify-center items-center h-full p-4">
-                <LoadingSpinner />
+        <div className="bg-white rounded-lg shadow-xl border border-gray-200 h-[calc(100vh-16rem)] flex overflow-hidden">
+          {/* Left Panel: Project List */}
+          <div className="w-1/3 lg:w-1/4 border-r border-gray-200 flex flex-col">
+            {/* Search */}
+            <div className="p-3 border-b">
+              <div className="relative">
+                <input
+                  type="search"
+                  placeholder="Search projects..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full border rounded-md pl-9 pr-3 py-1.5 text-sm ..."
+                />
+                <FaSearch className="h-4 w-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 ..." />
               </div>
-            ) : (
-              <ul className="divide-y divide-gray-200">
-                {filteredUsers.length > 0 ? (
-                  filteredUsers.map((user) => (
+            </div>
+            {/* Project List */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+              <ul className="divide-y divide-gray-100">
+                {filteredProjects.length > 0 ? (
+                  filteredProjects.map((proj) => (
                     <li
-                      key={user.id}
-                      onClick={() => handleSelectUser(user)}
-                      className={`p-3 flex justify-between items-center cursor-pointer transition-colors duration-150 ${
-                        selectedUser?.id === user.id
-                          ? "bg-indigo-100"
-                          : "hover:bg-gray-50"
+                      key={proj.projectId}
+                      onClick={() => setSelectedProject(proj)}
+                      className={`p-3 flex items-center gap-3 cursor-pointer text-sm ${
+                        selectedProject?.projectId === proj.projectId
+                          ? "bg-indigo-100 font-semibold text-indigo-800"
+                          : "hover:bg-gray-50 text-gray-700"
                       }`}
-                      title={`Chat with ${user.username}`}
                     >
-                      <div className="flex items-center space-x-3 overflow-hidden">
-                        {/* Basic Avatar Placeholder */}
-                        <span className="flex-shrink-0 h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center text-xs font-medium text-gray-600 uppercase">
-                          {user.username?.substring(0, 2)}
-                        </span>
-                        <div className="overflow-hidden">
-                          <p className="font-medium text-sm text-gray-800 truncate">
-                            {user.username}
-                          </p>
-                          {/* Add name if available: <p className="text-xs text-gray-500 truncate">{user.name}</p> */}
-                        </div>
-                      </div>
-                      {/* Placeholder for potential unread/timestamp */}
+                      <FaProjectDiagram
+                        className={`w-4 h-4 flex-shrink-0 ${
+                          selectedProject?.projectId === proj.projectId
+                            ? "text-indigo-600"
+                            : "text-gray-400"
+                        }`}
+                      />
+                      <span className="truncate">{proj.projectName}</span>
                     </li>
                   ))
                 ) : (
                   <p className="p-4 text-sm text-center text-gray-500">
-                    {searchTerm
-                      ? "No users match search."
-                      : "No users available to chat."}
+                    {searchTerm ? "No matches." : "No projects."}
                   </p>
                 )}
               </ul>
+            </div>
+          </div>
+
+          {/* Right Panel: Message Area */}
+          <div className="w-2/3 lg:w-3/4 flex flex-col bg-gray-50">
+            {!selectedProject ? (
+              <div className="flex-1 flex justify-center items-center text-center text-gray-500 p-5">
+                {" "}
+                <p>Select a project to view chat.</p>{" "}
+              </div>
+            ) : (
+              <>
+                {/* Message Area Header */}
+                <div className="flex items-center p-3 border-b bg-white gap-3 sticky top-0 z-10 shadow-sm">
+                  <div className="flex-shrink-0 h-9 w-9 bg-indigo-100 ...">
+                    <FaProjectDiagram />
+                  </div>
+                  <h2
+                    className="font-semibold text-lg text-gray-800 truncate"
+                    title={selectedProject.projectName}
+                  >
+                    {selectedProject.projectName}
+                  </h2>
+                  <button
+                    onClick={handleOpenMembersModal}
+                    className="ml-auto mr-3 p-1.5 text-gray-500 ..."
+                    title="View Members"
+                  >
+                    <FaUsers />
+                  </button>
+                  <div className={`text-xs ... ${isConnected ? "..." : "..."}`}>
+                    {" "}
+                    <FaWifi size="0.7em" /> {isConnected ? "Live" : "Offline"}{" "}
+                  </div>
+                </div>
+
+                {/* Message Display Area */}
+                <div className="flex-grow p-4 overflow-y-auto bg-gradient-to-br from-gray-100 to-blue-50 relative custom-scrollbar">
+                  {isLoadingMessages && (
+                    <div className="absolute inset-0 ...">
+                      <LoadingSpinner />
+                    </div>
+                  )}
+                  {socketError && (
+                    <ErrorMessage
+                      message={socketError}
+                      onClose={() => setSocketError("")}
+                      isDismissible={true}
+                      type="warning"
+                    />
+                  )}
+                  {/* Display fetch error specific to messages */}
+                  {error && (
+                    <ErrorMessage
+                      message={error}
+                      onClose={() => setError("")}
+                      isDismissible={true}
+                      type="error"
+                    />
+                  )}
+
+                  {messages.length > 0 ? (
+                    <ul className="space-y-1">
+                      {messages.map((msg, index) => {
+                        const prevMessage = messages[index - 1];
+                        const showDateSeparator =
+                          !prevMessage ||
+                          formatDateSeparator(msg.createdAt) !==
+                            formatDateSeparator(prevMessage.createdAt);
+                        return (
+                          <React.Fragment
+                            key={
+                              msg.id || `msg-${msg.senderId}-${msg.createdAt}`
+                            }
+                          >
+                            {showDateSeparator &&
+                              formatDateSeparator(msg.createdAt) && (
+                                <motion.div className="...">
+                                  {" "}
+                                  {/* Date Separator */}{" "}
+                                </motion.div>
+                              )}
+                            <motion.li
+                              className={`flex items-start gap-2.5 my-1.5 group relative pr-10`} /* Anim Props */
+                            >
+                              {/* Avatar */}
+                              <div className="..." title={msg.sender?.username}>
+                                {" "}
+                                {/* Avatar Logic */}{" "}
+                              </div>
+                              {/* Bubble + Meta */}
+                              <div
+                                className={`max-w-[75%] ... ${
+                                  msg.senderId === currentAdminId
+                                    ? "bg-blue-500 ..."
+                                    : "bg-white ..."
+                                }`}
+                              >
+                                <p className="text-xs font-semibold ...">
+                                  {msg.sender?.username ||
+                                    `User ${msg.senderId}`}
+                                </p>
+                                <p className="text-sm ...">{msg.content}</p>
+                                <p
+                                  className={`text-[10px] mt-1 ... text-right`}
+                                  title={
+                                    msg.createdAt
+                                      ? new Date(msg.createdAt).toLocaleString()
+                                      : ""
+                                  }
+                                >
+                                  {formatMessageTime(msg.createdAt)}
+                                </p>
+                              </div>
+                              {/* Delete Button */}
+                              <button
+                                onClick={() => handleDeleteClick(msg)}
+                                className="absolute right-1 bottom-1 p-1 text-red-300 ... opacity-0 group-hover:opacity-100 ..."
+                              >
+                                {" "}
+                                <FaTrash size="0.8em" />{" "}
+                              </button>
+                            </motion.li>
+                          </React.Fragment>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    !isLoadingMessages &&
+                    !error && (
+                      <p className="text-center text-sm text-gray-500 pt-10 italic">
+                        No messages found for this project.
+                      </p>
+                    )
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+                {/* Input Removed for Admin */}
+              </>
             )}
           </div>
         </div>
-
-        {/* Right Panel: Message Area & Input */}
-        <div className="w-2/3 flex flex-col bg-gray-50">
-          {selectedUser ? (
-            <>
-              {/* Message Area Header */}
-              <div className="p-4 border-b border-gray-200 bg-white flex items-center space-x-3 sticky top-0 z-10">
-                <span className="flex-shrink-0 h-9 w-9 rounded-full bg-gray-300 flex items-center justify-center text-sm font-medium text-gray-600 uppercase">
-                  {selectedUser.username?.substring(0, 2)}
-                </span>
-                <div>
-                  <h2 className="font-semibold text-gray-800">
-                    {selectedUser.username}
-                  </h2>
-                  {/* Add user's name/role if available */}
-                </div>
-              </div>
-
-              {/* Message Display Area */}
-              <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-gray-100 relative">
-                {isLoadingMessages && ( // Loading overlay for messages
-                  <div className="absolute inset-0 flex justify-center items-center bg-gray-100 bg-opacity-75 z-10">
-                    <LoadingSpinner />
-                  </div>
-                )}
-                {!isLoadingMessages && messages.length > 0
-                  ? messages.map((msg) => (
-                      <div
-                        key={msg.id}
-                        className={`flex ${
-                          msg.isAdminSender ? "justify-end" : "justify-start"
-                        }`}
-                      >
-                        <div
-                          className={`p-2 px-3 rounded-lg max-w-[70%] shadow-sm ${
-                            msg.isAdminSender
-                              ? "bg-indigo-500 text-white"
-                              : "bg-white text-gray-800 border border-gray-200"
-                          }`}
-                        >
-                          <p className="text-sm break-words">{msg.text}</p>
-                          <p
-                            className={`text-[10px] mt-1 ${
-                              msg.isAdminSender
-                                ? "text-indigo-200"
-                                : "text-gray-400"
-                            } text-right`}
-                          >
-                            {formatTimestamp(msg.timestamp)}
-                          </p>
-                        </div>
-                      </div>
-                    ))
-                  : !isLoadingMessages && ( // Only show 'no messages' if not loading
-                      <p className="text-center text-sm text-gray-500 pt-10">
-                        No messages yet. Start the conversation!
-                      </p>
-                    )}
-                {/* Error display specific to message sending/loading */}
-                {error && selectedUser && (
-                  <ErrorMessage message={error} onClose={() => setError("")} />
-                )}
-                <div ref={messagesEndRef} /> {/* Element to scroll to */}
-              </div>
-
-              {/* Message Input Area */}
-              <div className="p-4 border-t border-gray-200 bg-white">
-                <form
-                  onSubmit={handleSendMessage}
-                  className="flex space-x-3 items-center"
-                >
-                  <input
-                    type="text"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder={`Message ${selectedUser.username}...`}
-                    className="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-sm disabled:bg-gray-100"
-                    disabled={isSendingMessage}
-                    autoComplete="off"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!newMessage.trim() || isSendingMessage}
-                    className="p-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition-colors flex items-center justify-center w-[40px] h-[40px]" // Fixed size for button
-                    title="Send Message"
-                  >
-                    {isSendingMessage ? (
-                      <LoadingSpinner size="sm" color="text-white" />
-                    ) : (
-                      <PaperAirplaneIcon className="h-5 w-5 transform rotate-45" />
-                    )}
-                  </button>
-                </form>
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex justify-center items-center text-center text-gray-500 bg-gray-50 p-5">
-              {isLoadingUsers ? (
-                <p>Loading users...</p> // Show different message while users load initially
-              ) : (
-                <p>
-                  Select a user from the list on the left <br /> to view
-                  messages and start chatting.
-                </p>
-              )}
-            </div>
-          )}
-        </div>
       </div>
-    </div>
-  );
-};
 
-export default AdminChatPage;
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {messageToDelete && (
+          <motion.div
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4" /* Anim Props */
+          >
+            <div
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+              onClick={cancelDeleteMessage}
+            ></div>
+            <motion.div
+              className="relative bg-white rounded-lg shadow-xl p-6 max-w-sm w-full text-center border border-gray-300" /* Anim Props */
+            >
+              <h3 className="text-lg font-semibold text-red-700 mb-2">
+                Delete Message?
+              </h3>
+              <p className="text-sm text-gray-600 mb-4 break-all">
+                "{messageToDelete.content?.substring(0, 100)}
+                {messageToDelete.content?.length > 100 ? "..." : ""}"
+              </p>
+              <p className="text-xs text-gray-500 mb-5">
+                Sender:{" "}
+                {messageToDelete.sender?.username || messageToDelete.senderId}
+              </p>
+              <p className="text-xs text-gray-500 mb-5">
+                This cannot be undone.
+              </p>
+              <div className="flex justify-center gap-4">
+                <button
+                  onClick={cancelDeleteMessage}
+                  className="px-4 py-2 rounded border ..."
+                >
+                  {" "}
+                  Cancel{" "}
+                </button>
+                <button
+                  onClick={confirmDeleteMessage}
+                  className="px-4 py-2 rounded bg-red-600 ..."
+                >
+                  {" "}
+                  <FaTrash size="0.8em" /> Delete{" "}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Member List Modal */}
+      <MemberListModal
+        isOpen={showMembersModal}
+        onClose={() => setShowMembersModal(false)}
+        members={memberList}
+        isLoading={loadingMembers}
+        error={membersError}
+        projectName={selectedProject?.projectName}
+        onRetry={fetchMembers}
+        currentUserId={currentAdminId}
+      />
+    </>
+  );
+}
+
+export default AdminProjectChatViewer; // Renamed export

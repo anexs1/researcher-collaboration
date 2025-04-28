@@ -2,38 +2,35 @@
 import express from "express";
 import { protect, adminOnly } from "../middleware/authMiddleware.js";
 
-// --- Import Admin-Specific Controllers ---
-// User Management (Assuming these are ONLY for admin use now)
+// Import User Management controllers (adjust path if they move)
 import {
   adminGetAllUsers,
   adminGetPendingUsers,
   adminGetUserById,
-  adminUpdateUserStatus, // Corrected typo from previous version if any
+  adminUpdateUserStatus,
   adminUpdateUserRole,
   adminDeleteUser,
-} from "../controllers/userController.js"; // Adjust path if needed, or move to adminController
+} from "../controllers/userController.js";
 
-// Import from adminController
+// Import controllers from adminController.js
 import {
-  getDashboardStats, // <<< IMPORTED Dashboard controller
+  getDashboardStats,
   getAdminPublications,
+  adminGetAllProjects, // <<< IMPORTED Admin Project List controller
   adminGetProjectMessages,
   adminDeleteMessage,
-  // Import other admin controllers as needed
-} from "../controllers/adminController.js"; // <<< Ensure path is correct
-
-// Project Management (Example - Requires controller functions in adminController or projectController)
-// import { adminGetAllProjects, adminDeleteProject } from "../controllers/adminController.js";
+  // adminDeleteProject, // Import if implemented
+  // adminUpdatePublicationStatus, // Import if implemented
+  // adminDeletePublication // Import if implemented
+} from "../controllers/adminController.js";
 
 const router = express.Router();
 
-// --- Apply global middleware for ALL admin routes ---
-// Ensures only logged-in administrators can access these endpoints
+// --- Apply global admin protection ---
 router.use(protect);
 router.use(adminOnly);
 
 // --- Dashboard Route ---
-// Defines the endpoint the frontend will call to get dashboard statistics
 router.get("/dashboard/stats", getDashboardStats); // GET /api/admin/dashboard/stats
 
 // --- User Management Routes ---
@@ -49,14 +46,14 @@ router.get("/publications", getAdminPublications); // GET /api/admin/publication
 // Example: router.patch("/publications/:id/status", adminUpdatePublicationStatus);
 // Example: router.delete("/publications/:id", adminDeletePublication);
 
-// --- Project Management Routes (Example) ---
-// Example: router.get("/projects", adminGetAllProjects); // GET /api/admin/projects
+// --- Project Management Routes ---
+router.get("/projects", adminGetAllProjects); // GET /api/admin/projects
 // Example: router.delete("/projects/:id", adminDeleteProject);
 
 // --- Message Management Routes ---
 router.get("/messages/project/:projectId", adminGetProjectMessages); // GET /api/admin/messages/project/:projectId
 router.delete("/messages/:messageId", adminDeleteMessage); // DELETE /api/admin/messages/:messageId
 
-// Add other admin-specific routes here (e.g., settings, reports)
+// --- Add other admin routes (Settings, Reports, etc.) ---
 
 export default router;
