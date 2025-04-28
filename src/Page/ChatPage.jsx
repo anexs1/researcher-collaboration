@@ -13,84 +13,96 @@ import {
   FaExclamationCircle,
   FaWifi,
   FaLock,
+  FaComments, // Added for empty state
 } from "react-icons/fa";
 
+// Adjust import paths as needed
 import LoadingSpinner from "../Component/Common/LoadingSpinner";
 import ErrorMessage from "../Component/Common/ErrorMessage";
+// import { useAuth } from '../context/AuthContext'; // Example if using context
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
-const SOCKET_TIMEOUT = 10000;
+const SOCKET_TIMEOUT = 15000; // Increased timeout slightly
 
+// Helper to generate a consistent room name
 const getRoomName = (projectId) => {
   if (!projectId) return null;
   return `project-${projectId}`;
 };
 
+// --- ChatPage Component ---
 function ChatPage({ currentUser }) {
   const { projectId: projectIdParam } = useParams();
   const navigate = useNavigate();
 
-  const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState("");
-  const [projectDetails, setProjectDetails] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSending, setIsSending] = useState(false);
-  const [error, setError] = useState(null); // Error during fetch or socket connection
-  const [socketError, setSocketError] = useState(null); // Separate state for transient socket errors
-  const [isConnected, setIsConnected] = useState(false);
+  // --- State Definitions ---
+  const [messages, setMessages] = useState([]); // Holds the array of message objects
+  const [newMessage, setNewMessage] = useState(""); // Input field content
+  const [projectDetails, setProjectDetails] = useState(null); // { id, name } fetched from API
+  const [isLoading, setIsLoading] = useState(true); // True while fetching initial data
+  const [isSending, setIsSending] = useState(false); // True while emitting a message via socket
+  const [fetchError, setFetchError] = useState(null); // Stores errors from initial data fetching (can be fatal)
+  const [socketError, setSocketError] = useState(null); // Stores transient socket errors (connection, send failure)
+  const [isConnected, setIsConnected] = useState(false); // Tracks live socket connection status
 
-  const socketRef = useRef(null);
-  const messagesEndRef = useRef(null);
+  // --- Refs ---
+  const socketRef = useRef(null); // Holds the current socket instance
+  const messagesEndRef = useRef(null); // Target element for auto-scrolling
 
+  // --- Derived Values ---
   const currentUserId = currentUser?.id;
   const projectId = projectIdParam ? parseInt(projectIdParam, 10) : null;
   const roomName = projectId ? getRoomName(projectId) : null;
 
+  // --- Auto-scroll Logic ---
   const scrollToBottom = useCallback((behavior = "smooth") => {
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
-    }, 100);
+    }, 150); // Small delay for render
   }, []);
 
+  // Scroll when new messages arrive
   useEffect(() => {
     if (messages.length > 0) {
       scrollToBottom("smooth");
     }
   }, [messages, scrollToBottom]);
 
-  // --- Fetch Initial Chat Data (Project Details & History) ---
+  // --- Fetch Initial Data (Project Details & Chat History) ---
   const fetchInitialData = useCallback(async () => {
+    // Validate prerequisites
     if (!currentUserId) {
-      setError("User not identified.");
+      setFetchError("User not identified.");
       setIsLoading(false);
       return;
     }
     if (!projectId) {
-      setError("Project ID missing.");
+      setFetchError("Project ID missing.");
       setIsLoading(false);
       return;
     }
 
     console.log(
-      `ChatPage: Fetching initial data for project chat ${projectId} by user ${currentUserId}`
+      `ChatPage: Fetching initial data for project chat ${projectId}`
     );
     setIsLoading(true);
-    setError(null); // Clear previous *fetch* errors
-    setSocketError(null); // Clear previous *socket* errors
+    setFetchError(null); // Clear previous fetch errors
+    setSocketError(null); // Clear previous socket errors
     const token = localStorage.getItem("authToken");
 
     if (!token) {
-      setError("Authentication token not found.");
+      setFetchError("Authentication token not found.");
       setIsLoading(false);
       return;
     }
 
-    let fetchedProjectDetails = null;
-    let fetchedMessages = [];
-    let fetchError = null;
+    let fetchedDetails = null;
+    let fetchedMsgs = [];
+    let errorMsg = null;
 
     try {
+      // Fetch history and details concurrently
       const [historyResponse, projectInfoResponse] = await Promise.all([
         axios.get(
           `${API_BASE_URL}/api/messaging/history/project/${projectId}`,
@@ -102,141 +114,141 @@ function ChatPage({ currentUser }) {
           })
           .catch((err) => {
             console.warn(
-              `Failed fetch project details:`,
+              `Project details fetch failed:`,
               err.response?.data?.message || err.message
             );
             return null;
-          }),
+          }), // Gracefully handle project detail fetch failure
       ]);
 
-      // --- Corrected Project Details Handling ---
-      if (
-        projectInfoResponse?.data?.success &&
-        projectInfoResponse.data.project
-      ) {
-        fetchedProjectDetails = {
-          id: projectInfoResponse.data.project.id,
-          name: projectInfoResponse.data.project.title,
-        };
-        console.log(
-          "ChatPage: Processed project details from response.data.project"
-        );
-      } else if (
-        projectInfoResponse?.data?.success &&
-        projectInfoResponse.data.data
-      ) {
-        fetchedProjectDetails = {
-          id: projectInfoResponse.data.data.id,
-          name: projectInfoResponse.data.data.title,
-        };
-        console.log(
-          "ChatPage: Processed project details from response.data.data"
-        );
+      // Process Project Details Response
+      if (projectInfoResponse?.data?.success) {
+        // Prioritize the structure that worked (`.data.data`) based on previous logs, but keep fallback
+        const projectData =
+          projectInfoResponse.data.data || projectInfoResponse.data.project;
+        if (projectData && projectData.id && projectData.title) {
+          fetchedDetails = { id: projectData.id, name: projectData.title };
+          console.log(
+            `Processed project details: ID=${fetchedDetails.id}, Name=${fetchedDetails.name}`
+          );
+        } else {
+          console.warn(
+            "Project details structure unexpected, using fallback.",
+            projectInfoResponse.data
+          );
+          fetchedDetails = { id: projectId, name: `Project ${projectId}` };
+        }
       } else {
-        console.warn(`ChatPage: Using fallback name for project ${projectId}.`);
-        fetchedProjectDetails = { id: projectId, name: `Project ${projectId}` };
+        console.warn(
+          `Project details fetch unsuccessful or structure unknown, using fallback.`
+        );
+        fetchedDetails = { id: projectId, name: `Project ${projectId}` };
       }
-      // --- END CORRECTION ---
 
+      // Process Message History Response
       if (
         historyResponse.data?.success &&
         Array.isArray(historyResponse.data.data)
       ) {
-        fetchedMessages = historyResponse.data.data;
-        console.log(`Fetched ${fetchedMessages.length} messages.`);
+        fetchedMsgs = historyResponse.data.data;
+        console.log(`Fetched ${fetchedMsgs.length} messages.`);
       } else {
-        console.log(`No message history found or non-success.`);
-        fetchedMessages = [];
+        console.log(`No message history found or non-success response.`);
+        fetchedMsgs = [];
       }
-      fetchError = null;
     } catch (err) {
       console.error(`Error fetching initial chat data:`, err);
-      let errorMsg = "Could not load chat data.";
+      // Determine error message and check for fatal errors (403, 404)
       if (err.response) {
         errorMsg = err.response.data?.message || `Error ${err.response.status}`;
-        if (err.response.status === 403) {
+        if (err.response.status === 403)
           errorMsg = "Access Denied: Not authorized for this chat.";
-        } else if (err.response.status === 404) {
-          errorMsg = "Project chat not found.";
-        } else if (err.response.status === 401) {
-          errorMsg = "Authentication expired.";
-        }
-      } else if (err.request) {
-        errorMsg = "Network Error.";
-      } else if (
-        err instanceof TypeError &&
-        err.message.includes("undefined")
-      ) {
-        errorMsg = "Internal Error: Failed processing server response.";
-        console.error("Potential API response structure issue.", err);
-      } else {
-        errorMsg = err.message || "Unknown data fetching error.";
-      }
-      fetchError = errorMsg;
-      // Use previous details only if fetch failed, otherwise use new fallback
-      fetchedProjectDetails = fetchedProjectDetails ||
-        projectDetails || { id: projectId, name: `Project ${projectId}` };
-      fetchedMessages = [];
+        else if (err.response.status === 404)
+          errorMsg = "Project or chat not found.";
+        else if (err.response.status === 401)
+          errorMsg = "Authentication session expired.";
+      } else if (err.request)
+        errorMsg = "Network Error: Unable to reach server.";
+      else if (err instanceof TypeError && err.message.includes("undefined")) {
+        errorMsg = "Internal Error: Processing server response failed.";
+        console.error("Check API response structure.", err);
+      } else errorMsg = err.message || "Unknown error during data load.";
+
+      // Use existing details only if fetch failed, otherwise use fallback
+      fetchedDetails = projectDetails || {
+        id: projectId,
+        name: `Project ${projectId}`,
+      };
+      fetchedMsgs = []; // Clear messages on critical fetch error
     } finally {
       console.log("Applying fetched data to state.");
-      setProjectDetails(fetchedProjectDetails); // Update project details
-      setMessages(fetchedMessages); // Update messages
-      setError(fetchError); // Set fetch error state
+      setProjectDetails(fetchedDetails); // Update project details state
+      setMessages(fetchedMsgs); // Update messages state
+      setFetchError(errorMsg); // Set potential fetch error
       setIsLoading(false); // Mark loading as complete
-      if (fetchedMessages.length > 0 && !fetchError) {
-        scrollToBottom("auto"); // Scroll after initial data load
+      // Scroll only if data was loaded successfully
+      if (fetchedMsgs.length > 0 && !errorMsg) {
+        scrollToBottom("auto");
       }
     }
-    // *** REMOVED projectDetails from dependency array ***
-  }, [currentUserId, projectId, scrollToBottom]);
+  }, [currentUserId, projectId, scrollToBottom]); // Dependencies for the data fetching logic
 
-  // Effect to run fetchInitialData on mount or if critical IDs change
+  // Effect to fetch data on mount or when critical IDs change
   useEffect(() => {
     fetchInitialData();
-  }, [fetchInitialData]);
+  }, [fetchInitialData]); // Relies on the memoized fetchInitialData
 
   // --- WebSocket Connection and Event Handling ---
   useEffect(() => {
-    // --- Conditions to PREVENT connection ---
-    // 1. Don't connect if essential IDs/details are missing
-    if (!currentUserId || !projectId || !roomName || !projectDetails) {
+    // --- Guard Clauses: Conditions to PREVENT connection ---
+    // 1. Don't connect until project details are loaded (essential for checks/room name)
+    if (!projectDetails) {
+      console.log("Socket Effect: Skipping - Project details not loaded yet.");
+      return;
+    }
+    // 2. Don't connect if essential IDs are missing
+    if (!currentUserId || !projectId || !roomName) {
       console.log(
-        "Socket Effect: Skipping connection (missing IDs, roomName, or projectDetails)."
+        "Socket Effect: Skipping - Missing user/project ID or room name."
       );
       return;
     }
-    // 2. Don't connect if initial data fetch resulted in a critical error (e.g., 403, 404)
-    if (error && !isLoading) {
+    // 3. Don't connect if initial fetch had a fatal error (Access Denied/Not Found)
+    if (fetchError && !isLoading) {
       // Check isLoading to ensure fetch attempt finished
       const isFatalError =
-        error.includes("Access Denied") || error.includes("not found");
+        fetchError.includes("Access Denied") ||
+        fetchError.includes("not found");
       if (isFatalError) {
-        console.log(
-          "Socket Effect: Skipping connection due to fatal fetch error:",
-          error
-        );
+        console.log("Socket Effect: Skipping - Fatal fetch error:", fetchError);
         return;
       }
     }
-    // 3. Don't proceed if no authentication token is available
+    // 4. Don't connect if no auth token
     const token = localStorage.getItem("authToken");
     if (!token) {
-      console.log("Socket Effect: Skipping connection (no auth token).");
+      console.log("Socket Effect: Skipping - No auth token.");
       return;
     }
-    // 4. Don't reconnect if already connected
-    if (socketRef.current && socketRef.current.connected) {
-      console.log(
-        `Socket Effect: Already connected (ID: ${socketRef.current.id}).`
-      );
-      // Ensure state is accurate, though it should be already
-      if (!isConnected) setIsConnected(true);
-      return;
-    }
-    // --- End Conditions ---
 
-    console.log(`Socket Effect: Attempting to connect to room: ${roomName}`);
-    setSocketError(null); // Clear previous socket errors on new connection attempt
+    // --- *** CRITICAL CHECK: Prevent Duplicate Connections *** ---
+    // If socketRef already holds an instance, DO NOT create a new one.
+    if (socketRef.current) {
+      console.log(
+        `Socket Effect: Skipping - Socket ref exists (ID: ${socketRef.current.id}, Connected: ${socketRef.current.connected}).`
+      );
+      // Sync UI state if needed (e.g., if connection dropped without state update)
+      if (isConnected !== socketRef.current.connected)
+        setIsConnected(socketRef.current.connected);
+      return;
+    }
+    // --- End Duplicate Connection Check ---
+
+    // --- Proceed with Establishing Connection ---
+    console.log(
+      `Socket Effect: Conditions met, Attempting connection to room: ${roomName}`
+    );
+    setSocketError(null); // Clear previous socket errors
 
     const newSocket = io(API_BASE_URL, {
       auth: { token },
@@ -245,31 +257,31 @@ function ChatPage({ currentUser }) {
       reconnectionAttempts: 3,
       timeout: SOCKET_TIMEOUT,
     });
+    // --- Store the new socket instance in the ref IMMEDIATELY ---
     socketRef.current = newSocket;
 
-    // --- Socket Event Listeners ---
+    // --- Event Listeners ---
     newSocket.on("connect", () => {
       console.log(">>> Socket CONNECTED:", newSocket.id);
-      setIsConnected(true);
-      setSocketError(null); // Clear errors on successful connection
+      setIsConnected(true); // Update connection state
+      setSocketError(null); // Clear any previous connection errors
+      // Join the specific project chat room
       newSocket.emit("joinChatRoom", { roomName }, (ack) => {
-        // Join room
-        if (ack?.success) {
-          console.log(`Joined room: ${roomName}`);
-        } else {
-          console.error(`Failed join room ${roomName}:`, ack?.error);
-          setSocketError(`Join Error: ${ack?.error || "Server issue"}`);
+        if (ack?.success) console.log(`Successfully joined room: ${roomName}`);
+        else {
+          console.error(`Failed to join room ${roomName}:`, ack?.error);
+          setSocketError(`Join Error: ${ack?.error || "Server error"}`);
         }
       });
     });
 
     newSocket.on("disconnect", (reason) => {
       console.log(">>> Socket DISCONNECTED:", newSocket.id, "Reason:", reason);
-      setIsConnected(false);
+      setIsConnected(false); // Update connection state
       if (reason !== "io client disconnect") {
-        // Only show error if unexpected
-        setSocketError("Disconnected. Attempting to reconnect...");
+        setSocketError("Disconnected. Trying to reconnect...");
       }
+      // Ensure ref is cleared only if the disconnected instance is the one stored
       if (socketRef.current?.id === newSocket.id) {
         socketRef.current = null;
       }
@@ -277,71 +289,92 @@ function ChatPage({ currentUser }) {
 
     newSocket.on("connect_error", (err) => {
       console.error(">>> Socket CONNECTION ERROR:", err.message);
-      setIsConnected(false);
-      setSocketError(`Connection Failed: ${err.message}. Retrying...`);
+      setIsConnected(false); // Update connection state
+      setSocketError(`Connection Failed: ${err.message}.`);
+      // Ensure ref is cleared only if the failing instance is the one stored
       if (socketRef.current?.id === newSocket.id) {
         socketRef.current = null;
       }
     });
 
+    // Listen for incoming messages for this project
     newSocket.on("newMessage", (message) => {
-      // Handle incoming messages
       console.log("Socket 'newMessage' received:", message);
       if (message?.content && message.senderId && message.projectId) {
+        // Make sure the message is for the project currently being viewed
         if (message.projectId?.toString() === projectId?.toString()) {
+          // Add sender details if missing (backend should ideally send this)
           const messageWithSender = {
             ...message,
             sender: message.sender || { id: message.senderId },
           };
+          // Add to message list, preventing duplicates
           setMessages((prev) =>
             prev.some((m) => m.id === messageWithSender.id)
               ? prev
               : [...prev, messageWithSender]
           );
         } else {
-          console.log(`Ignoring msg for different project.`);
+          console.log(
+            `Ignoring msg for different project (${message.projectId}).`
+          );
         }
       } else {
-        console.warn("Invalid message structure:", message);
+        console.warn("Invalid message structure received:", message);
       }
     });
 
-    // --- Cleanup Function ---
+    // --- Cleanup Function for this specific effect instance ---
     return () => {
-      const socketInstanceToClean = socketRef.current;
-      if (socketInstanceToClean) {
-        console.log(
-          "Socket Cleanup: Disconnecting socket instance:",
-          socketInstanceToClean.id
-        );
-        try {
-          if (socketInstanceToClean.connected) {
-            socketInstanceToClean.emit("leaveChatRoom", { roomName });
-          }
-          socketInstanceToClean.off("connect");
-          socketInstanceToClean.off("disconnect");
-          socketInstanceToClean.off("connect_error");
-          socketInstanceToClean.off("newMessage");
-          socketInstanceToClean.disconnect();
-        } catch (cleanupErr) {
-          console.error("Error during socket cleanup:", cleanupErr);
-        } finally {
-          // Crucial: Clear the ref only if cleaning up the specific instance stored in it
-          if (
-            socketRef.current &&
-            socketRef.current.id === socketInstanceToClean.id
-          ) {
-            socketRef.current = null;
-            console.log("Socket Cleanup: socketRef nullified.");
-          }
+      // Use the instance created in *this* effect run for cleanup
+      const socketInstanceToClean = newSocket;
+      console.log(
+        "Socket Cleanup: Cleaning up listeners and disconnecting socket instance:",
+        socketInstanceToClean.id
+      );
+      try {
+        // Remove listeners to prevent memory leaks
+        socketInstanceToClean.off("connect");
+        socketInstanceToClean.off("disconnect");
+        socketInstanceToClean.off("connect_error");
+        socketInstanceToClean.off("newMessage");
+
+        // Leave room and disconnect
+        if (socketInstanceToClean.connected) {
+          socketInstanceToClean.emit("leaveChatRoom", { roomName });
         }
-      } else {
-        console.log("Socket Cleanup: No active socket instance.");
+        socketInstanceToClean.disconnect();
+      } catch (cleanupErr) {
+        console.error("Error during socket cleanup:", cleanupErr);
+      } finally {
+        // --- IMPORTANT: Nullify ref ONLY if it holds this instance ---
+        if (
+          socketRef.current &&
+          socketRef.current.id === socketInstanceToClean.id
+        ) {
+          socketRef.current = null; // Clear the ref
+          console.log(
+            "Socket Cleanup: socketRef nullified for cleaned instance."
+          );
+        } else {
+          console.log(
+            "Socket Cleanup: socketRef did not hold the instance being cleaned, ref not changed."
+          );
+        }
+        // We don't set isConnected to false here, the 'disconnect' listener handles that state update.
       }
-      setIsConnected(false); // Set disconnected on cleanup
     };
-    // *** CORRECTED Dependency Array: Depends only on stable identifiers ***
-  }, [currentUserId, projectId, roomName, API_BASE_URL]); // Removed projectDetails, error, isLoading
+    // --- Dependencies for the socket effect ---
+    // It runs when IDs/room change, OR when projectDetails load, OR if fetchError/isLoading changes (to re-evaluate guards)
+  }, [
+    currentUserId,
+    projectId,
+    roomName,
+    API_BASE_URL,
+    projectDetails,
+    fetchError,
+    isLoading,
+  ]);
 
   // --- Send Message Handler ---
   const handleSendMessage = useCallback(
@@ -352,17 +385,17 @@ function ChatPage({ currentUser }) {
 
       if (!contentToSend) return;
       if (!currentSocket?.connected) {
-        setSocketError("Not connected. Cannot send.");
+        setSocketError("Cannot send: Not connected.");
         return;
       }
       if (isSending) return;
       if (!projectId || !currentUserId) {
-        setError("Internal Error: Missing IDs.");
+        setFetchError("Internal Error: Missing IDs.");
         return;
-      } // Use main error for this
+      } // Use fetchError for this critical state issue
 
       setIsSending(true);
-      setSocketError(null); // Clear transient socket errors on send attempt
+      setSocketError(null); // Clear transient socket errors
 
       const messageData = {
         senderId: currentUserId,
@@ -375,10 +408,10 @@ function ChatPage({ currentUser }) {
       currentSocket
         .timeout(SOCKET_TIMEOUT)
         .emit("sendMessage", messageData, (err, ack) => {
-          setIsSending(false);
+          setIsSending(false); // Mark sending as complete
           if (err) {
-            console.error("Send timeout/error:", err);
-            setSocketError("Error: Message timed out.");
+            console.error("Send message timeout/error:", err);
+            setSocketError("Error: Message failed to send (timeout).");
           } else if (ack?.success) {
             console.log("Send ACK success:", ack);
             setNewMessage("");
@@ -391,32 +424,34 @@ function ChatPage({ currentUser }) {
         });
     },
     [newMessage, currentUserId, projectId, roomName, isSending]
-  ); // Removed currentUser from deps if not used for optimistic UI
+  );
 
   // --- Render Logic ---
 
-  // Loading State
+  // Initial Loading Screen
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center h-[calc(100vh-8rem)] text-center p-4">
-        <LoadingSpinner size="xl" message="Loading Chat..." />
+      <div className="flex justify-center items-center h-[calc(100vh-8rem)] p-4">
+        {" "}
+        <LoadingSpinner size="xl" message="Loading Chat..." />{" "}
       </div>
     );
   }
 
-  // Fatal Error State (Access Denied, Not Found, or Critical Fetch Failure)
-  const isFatalError =
-    error && !isLoading && (!projectDetails || !messages.length);
+  // Fatal Error Screen (Access Denied, Not Found, etc.)
+  // Check fetchError state AFTER isLoading is false
+  const isFatalError = fetchError && !isLoading;
   if (isFatalError) {
-    const isForbidden = error.includes("Access Denied");
-    const isNotFound = error.includes("not found");
+    const isForbidden = fetchError.includes("Access Denied");
+    const isNotFound = fetchError.includes("not found");
     return (
       <div className="p-4 sm:p-8 max-w-2xl mx-auto text-center">
         <Link
           to="/messages"
           className="text-sm text-indigo-600 hover:underline mb-6 inline-flex items-center gap-1.5"
         >
-          <FaArrowLeft /> Back to Chats
+          {" "}
+          <FaArrowLeft /> Back to Chats{" "}
         </Link>
         <div className="mt-4 p-6 bg-white rounded-lg shadow border border-red-200">
           {isForbidden ? (
@@ -434,15 +469,15 @@ function ChatPage({ currentUser }) {
                 ? "Chat Not Found"
                 : "Error Loading Chat"
             }
-            message={error} // Display the fetch error
-            onRetry={!isForbidden && !isNotFound ? fetchInitialData : undefined}
+            message={fetchError} // Show the specific fetch error
+            onRetry={!isForbidden && !isNotFound ? fetchInitialData : undefined} // Allow retry only for non-fatal errors
           />
         </div>
       </div>
     );
   }
 
-  // Main Chat Interface
+  // Main Chat Interface (Rendered if no fatal error and not loading)
   return (
     <div className="flex flex-col h-[calc(100vh-5rem)] max-w-4xl mx-auto bg-white shadow-xl rounded-b-lg border border-t-0 border-gray-200 overflow-hidden">
       {/* Chat Header */}
@@ -457,20 +492,19 @@ function ChatPage({ currentUser }) {
         {projectDetails ? (
           <>
             <div className="flex-shrink-0 mr-3 h-8 w-8 bg-indigo-100 rounded-full flex items-center justify-center">
-              {" "}
-              <FaProjectDiagram className="w-4 h-4 text-indigo-600" />{" "}
+              <FaProjectDiagram className="w-4 h-4 text-indigo-600" />
             </div>
             <span
               className="font-semibold text-gray-800 truncate text-lg"
               title={projectDetails.name}
             >
-              {" "}
-              {projectDetails.name || `Project ${projectId}`}{" "}
+              {projectDetails.name || `Project ${projectId}`}
             </span>
           </>
         ) : (
           <span className="font-semibold text-gray-800 text-lg">Chat</span>
         )}
+        {/* Connection Status */}
         <span
           className={`ml-auto text-xs font-medium px-2.5 py-1 rounded-full flex items-center gap-1.5 ${
             isConnected
@@ -485,7 +519,7 @@ function ChatPage({ currentUser }) {
 
       {/* Messages Area */}
       <div className="flex-grow p-4 overflow-y-auto bg-gradient-to-br from-gray-100 to-slate-200 relative custom-scrollbar">
-        {/* Display non-fatal SOCKET errors here */}
+        {/* Display Transient Socket Errors */}
         {socketError && (
           <div className="p-1 sticky top-0 z-10 mb-2">
             <ErrorMessage
@@ -497,12 +531,17 @@ function ChatPage({ currentUser }) {
           </div>
         )}
         {/* Empty Chat Message */}
-        {!isLoading && messages.length === 0 && !error && (
-          <p className="text-center text-gray-500 italic mt-16 text-base">
-            {" "}
-            No messages yet.{" "}
-          </p>
-        )}
+        {messages.length === 0 &&
+          !isLoading &&
+          !fetchError && ( // Check isLoading/fetchError again
+            <div className="text-center py-16 px-6 text-gray-500">
+              <FaComments className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+              <p className="text-base italic">
+                No messages in this project yet.
+              </p>
+              <p className="text-sm mt-1">Start the conversation!</p>
+            </div>
+          )}
         {/* List of Messages */}
         <ul className="space-y-4 pb-2">
           {messages.map((msg) => {
@@ -527,11 +566,8 @@ function ChatPage({ currentUser }) {
                         className="w-8 h-8 rounded-full object-cover border border-gray-200 shadow-sm"
                       />
                     ) : (
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-sm font-semibold text-white shadow-sm">
-                        {" "}
-                        {(msg.sender?.username || "?")
-                          .charAt(0)
-                          .toUpperCase()}{" "}
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-sm font-semibold text-white shadow-sm">
+                        {(msg.sender?.username || "?").charAt(0).toUpperCase()}
                       </div>
                     )}
                   </div>
@@ -587,13 +623,13 @@ function ChatPage({ currentUser }) {
           onChange={(e) => setNewMessage(e.target.value)}
           placeholder={isConnected ? "Type your message..." : "Connecting..."}
           className="flex-grow px-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
-          disabled={!isConnected || isSending}
+          disabled={!isConnected || isSending} // Input disabled if not connected OR sending
           autoComplete="off"
           aria-label="Message input"
         />
         <button
           type="submit"
-          disabled={!newMessage.trim() || !isConnected || isSending}
+          disabled={!newMessage.trim() || !isConnected || isSending} // Button disabled if no text OR not connected OR sending
           className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full p-3 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-all flex items-center justify-center shadow-sm"
           aria-label="Send message"
           title="Send message"
