@@ -1,6 +1,6 @@
 import ChatRoom from "../models/ChatRoom.js";
 import Message from "../models/Message.js";
-import Project from "../models/project.js";
+import Project from "../models/Project.js";
 import ProjectCollaborator from "../models/ProjectCollaborator.js";
 
 // Get all messages for a project

@@ -214,10 +214,8 @@ export const getProjectChatHistory = asyncHandler(async (req, res) => {
       `Error in getProjectChatHistory for project ${projectId}, user ${currentUserId}:`,
       error
     );
-    // Handle specific errors like 403, 404 passed up via throw
     const statusCode = res.statusCode >= 400 ? res.statusCode : 500; // Use status code set by throw if available
     const message = error.message || "Server error fetching chat history.";
-    // Avoid sending detailed internal errors in production
     const responseMessage =
       statusCode === 500 && process.env.NODE_ENV !== "development"
         ? "Server error fetching chat history."
