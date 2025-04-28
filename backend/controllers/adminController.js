@@ -6,7 +6,7 @@ import { format } from "date-fns"; // <<< IMPORTED date-fns format function
 
 // Destructure all necessary models used in this controller
 // Ensure 'Setting' is defined in models/index.js
-// REMOVED 'Comment' assuming it's not currently used or the table doesn't exist
+// REMOVED 'Comment' as it caused errors (table likely doesn't exist)
 const {
   User,
   Publication,
@@ -14,13 +14,12 @@ const {
   Member,
   Message,
   Setting,
-  sequelize /*, AuditLog */, // Comment model removed from destructuring
+  sequelize /*, AuditLog */, // Comment model removed
 } = db;
 
 // --- Helper Functions ---
 // Safely count records, return 0 on error or if model is invalid
 async function safeCount(model, options = {}) {
-  // Added check if model itself is defined before trying to count
   if (!model || typeof model.count !== "function") {
     console.warn(
       `safeCount: Model invalid or missing 'count' method. Model: ${
@@ -33,14 +32,12 @@ async function safeCount(model, options = {}) {
     const count = await model.count(options);
     return Number.isInteger(count) ? count : 0;
   } catch (error) {
-    // Log specific model name if available
-    console.error(`Count Error [${model?.name || "?"}]:`, error.message); // Log only message for brevity maybe
+    console.error(`Count Error [${model?.name || "?"}]:`, error.message);
     return 0;
   }
 }
 // Safely find all records, return empty array on error or if model is invalid
 async function safeFindAll(model, options = {}) {
-  // Added check if model itself is defined
   if (!model || typeof model.findAll !== "function") {
     console.warn(
       `safeFindAll: Model invalid or missing 'findAll' method. Model: ${
@@ -78,7 +75,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     if (!User || !Publication || !Project) {
       throw new Error("Required models not available");
     }
-    // Removed Comment count from Promise.all
+    // Removed Comment count
     const counts = await Promise.all([
       safeCount(User), // Index 0
       safeCount(User, { where: { status: "approved" } }), // Index 1
@@ -276,13 +273,15 @@ export const adminGetAllProjects = asyncHandler(async (req, res) => {
     console.log(
       `ADMIN: Found ${count} projects, returning page ${parsedPage}.`
     );
-    res.status(200).json({
-      success: true,
-      count,
-      totalPages: Math.ceil(count / parsedLimit),
-      currentPage: parsedPage,
-      data: projects,
-    });
+    res
+      .status(200)
+      .json({
+        success: true,
+        count,
+        totalPages: Math.ceil(count / parsedLimit),
+        currentPage: parsedPage,
+        data: projects,
+      });
   } catch (error) {
     console.error("ADMIN API Error fetching all projects:", error);
     res
@@ -337,14 +336,16 @@ export const adminGetProjectMessages = asyncHandler(async (req, res) => {
     console.log(
       `ADMIN: Fetched ${messages.length}/${count} messages page ${parsedPage} for project ${projectId}.`
     );
-    res.status(200).json({
-      success: true,
-      projectTitle: project.title,
-      count,
-      totalPages: Math.ceil(count / parsedLimit),
-      currentPage: parsedPage,
-      messages: messages,
-    });
+    res
+      .status(200)
+      .json({
+        success: true,
+        projectTitle: project.title,
+        count,
+        totalPages: Math.ceil(count / parsedLimit),
+        currentPage: parsedPage,
+        messages: messages,
+      });
   } catch (error) {
     console.error(`ADMIN API Error adminGetProjectMessages:`, error);
     const sc = res.statusCode >= 400 ? res.statusCode : 500;
@@ -404,11 +405,11 @@ export const getAdminSettings = asyncHandler(async (req, res) => {
   console.log(`ADMIN API: getAdminSettings by Admin ${adminUserId}`);
   if (!Setting) {
     throw new Error("Server config error: Settings model unavailable.");
-  } // Ensure Setting model is loaded
+  }
   try {
-    let settingsRecord = await Setting.findOne({ where: { id: 1 } }); // Assuming ID 1
+    let settingsRecord = await Setting.findOne({ where: { id: 1 } });
     let settingsData = settingsRecord ? settingsRecord.toJSON() : {};
-    const dataToSend = { ...defaultSettings, ...settingsData }; // Merge defaults with DB data
+    const dataToSend = { ...defaultSettings, ...settingsData };
     console.log("ADMIN: Returning settings.");
     res.status(200).json(dataToSend);
   } catch (error) {
@@ -425,13 +426,12 @@ export const updateAdminSettings = asyncHandler(async (req, res) => {
   if (!Setting) {
     throw new Error("Server config error: Settings model unavailable.");
   }
-  // Basic Validation
   const validatedUpdates = {};
   const allowedKeys = Object.keys(defaultSettings);
   for (const key of allowedKeys) {
     if (updatedSettings.hasOwnProperty(key)) {
       const value = updatedSettings[key];
-      /* Add type/value checks */ validatedUpdates[key] = value;
+      /* TODO: Add detailed validation */ validatedUpdates[key] = value;
     }
   }
   if (Object.keys(validatedUpdates).length === 0) {
@@ -469,7 +469,7 @@ export const updateAdminSettings = asyncHandler(async (req, res) => {
   }
 });
 
-// --- *** Report Controller Functions *** ---
+// --- Report Controller Functions ---
 
 /**
  * @desc    Admin: Get Summary Report Stats
@@ -478,11 +478,12 @@ export const updateAdminSettings = asyncHandler(async (req, res) => {
 export const getReportSummary = asyncHandler(async (req, res) => {
   console.log(`ADMIN API: getReportSummary invoked by Admin ${req.user.id}`);
   try {
-    // Removed Comment count, ensure safeCount checks model validity
+    // Removed Comment count
     const [userCount, projectCount, pubCount] = await Promise.all([
       safeCount(User),
       safeCount(Project),
       safeCount(Publication),
+      // safeCount(Comment) // Keep commented out
     ]);
     res.status(200).json({
       success: true,
@@ -494,10 +495,12 @@ export const getReportSummary = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     console.error(`ADMIN API Error in getReportSummary:`, error);
-    res.status(500).json({
-      success: false,
-      message: "Server error fetching summary report.",
-    });
+    res
+      .status(500)
+      .json({
+        success: false,
+        message: "Server error fetching summary report.",
+      });
   }
 });
 
@@ -511,7 +514,7 @@ export const getReportUserGrowth = asyncHandler(async (req, res) => {
   let dateEnd = endDate ? new Date(endDate) : new Date();
   let dateStart = startDate
     ? new Date(startDate)
-    : new Date(new Date().setMonth(dateEnd.getMonth() - 1));
+    : new Date(new Date().setMonth(dateEnd.getMonth() - 1)); // Default 1 month back
   dateEnd.setHours(23, 59, 59, 999); // Include full end day
   if (isNaN(dateStart.getTime()) || isNaN(dateEnd.getTime())) {
     res.status(400);
@@ -519,12 +522,11 @@ export const getReportUserGrowth = asyncHandler(async (req, res) => {
   }
 
   try {
-    // Ensure User model is valid before querying
     if (!User || typeof User.findAll !== "function") {
-      throw new Error("User model is not available for user growth report.");
+      throw new Error("User model unavailable.");
     }
 
-    // Group users by creation date (using DATE function - adjust for specific SQL dialect if needed)
+    // Group users by creation date (adjust DATE function if needed for your SQL dialect)
     const results = await User.findAll({
       attributes: [
         [fn("DATE", col("createdAt")), "date"], // Group by day
@@ -536,28 +538,32 @@ export const getReportUserGrowth = asyncHandler(async (req, res) => {
       raw: true,
     });
 
-    // Format for Recharts - Use imported 'format'
+    // Format for Recharts - Using imported 'format'
     const formattedData = results.map((row) => {
       try {
-        // Add try-catch around date parsing for robustness
         return {
-          name: format(new Date(row.date), "MMM d"), // Format as 'Apr 28'
-          Users: parseInt(row.count, 10) || 0, // Ensure count is a number
+          name: format(new Date(row.date), "MMM d"), // Format as 'Apr 28' etc.
+          Users: parseInt(row.count, 10) || 0,
         };
       } catch (dateFormatError) {
         console.error(`Date formatting error for row:`, row, dateFormatError);
-        return { name: "Invalid Date", Users: parseInt(row.count, 10) || 0 }; // Handle potential invalid date from DB
+        return { name: "Invalid Date", Users: parseInt(row.count, 10) || 0 };
       }
     });
 
-    console.log(`ADMIN: Found ${formattedData.length} user growth points.`);
+    console.log(
+      `ADMIN: Found ${formattedData.length} user growth data points.`
+    );
     res.status(200).json({ success: true, data: formattedData });
   } catch (error) {
     console.error(`ADMIN API Error in getReportUserGrowth:`, error);
-    res.status(500).json({
-      success: false,
-      message: "Server error fetching user growth report.",
-    });
+    // Provide more specific error if possible (e.g., from Sequelize)
+    res
+      .status(500)
+      .json({
+        success: false,
+        message: error.message || "Server error fetching user growth.",
+      });
   }
 });
 
@@ -579,7 +585,7 @@ export const getReportContentOverview = asyncHandler(async (req, res) => {
       if (!isNaN(dS.getTime()) && !isNaN(dE.getTime()))
         whereClause.createdAt = { [Op.between]: [dS, dE] };
     } catch (e) {
-      console.warn("Ignoring invalid date range for content overview.");
+      console.warn("Ignoring invalid date range.");
     }
   }
 
@@ -588,26 +594,27 @@ export const getReportContentOverview = asyncHandler(async (req, res) => {
     const [projectCount, pubCount] = await Promise.all([
       safeCount(Project, { where: whereClause }),
       safeCount(Publication, { where: whereClause }),
-      // safeCount(Comment, { where: whereClause }) // Keep commented out
+      // safeCount(Comment, { where: whereClause }) // Keep commented
     ]);
 
-    // Format for Recharts
     const formattedData = [
       { name: "Projects", value: projectCount },
       { name: "Publications", value: pubCount },
-      // { name: 'Comments', value: commentCount }, // Keep commented out
+      // { name: 'Comments', value: commentCount }, // Keep commented
     ];
 
     console.log(`ADMIN: Content overview counts:`, formattedData);
     res.status(200).json({ success: true, data: formattedData });
   } catch (error) {
     console.error(`ADMIN API Error in getReportContentOverview:`, error);
-    res.status(500).json({
-      success: false,
-      message: "Server error fetching content overview report.",
-    });
+    res
+      .status(500)
+      .json({
+        success: false,
+        message: "Server error fetching content overview.",
+      });
   }
 });
-// --- *** END Report Controller Functions *** ---
+// --- END Report Controller Functions ---
 
 // --- Add other admin controller functions below ---
