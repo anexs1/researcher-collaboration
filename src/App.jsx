@@ -1,68 +1,67 @@
 // src/App.jsx
 
-import React, { useEffect, useState, useCallback, useRef } from "react"; // Added useRef
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
-  BrowserRouter as Router, // Use BrowserRouter once at the top level
+  BrowserRouter as Router,
   Routes,
   Route,
   Navigate,
   useLocation,
 } from "react-router-dom";
-import { io } from "socket.io-client"; // Import socket client
-import { motion, AnimatePresence } from "framer-motion"; // For notification animation
-import "./index.css"; // Ensure your main CSS is imported
+import { io } from "socket.io-client";
+import { motion, AnimatePresence } from "framer-motion";
+import "./index.css"; // Main CSS import
 
 // --- CONTEXT PROVIDER IMPORT ---
 import {
   NotificationProvider,
   useNotifications,
-} from "./context/NotificationContext"; // Adjust path as needed
+} from "./context/NotificationContext"; // Adjust path
 
 // --- Layout Imports ---
-import AdminLayout from "./Layout/AdminLayout"; // Adjust path as needed
-import UserLayout from "./Layout/UserLayout"; // Adjust path as needed
+import AdminLayout from "./Layout/AdminLayout";
+import UserLayout from "./Layout/UserLayout";
 
 // --- Component Imports ---
-import Navbar from "./Component/Navbar"; // Adjust path as needed
-import NormalizeURL from "./Component/NormalizeURL"; // Adjust path as needed
-import AcademicSignupForm from "./Component/AcademicSignupForm"; // Adjust path as needed
-import CorporateSignupForm from "./Component/CorporateSignupForm"; // Adjust path as needed
-import MedicalSignupForm from "./Component/MedicalSignupForm"; // Adjust path as needed
-import NotResearcherSignupForm from "./Component/NotResearcherSignupForm"; // Adjust path as needed
-import UserActivityPage from "./Component/Profile/UserActivityPage"; // Adjust path as needed
-import Notification from "./Component/Common/Notification"; // Adjust path as needed
-import LoadingSpinner from "./Component/Common/LoadingSpinner"; // Adjust path as needed
-// Import ErrorMessage if used directly in App.jsx
-// import ErrorMessage from "./Component/Common/ErrorMessage";
+import Navbar from "./Component/Navbar";
+import NormalizeURL from "./Component/NormalizeURL";
+import AcademicSignupForm from "./Component/AcademicSignupForm";
+import CorporateSignupForm from "./Component/CorporateSignupForm";
+import MedicalSignupForm from "./Component/MedicalSignupForm";
+import NotResearcherSignupForm from "./Component/NotResearcherSignupForm";
+import UserActivityPage from "./Component/Profile/UserActivityPage";
+import Notification from "./Component/Common/Notification";
+import LoadingSpinner from "./Component/Common/LoadingSpinner";
 
 // --- Page Imports (User Facing) ---
-import Home from "./Page/Home"; // Adjust path as needed
-import ExplorePage from "./Page/ExplorePage"; // Adjust path as needed
-import SignupPage from "./Page/SignupPage"; // Adjust path as needed
-import LoginPage from "./Page/LoginPage"; // Adjust path as needed
-import Profile from "./Page/Profile"; // Adjust path as needed
-import PublicationPage from "./Page/Publication"; // Your main public publication list page (verify name/path)
-import PublicationDetailPage from "./Page/PublicationDetailPage"; // Detail Page Component
-import EditPublicationPage from "./Page/EditPublicationPage"; // Adjust path as needed
-import Projects from "./Page/Projects"; // Adjust path as needed
-import CreateProjectPage from "./Page/CreateProjectPage"; // Adjust path as needed
-import EditProjectPage from "./Page/EditProjectPage"; // Adjust path as needed
-import Messages from "./Page/Messages"; // Adjust path as needed
-import ChatPage from "./Page/ChatPage"; // <<< Ensure this placeholder exists
-import PostPublicationPage from "./Page/PostPublicationPage"; // Adjust path as needed
-import AccountSettingsPage from "./Page/Settings/AccountSettingsPage"; // Adjust path as needed
-import NotFoundPage from "./Page/NotFoundPage"; // <<< Ensure this placeholder exists
+import Home from "./Page/Home";
+import ExplorePage from "./Page/ExplorePage";
+import SignupPage from "./Page/SignupPage";
+import LoginPage from "./Page/LoginPage";
+import Profile from "./Page/Profile";
+import PublicationPage from "./Page/Publication";
+import PublicationDetailPage from "./Page/PublicationDetailPage";
+import EditPublicationPage from "./Page/EditPublicationPage";
+import Projects from "./Page/Projects";
+import CreateProjectPage from "./Page/CreateProjectPage";
+import EditProjectPage from "./Page/EditProjectPage";
+import Messages from "./Page/Messages"; // Page listing project chats
+import ChatPage from "./Page/ChatPage"; // Page for a specific project chat
+import PostPublicationPage from "./Page/PostPublicationPage";
+import AccountSettingsPage from "./Page/Settings/AccountSettingsPage";
+import NotFoundPage from "./Page/NotFoundPage";
 
 // --- Page Imports (Admin Facing) ---
-import AdminDashboardPage from "./Page/Admin/AdminDashboardPage"; // Adjust path as needed
-import AdminUsersPage from "./Page/Admin/AdminUsersPage"; // <<< Ensure this placeholder exists
-import AdminSettingsPage from "./Page/Admin/AdminSettingsPage"; // Adjust path as needed
-import AdminReportsPage from "./Page/Admin/AdminReportsPage"; // Adjust path as needed
-import AdminPendingUsersPage from "./Page/Admin/AdminPendingUsersPage"; // Adjust path as needed
-import AdminChatPage from "./Page/Admin/AdminChatPage"; // Adjust path as needed
-import AdminPublicationManagementPage from "./Page/Admin/AdminPublicationManagementPage"; // Adjust path as needed
+import AdminDashboardPage from "./Page/Admin/AdminDashboardPage";
+import AdminUsersPage from "./Page/Admin/AdminUsersPage";
+import AdminSettingsPage from "./Page/Admin/AdminSettingsPage";
+import AdminReportsPage from "./Page/Admin/AdminReportsPage";
+import AdminPendingUsersPage from "./Page/Admin/AdminPendingUsersPage";
+import AdminChatPage from "./Page/Admin/AdminChatPage";
+import AdminPublicationManagementPage from "./Page/Admin/AdminPublicationManagementPage";
 
 // --- Centralized Auth Hook ---
+// Manages user authentication state and local storage synchronization
 const useAuth = () => {
   const [user, setUser] = useState(() => {
     try {
@@ -70,62 +69,50 @@ const useAuth = () => {
       return storedUser ? JSON.parse(storedUser) : null;
     } catch (e) {
       console.error("useAuth: Error parsing user from localStorage", e);
-      localStorage.removeItem("user"); // Clear corrupted data
+      localStorage.removeItem("user");
       return null;
     }
   });
-  const [token, setToken] = useState(() => localStorage.getItem("authToken")); // <<< VERIFY THIS KEY
+  const [token, setToken] = useState(() => localStorage.getItem("authToken")); // Ensure this key matches where you store the token
 
-  // Login function - stores token and user data
   const login = useCallback((userData, authToken) => {
     try {
       if (!userData || !authToken) {
         console.error("useAuth login: Invalid user data or token provided.");
         return;
       }
-      console.log("useAuth: Storing auth data...");
-      localStorage.setItem("authToken", authToken); // <<< CONSISTENT KEY
-      localStorage.setItem("user", JSON.stringify(userData));
+      localStorage.setItem("authToken", authToken); // Store token
+      localStorage.setItem("user", JSON.stringify(userData)); // Store user object
       setToken(authToken);
       setUser(userData);
       window.dispatchEvent(new Event("authChange")); // Notify other parts of app/tabs
-      console.log("useAuth: Login state updated.");
     } catch (error) {
       console.error("Error saving auth data to localStorage:", error);
     }
-  }, []); // No dependencies needed as setters are stable
+  }, []);
 
-  // Logout function - clears token and user data
   const logout = useCallback(() => {
-    console.log("useAuth: Logging out and clearing storage.");
-    localStorage.removeItem("authToken"); // <<< CONSISTENT KEY
-    localStorage.removeItem("user");
+    localStorage.removeItem("authToken"); // Clear token
+    localStorage.removeItem("user"); // Clear user object
     setToken(null);
     setUser(null);
     window.dispatchEvent(new Event("authChange"));
-  }, []); // No dependencies needed
+  }, []);
 
-  // Effect to sync auth state with localStorage (e.g., for other tabs)
+  // Effect to sync auth state across tabs/windows using localStorage events
   useEffect(() => {
     const syncAuth = (event) => {
-      // Only react to changes in relevant keys or manual dispatch
       if (event && event.key && !["authToken", "user"].includes(event.key)) {
-        return;
+        return; // Ignore storage events for unrelated keys
       }
-      console.log("Auth sync triggered by:", event?.type || "initial/manual");
-      const currentToken = localStorage.getItem("authToken"); // <<< CONSISTENT KEY
+      const currentToken = localStorage.getItem("authToken");
       const currentUserJson = localStorage.getItem("user");
       let currentUser = null;
       try {
         currentUser = currentUserJson ? JSON.parse(currentUserJson) : null;
       } catch (e) {
-        console.warn(
-          "syncAuth: Clearing corrupted user data from localStorage",
-          e
-        );
-        localStorage.removeItem("user");
+        localStorage.removeItem("user"); // Clear corrupted data
       }
-      // Update state only if the value has actually changed
       setToken((prevToken) =>
         prevToken !== currentToken ? currentToken : prevToken
       );
@@ -136,22 +123,22 @@ const useAuth = () => {
       );
     };
 
-    syncAuth(); // Initial sync on component mount
-
-    window.addEventListener("storage", syncAuth); // Listen for changes in other tabs
-    window.addEventListener("authChange", syncAuth); // Listen for manual login/logout events
+    syncAuth(); // Initial sync on load
+    window.addEventListener("storage", syncAuth); // Listen for storage changes in other tabs
+    window.addEventListener("authChange", syncAuth); // Listen for explicit login/logout
 
     return () => {
-      // Cleanup listeners on unmount
       window.removeEventListener("storage", syncAuth);
       window.removeEventListener("authChange", syncAuth);
     };
-  }, []); // Run only once on mount
+  }, []); // Run only once
 
   return { user, token, login, logout };
 };
 
 // --- Helper Components ---
+
+// Simple loading screen component
 const LoadingScreen = ({ message = "Loading..." }) => (
   <div className="flex flex-col justify-center items-center h-screen text-lg font-medium text-gray-700 bg-gray-100">
     <LoadingSpinner size="lg" />
@@ -159,136 +146,124 @@ const LoadingScreen = ({ message = "Loading..." }) => (
   </div>
 );
 
-// Protected Route for standard logged-in users
+// Component to protect routes requiring standard login
 const ProtectedRoute = ({ isLoggedIn, children }) => {
   const location = useLocation();
   if (isLoggedIn === null) {
-    // Check if auth state is determined yet
-    return <LoadingScreen message="Verifying session..." />;
+    return <LoadingScreen message="Verifying session..." />; // Show loading while auth state is resolving
   }
   if (!isLoggedIn) {
-    // If auth check complete and not logged in
-    console.log("ProtectedRoute: User not logged in, redirecting to login.");
-    // Redirect to login, saving the page they tried to access
+    // Redirect unauthenticated users to login, preserving intended destination
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
-  return children; // Render the intended component if logged in
+  return children; // Render children if authenticated
 };
 
-// Protected Route for Admin users
+// Component to protect routes requiring admin privileges
 const AdminProtectedRoute = ({ isLoggedIn, isAdmin, children }) => {
   const location = useLocation();
   if (isLoggedIn === null || isAdmin === null) {
-    // Check if auth/admin state is determined
-    return <LoadingScreen message="Verifying access level..." />;
+    return <LoadingScreen message="Verifying access level..." />; // Show loading while auth/admin state resolves
   }
   if (!isLoggedIn) {
-    // Must be logged in first
-    console.log(
-      "AdminProtectedRoute: User not logged in, redirecting to login."
-    );
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/login" state={{ from: location }} replace />; // Must be logged in
   }
   if (!isAdmin) {
-    // Must have admin role
-    console.warn(
-      "AdminProtectedRoute: Non-admin access blocked, redirecting home."
-    );
-    // Redirect non-admins away from admin routes (e.g., to home or profile)
-    return <Navigate to="/" replace />;
+    return <Navigate to="/" replace />; // Redirect non-admins away
   }
-  return children; // Render the intended admin component
+  return children; // Render children if authenticated and admin
 };
 
-// --- Socket Manager Component (Corrected) ---
+// Component to manage the global WebSocket connection
 const SocketManager = ({ token, API_BASE }) => {
-  const { addNewNotification } = useNotifications(); // Get handler from context
-  const socketRef = useRef(null); // Use ref to manage the socket instance
+  const { addNewNotification } = useNotifications(); // Use context for notifications
+  const socketRef = useRef(null); // Ref to hold the socket instance
 
   useEffect(() => {
-    // 1. Disconnect if no token
     if (!token) {
+      // Disconnect if token is removed (logout)
       if (socketRef.current) {
-        console.log(
-          "SocketManager: No token, disconnecting.",
-          socketRef.current.id
-        );
         socketRef.current.disconnect();
         socketRef.current = null;
       }
       return;
     }
 
-    // 2. Connect only if token exists AND not already connected via ref
     if (!socketRef.current) {
-      console.log("SocketManager: Token found, attempting connection...");
+      // Connect only if not already connected
       const newSocket = io(API_BASE, {
         auth: { token },
-        transports: ["websocket"], // Prioritize WebSocket
-        reconnectionAttempts: 5, // Example: Limit retries
+        transports: ["websocket"],
+        reconnectionAttempts: 3,
       });
 
-      socketRef.current = newSocket; // Store ref immediately
+      socketRef.current = newSocket;
 
-      // --- Event Listeners ---
-      newSocket.on("connect", () => {
-        console.log("Socket connected:", newSocket.id);
-      });
+      // --- Standard Event Listeners ---
+      newSocket.on("connect", () =>
+        console.log("Socket connected:", newSocket.id)
+      );
       newSocket.on("disconnect", (reason) => {
         console.log("Socket disconnected:", newSocket.id, "Reason:", reason);
-        socketRef.current = null;
+        // Nullify ref only if this specific socket instance disconnected
+        if (socketRef.current && socketRef.current.id === newSocket.id) {
+          socketRef.current = null;
+        }
       });
       newSocket.on("connect_error", (err) => {
         console.error("Socket connection error:", err.message);
-        socketRef.current = null;
+        // Nullify ref on connection error too
+        if (socketRef.current && socketRef.current.id === newSocket.id) {
+          socketRef.current = null;
+        }
       });
 
-      // --- Custom Event Handlers ---
-      const handleNewRequest = (data) => {
-        if (data && addNewNotification) addNewNotification(data);
+      // --- Custom Application Event Listeners ---
+      // Example: Listen for notifications from the backend
+      const handleNotification = (data) => {
+        if (data && addNewNotification) {
+          console.log("Received notification via socket:", data);
+          addNewNotification(data); // Add to notification context
+        }
       };
-      const handleRequestResponse = (data) => {
-        if (data && addNewNotification) addNewNotification(data);
-      };
-      // Add more specific handlers...
-      // const handleNewMessage = (data) => { if (data && addNewNotification) addNewNotification(data, 'message'); }; // Example
+      newSocket.on("notification", handleNotification); // Assuming backend emits 'notification'
 
-      newSocket.on("new_collaboration_request", handleNewRequest);
-      newSocket.on("request_response", handleRequestResponse);
-      // newSocket.on("new_message", handleNewMessage); // Example
-      // ... other event listeners ...
+      // Example: Specific event for collaboration requests
+      newSocket.on("new_collaboration_request", handleNotification); // Can reuse handler or make specific ones
+      newSocket.on("request_response", handleNotification);
+
+      // **Important**: Do NOT listen for 'newMessage' here globally.
+      // The ChatPage component will handle its own 'newMessage' listeners specific to the room it's in.
+      // Listening globally would cause duplicate message handling.
 
       // --- Cleanup Function ---
       return () => {
         console.log("SocketManager: Cleaning up socket instance", newSocket.id);
-        // Remove specific listeners
         newSocket.off("connect");
         newSocket.off("disconnect");
         newSocket.off("connect_error");
-        newSocket.off("new_collaboration_request", handleNewRequest);
-        newSocket.off("request_response", handleRequestResponse);
-        // newSocket.off("new_message", handleNewMessage); // Example
-        // ... remove others ...
+        newSocket.off("notification", handleNotification); // Remove specific listener
+        newSocket.off("new_collaboration_request", handleNotification);
+        newSocket.off("request_response", handleNotification);
+        // ... remove any other global listeners ...
 
         newSocket.disconnect();
-        // Clear ref only if this specific instance is being cleaned up
         if (socketRef.current && socketRef.current.id === newSocket.id) {
-          socketRef.current = null;
+          socketRef.current = null; // Clear ref on cleanup
         }
       };
     }
-    // Effect depends ONLY on token, API_BASE, and the stable addNewNotification function reference
-  }, [token, API_BASE, addNewNotification]);
+  }, [token, API_BASE, addNewNotification]); // Dependencies for the effect
 
-  return null; // This component renders no UI
+  return null; // This component doesn't render any UI
 };
 
 // --- Main App Component ---
 function App() {
   const { user: currentUser, token, login, logout } = useAuth();
-  const [isAdmin, setIsAdmin] = useState(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(null);
-  const [loadingAuth, setLoadingAuth] = useState(true); // Start as true
+  const [isAdmin, setIsAdmin] = useState(null); // Derived admin status
+  const [isLoggedIn, setIsLoggedIn] = useState(null); // Derived login status
+  const [loadingAuth, setLoadingAuth] = useState(true); // Tracks initial auth check
   const [popupNotification, setPopupNotification] = useState({
     message: "",
     type: "",
@@ -296,78 +271,74 @@ function App() {
   });
   const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
-  // Memoized notification handler
+  // Memoized function to show global popup notifications
   const showPopupNotification = useCallback((message, type = "info") => {
     setPopupNotification({ message, type, show: true });
     const timerId = setTimeout(
       () => setPopupNotification((prev) => ({ ...prev, show: false })),
       5000
     );
-    // Optional: return () => clearTimeout(timerId);
+    // Optional: Return cleanup function if needed elsewhere: return () => clearTimeout(timerId);
   }, []);
 
-  // Effect to derive login/admin status from auth state
+  // Effect to update derived login/admin status when auth state changes
   useEffect(() => {
-    console.log("Auth state changed, deriving status:", {
-      token: !!token,
-      user: !!currentUser?.id,
-      role: currentUser?.role,
-    });
     const userIsLoggedIn = !!token && !!currentUser?.id;
     const userIsAdmin = userIsLoggedIn && currentUser?.role === "admin";
     setIsLoggedIn(userIsLoggedIn);
     setIsAdmin(userIsAdmin);
-    setLoadingAuth(false); // Auth check is complete
+    setLoadingAuth(false); // Mark initial auth check as complete
   }, [token, currentUser]);
 
-  const handleLogout = logout; // Alias for clarity
+  const handleLogout = logout; // Use the logout function from the auth hook
 
-  // Show loading screen during initial auth check
+  // Display loading screen while determining initial auth state
   if (loadingAuth) {
-    return <LoadingScreen message="Initializing..." />;
+    return <LoadingScreen message="Initializing Application..." />;
   }
 
   return (
+    // Wrap the entire app with the Notification Context Provider
     <NotificationProvider>
-      {" "}
-      {/* Wrap Router with Provider */}
       <Router>
-        <NormalizeURL /> {/* Component to handle URL normalization if needed */}
-        {/* Conditionally render SocketManager only if logged in */}
+        <NormalizeURL /> {/* Optional: Component for URL cleanup */}
+        {/* Render SocketManager only when logged in to establish global connection */}
         {isLoggedIn && <SocketManager token={token} API_BASE={API_BASE} />}
-        {/* Conditionally render Navbar based on route */}
+        {/* Render Navbar conditionally based on the current route */}
         <ConditionalNavbar
           isLoggedIn={isLoggedIn}
           currentUser={currentUser}
           onLogout={handleLogout}
         />
         {/* Main content area with padding for fixed navbar */}
-        <div className="pt-16 md:pt-20 bg-gray-50 min-h-screen">
-          {/* Global Notification Popup */}
+        <div className="pt-16 md:pt-20 bg-gray-100 min-h-screen">
+          {" "}
+          {/* Adjusted padding & background */}
+          {/* Global Notification Popup Area */}
           <AnimatePresence>
             {popupNotification.show && (
               <motion.div
-                initial={{ opacity: 0, y: -40 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                className="fixed top-20 md:top-24 right-5 z-[200] w-full max-w-md pointer-events-none"
+                initial={{ opacity: 0, y: -50, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -50, scale: 0.9 }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                className="fixed top-20 md:top-24 right-4 md:right-6 z-[200] w-full max-w-sm pointer-events-none" // Positioned top-right
               >
+                {/* Notification component renders the actual popup */}
                 <Notification
                   message={popupNotification.message}
                   type={popupNotification.type}
                   onClose={() =>
                     setPopupNotification((prev) => ({ ...prev, show: false }))
                   }
-                  className="pointer-events-auto shadow-lg" // Make notification itself clickable
+                  className="pointer-events-auto shadow-lg rounded-md" // Make notification clickable/hoverable
                 />
               </motion.div>
             )}
           </AnimatePresence>
-
-          {/* --- Application Routes --- */}
+          {/* --- Application Routes Definition --- */}
           <Routes>
-            {/* --- Public Routes --- */}
+            {/* --- Publicly Accessible Routes --- */}
             <Route path="/" element={<Home />} />
             <Route path="/explore" element={<ExplorePage />} />
             <Route
@@ -378,10 +349,10 @@ function App() {
               path="/publications/:id"
               element={<PublicationDetailPage currentUser={currentUser} />}
             />
-
-            {/* --- Auth Routes --- */}
+            {/* --- Authentication Routes --- */}
             <Route
               path="/login"
+              // Redirect logged-in users away from login page
               element={
                 isLoggedIn ? (
                   <Navigate to={isAdmin ? "/admin" : "/profile"} replace />
@@ -392,6 +363,7 @@ function App() {
             />
             <Route
               path="/signup"
+              // Redirect logged-in users away from signup page
               element={
                 isLoggedIn ? <Navigate to="/profile" replace /> : <SignupPage />
               }
@@ -403,20 +375,20 @@ function App() {
               path="/signup/not-researcher"
               element={<NotResearcherSignupForm />}
             />
-
-            {/* --- Protected User Routes (Inside UserLayout) --- */}
+            {/* --- Protected User Routes (Rendered within UserLayout) --- */}
+            {/* These routes require the user to be logged in */}
             <Route
               element={
                 <ProtectedRoute isLoggedIn={isLoggedIn}>
-                  {" "}
                   <UserLayout
                     isLoggedIn={isLoggedIn}
                     handleLogout={handleLogout}
                     currentUser={currentUser}
-                  />{" "}
+                  />
                 </ProtectedRoute>
               }
             >
+              {/* Profile related */}
               <Route
                 path="/profile"
                 element={<Profile currentUser={currentUser} />}
@@ -424,15 +396,18 @@ function App() {
               <Route
                 path="/profile/:userId"
                 element={<Profile currentUser={currentUser} />}
-              />
+              />{" "}
+              {/* Public profile view? */}
               <Route
                 path="/profile/activity"
                 element={<UserActivityPage currentUser={currentUser} />}
               />
+              {/* Settings */}
               <Route
                 path="/settings/account"
                 element={<AccountSettingsPage currentUser={currentUser} />}
               />
+              {/* Projects */}
               <Route
                 path="/projects"
                 element={<Projects currentUser={currentUser} />}
@@ -442,6 +417,7 @@ function App() {
                 path="/projects/edit/:projectId"
                 element={<EditProjectPage currentUser={currentUser} />}
               />
+              {/* Publications */}
               <Route
                 path="/publications/new"
                 element={<PostPublicationPage currentUser={currentUser} />}
@@ -450,23 +426,25 @@ function App() {
                 path="/publications/edit/:id"
                 element={<EditPublicationPage />}
               />
-              {/* Messaging Routes */}
+              {/* --- CORRECTED Messaging Routes --- */}
               <Route
-                path="/messages"
+                path="/messages" // Lists available project chats
                 element={<Messages currentUser={currentUser} />}
               />
+              {/* --- CORRECTED: Path for viewing a specific project chat --- */}
               <Route
-                path="/messages/:userId"
+                path="/chat/project/:projectId" // <<< THIS PATH NOW CORRECTLY MATCHES NAVIGATION
                 element={<ChatPage currentUser={currentUser} />}
               />
-            </Route>
-
-            {/* --- Protected Admin Routes (Inside AdminLayout) --- */}
+              {/* Removed the old /messages/:userId route as it's replaced by project chat */}
+            </Route>{" "}
+            {/* End of UserLayout Protected Routes */}
+            {/* --- Protected Admin Routes (Rendered within AdminLayout) --- */}
+            {/* These routes require the user to be logged in AND have the 'admin' role */}
             <Route
               element={
                 <AdminProtectedRoute isLoggedIn={isLoggedIn} isAdmin={isAdmin}>
-                  {" "}
-                  <AdminLayout />{" "}
+                  <AdminLayout /> {/* AdminLayout contains sidebar, etc. */}
                 </AdminProtectedRoute>
               }
             >
@@ -477,31 +455,39 @@ function App() {
                 element={<AdminPendingUsersPage />}
               />
               <Route path="/admin/reports" element={<AdminReportsPage />} />
-              <Route path="/admin/chat" element={<AdminChatPage />} />
+              <Route path="/admin/chat" element={<AdminChatPage />} />{" "}
+              {/* Optional: Admin specific chat interface? */}
               <Route
                 path="/admin/publications"
                 element={<AdminPublicationManagementPage />}
               />
               <Route path="/admin/settings" element={<AdminSettingsPage />} />
-            </Route>
-
-            {/* --- Catch-all / Not Found Route --- */}
+              {/* Add other admin-specific routes here */}
+            </Route>{" "}
+            {/* End of AdminLayout Protected Routes */}
+            {/* --- Catch-all Route for 404 Not Found pages --- */}
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
-        </div>
+        </div>{" "}
+        {/* End main content area */}
       </Router>
     </NotificationProvider>
   );
 }
 
-// --- Conditional Navbar Rendering Component ---
-// Renders Navbar except on admin routes
+// --- Helper Component to conditionally render the Navbar ---
+// Avoids showing the main user navbar on admin panel pages
 const ConditionalNavbar = ({ isLoggedIn, currentUser, onLogout }) => {
   const location = useLocation();
+  // Check if the current path starts with /admin
   const isAdminRoute = location.pathname.startsWith("/admin");
+
+  // Don't render the main Navbar on admin routes
   if (isAdminRoute) {
-    return null; // Don't render Navbar on admin routes
+    return null;
   }
+
+  // Render the main Navbar on all other routes
   return (
     <Navbar
       isLoggedIn={isLoggedIn}

@@ -4,13 +4,14 @@ import { Sequelize, DataTypes } from "sequelize";
 import sequelize from "../config/db.js"; // Your configured sequelize instance
 
 // Import all model definition functions
-import UserModel from "./User.js"; // Use consistent naming
+import UserModel from "./User.js";
 import PublicationModel from "./Publication.js";
 import CollaborationRequestModel from "./CollaborationRequest.js";
 import MemberModel from "./Member.js";
-import ProjectModel from "./Project.js"; // Use consistent naming
+import ProjectModel from "./Project.js";
 import CommentModel from "./Comment.js";
-import MessageModel from "./Message.js"; // <<< Import Message model
+import MessageModel from "./Message.js";
+import GroupModel from "./Group.js"; // <<<--- ADD THIS IMPORT
 
 const db = {};
 
@@ -22,7 +23,8 @@ db.CollaborationRequest = CollaborationRequestModel(sequelize, DataTypes);
 db.Project = ProjectModel(sequelize, DataTypes);
 db.Member = MemberModel(sequelize, DataTypes);
 db.Comment = CommentModel(sequelize, DataTypes);
-db.Message = MessageModel(sequelize, DataTypes); // <<< Initialize Message
+db.Message = MessageModel(sequelize, DataTypes);
+db.Group = GroupModel(sequelize, DataTypes); // <<<--- ADD THIS INITIALIZATION
 console.log("Models initialized:", Object.keys(db).join(", "));
 
 // Apply associations

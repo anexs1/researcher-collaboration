@@ -1,96 +1,71 @@
-// backend/models/Member.js
+// backend/models/Message.js
 import { DataTypes } from "sequelize";
 
-const MemberModel = (sequelize) => {
-  const Member = sequelize.define(
-    "Member", // Model name (singular PascalCase)
+const MessageModel = (sequelize) => {
+  const Message = sequelize.define(
+    "Message",
     {
-      // Assuming composite primary key (user_id, project_id)
-      // If you have a separate 'id' PK column, uncomment it.
-      // id: {
-      //   type: DataTypes.INTEGER.UNSIGNED,
-      //   primaryKey: true,
-      //   autoIncrement: true,
-      // },
-
-      // --- Foreign Keys (camelCase in model) ---
-      userId: {
-        type: DataTypes.INTEGER.UNSIGNED, // Match User ID type
+      id: {
+        type: DataTypes.INTEGER.UNSIGNED,
+        primaryKey: true,
+        autoIncrement: true,
+      },
+      senderId: {
+        type: DataTypes.INTEGER.UNSIGNED,
         allowNull: false,
-        primaryKey: true, // Part of composite primary key
-        references: { model: "Users", key: "id" }, // Add references for FK constraint definition
+        references: { model: "Users", key: "id" },
         onDelete: "CASCADE",
         onUpdate: "CASCADE",
+        field: "senderId", // Explicitly map to camelCase column if needed
       },
       projectId: {
-        type: DataTypes.INTEGER.UNSIGNED, // Match Project ID type
+        // Changed from groupId, links to Project
+        type: DataTypes.INTEGER.UNSIGNED,
         allowNull: false,
-        primaryKey: true, // Part of composite primary key
-        references: { model: "Projects", key: "id" }, // Add references for FK constraint definition
+        references: { model: "Projects", key: "id" }, // Reference Projects table
         onDelete: "CASCADE",
         onUpdate: "CASCADE",
+        field: "projectId", // Explicitly map to camelCase column if needed
       },
-
-      // --- Additional Fields (camelCase in model) ---
-      role: {
-        type: DataTypes.STRING, // Or ENUM if you have fixed roles
+      content: {
+        type: DataTypes.TEXT,
         allowNull: false,
-        defaultValue: "member", // Consistent with controller
+        validate: { notEmpty: true },
       },
-      status: {
-        // Status of the membership
-        type: DataTypes.ENUM("active", "invited", "pending", "inactive"), // Match DB ENUM values exactly
-        allowNull: false,
-        defaultValue: "active", // Default when created via controller
-      },
-      // --- Added joinedAt field to match DB column 'joined_at' ---
-      joinedAt: {
-        // camelCase model field name
-        type: DataTypes.DATE,
-        allowNull: false, // Assuming DB column is NOT NULL (Adjust if needed)
-        defaultValue: DataTypes.NOW, // Set current time automatically on creation
-        // 'field: joined_at' mapping is handled by underscored: true
-      },
-
-      // createdAt and updatedAt are added by `timestamps: true`
-      // and mapped to created_at/updated_at by `underscored: true`
+      // receiverId is removed
+      // readStatus is removed (handle per-user read status in a separate table if needed)
     },
     {
-      // --- Model Options ---
-      tableName: "project_members", // Exact table name
-      timestamps: true, // Enable createdAt, updatedAt
-      underscored: true, // Map camelCase fields to snake_case columns
-      freezeTableName: true, // Prevent table name pluralization
-
+      tableName: "Messages", // Ensure this matches your actual table name
+      timestamps: true, // Expects createdAt, updatedAt
+      // Set underscored based on your DB column naming convention for Messages table
+      // If Messages table uses camelCase (createdAt, senderId, projectId), set underscored: false
+      // If Messages table uses snake_case (created_at, sender_id, project_id), set underscored: true
+      underscored: false, // <<< ADJUST THIS based on your Messages table columns
+      freezeTableName: true,
       indexes: [
-        // Composite unique key also serves as the primary key defined above
-        {
-          unique: true,
-          primary: true, // Explicitly mark this index as the primary key constraint
-          fields: ["user_id", "project_id"], // Use DB column names for index definition
-        },
-        // Optional separate indexes (often covered by PK)
-        // { fields: ["user_id"] },
-        // { fields: ["project_id"] },
+        // Use MODEL field names (camelCase) unless underscored:true maps them
+        { fields: ["senderId"] },
+        { fields: ["projectId"] },
+        { fields: ["createdAt"] },
       ],
     }
   );
 
-  // --- Associations ---
-  // Define associations if Member model needs to directly access User/Project
-  // OR if User/Project use 'Member' as the 'through' model in belongsToMany
-  Member.associate = (models) => {
-    Member.belongsTo(models.User, {
-      foreignKey: "userId", // FK in *this* model (maps to user_id)
-      as: "user", // << Define alias needed for include in controller
-    });
-    Member.belongsTo(models.Project, {
-      foreignKey: "projectId", // FK in *this* model (maps to project_id)
-      as: "project", // << Define alias if needed elsewhere
+  Message.associate = (models) => {
+    // A Message belongs to a User (sender)
+    // Use the alias 'sender' so you can include it easily
+    Message.belongsTo(models.User, { foreignKey: "senderId", as: "sender" });
+
+    // A Message belongs to a Project (the group chat)
+    // Use the alias 'project'
+    Message.belongsTo(models.Project, {
+      foreignKey: "projectId",
+      as: "project",
     });
   };
 
-  return Member;
+  return Message;
 };
 
-export default MemberModel;
+export default MessageModel;

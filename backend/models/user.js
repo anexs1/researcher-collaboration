@@ -6,7 +6,6 @@ const UserModel = (sequelize) => {
   const User = sequelize.define(
     "User",
     {
-      // --- Fields (camelCase - Matching DB Columns) ---
       id: {
         type: DataTypes.INTEGER.UNSIGNED,
         primaryKey: true,
@@ -41,7 +40,6 @@ const UserModel = (sequelize) => {
         allowNull: false,
         defaultValue: "pending",
       },
-      // DB fields based on sample (camelCase)
       university: { type: DataTypes.STRING, allowNull: true },
       department: { type: DataTypes.STRING, allowNull: true },
       companyName: { type: DataTypes.STRING, allowNull: true },
@@ -50,9 +48,6 @@ const UserModel = (sequelize) => {
       hospitalName: { type: DataTypes.STRING, allowNull: true },
       profilePictureUrl: { type: DataTypes.STRING, allowNull: true },
       bio: { type: DataTypes.TEXT, allowNull: true },
-      // NOTE: Assuming firstName, lastName columns DO NOT exist in your DB based on error
-      // firstName: { type: DataTypes.STRING, allowNull: true },
-      // lastName: { type: DataTypes.STRING, allowNull: true },
     },
     {
       timestamps: true, // Expects createdAt, updatedAt columns
@@ -65,75 +60,81 @@ const UserModel = (sequelize) => {
         },
       },
       scopes: {
+        // Exclude password by default
         defaultScope: { attributes: { exclude: ["password"] } },
+        // Scope to explicitly include password when needed (e.g., login)
         withPassword: { attributes: {} },
       },
       indexes: [
-        // Use model field names (camelCase)
         { fields: ["status"] },
         { fields: ["role"] },
         { unique: true, fields: ["email"] },
         { unique: true, fields: ["username"] },
       ],
-      tableName: "Users",
-      underscored: false, // <<< Set to FALSE because DB uses camelCase
+      tableName: "Users", // Make sure this matches your DB table name
+      // Set based on your Users table column naming (e.g., profilePictureUrl vs profile_picture_url)
+      underscored: false, // <<< ADJUST THIS based on your Users table columns
     }
   );
 
   User.prototype.matchPassword = async function (candidatePassword) {
+    // Ensure password was fetched (use .scope('withPassword') when finding user for login)
     if (!this.password) {
       throw new Error(
-        "Password field not available (use 'withPassword' scope)."
+        "Password field not available for comparison. Use 'withPassword' scope when fetching user."
       );
     }
     return await bcrypt.compare(candidatePassword, this.password);
   };
 
   User.associate = (models) => {
-    // Associations use MODEL field names (camelCase) for foreign keys
+    // User owns Projects
     User.hasMany(models.Project, {
       foreignKey: "ownerId",
       as: "ownedProjects",
     });
+
+    // User sends CollaborationRequests
     if (models.CollaborationRequest) {
       User.hasMany(models.CollaborationRequest, {
         foreignKey: "requesterId",
         as: "sentRequests",
       });
     }
+
+    // User authors Publications
     if (models.Publication) {
       User.hasMany(models.Publication, {
         foreignKey: "authorId",
         as: "authoredPublications",
       });
     }
+
+    // User makes Comments
     if (models.Comment) {
       User.hasMany(models.Comment, { foreignKey: "userId", as: "comments" });
     }
 
-    // Many-to-Many with Project through Member
+    // User is a Member of many Projects (through Member table)
     if (models.Project && models.Member) {
       User.belongsToMany(models.Project, {
-        through: models.Member,
-        foreignKey: "userId",
-        otherKey: "projectId",
-        as: "memberProjects",
+        through: models.Member, // Join table
+        foreignKey: "userId", // Key in Member pointing to User
+        otherKey: "projectId", // Key in Member pointing to Project
+        as: "memberProjects", // Alias to get projects user is member of
       });
+      // User has many direct Membership records
       User.hasMany(models.Member, { foreignKey: "userId", as: "memberships" });
     }
 
-    // *** ADDED Message Associations ***
+    // User sends Messages
     if (models.Message) {
       User.hasMany(models.Message, {
-        foreignKey: "senderId",
+        foreignKey: "senderId", // Key in Message pointing to User
         as: "sentMessages",
       });
-      User.hasMany(models.Message, {
-        foreignKey: "receiverId",
-        as: "receivedMessages",
-      });
+      // NO receivedMessages association needed, as messages belong to projects now
     }
-    // ********************************
   };
 
   return User;

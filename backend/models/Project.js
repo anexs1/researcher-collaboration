@@ -5,91 +5,74 @@ const ProjectModel = (sequelize) => {
   const Project = sequelize.define(
     "Project",
     {
-      // --- Fields (camelCase in Model) ---
       id: {
         type: DataTypes.INTEGER.UNSIGNED,
         primaryKey: true,
         autoIncrement: true,
       },
       title: {
-        type: DataTypes.STRING(255),
-        allowNull: false,
-        validate: { notEmpty: true, len: [5, 255] },
-      },
-      description: {
-        type: DataTypes.TEXT,
+        type: DataTypes.STRING,
         allowNull: false,
         validate: { notEmpty: true },
       },
-      ownerId: {
-        // <<< Model uses camelCase, should map to ownerId in DB
-        type: DataTypes.INTEGER.UNSIGNED,
-        allowNull: false,
-        references: { model: "Users", key: "id" }, // References Users table's 'id' (camelCase)
-        onUpdate: "CASCADE",
-        onDelete: "CASCADE",
+      description: {
+        type: DataTypes.TEXT,
+        allowNull: true,
       },
-      requiredCollaborators: {
+      ownerId: {
         type: DataTypes.INTEGER.UNSIGNED,
         allowNull: false,
-        defaultValue: 1,
-        validate: { isInt: true, min: 0 },
-      }, // should map to requiredCollaborators
-      status: {
-        type: DataTypes.ENUM("Planning", "Active", "Completed", "On Hold"),
-        allowNull: false,
-        defaultValue: "Planning",
-      }, // should map to status
-      // createdAt, updatedAt should map to createdAt, updatedAt
+        references: { model: "Users", key: "id" },
+        onDelete: "CASCADE", // Or restrict/set null based on your rules
+        onUpdate: "CASCADE",
+        field: "ownerId", // Explicit mapping if needed
+      },
+      // Add other project fields as needed (e.g., status, category)
     },
     {
-      tableName: "Projects",
-      timestamps: true, // Expects createdAt, updatedAt columns in DB
-      underscored: false, // <<< CORRECTED: Set to FALSE because DB uses camelCase (ownerId)
+      tableName: "Projects", // Ensure this matches your actual table name
+      timestamps: true, // Expects createdAt, updatedAt
+      // Set based on your Projects table column naming (e.g., ownerId vs owner_id)
+      underscored: false, // <<< ADJUST THIS based on your Projects table columns
       freezeTableName: true,
       indexes: [
-        // Use MODEL field names (camelCase) for index definitions now
-        { fields: ["ownerId"] }, // <<< CORRECTED
-        { fields: ["status"] },
+        // Use MODEL field names unless underscored:true maps them
+        { fields: ["ownerId"] },
+        { fields: ["title"] },
       ],
     }
   );
 
   Project.associate = (models) => {
-    // Associations use MODEL field names (camelCase) for foreign keys
-    Project.belongsTo(models.User, { foreignKey: "ownerId", as: "owner" }); // ownerId in Project model matches ownerId in DB
+    // Project belongs to a User (Owner)
+    Project.belongsTo(models.User, { foreignKey: "ownerId", as: "owner" });
 
-    // Check if models exist before associating
+    // Project has many Members (through Member table)
+    Project.belongsToMany(models.User, {
+      through: models.Member, // Join table
+      foreignKey: "projectId", // Key in Member pointing to Project
+      otherKey: "userId", // Key in Member pointing to User
+      as: "members", // Alias to get users who are members
+    });
+    // Project has many direct Membership records
+    Project.hasMany(models.Member, {
+      foreignKey: "projectId",
+      as: "projectMemberships",
+    });
+
+    // Project receives CollaborationRequests
     if (models.CollaborationRequest) {
       Project.hasMany(models.CollaborationRequest, {
         foreignKey: "projectId",
-        as: "joinRequests",
-        onDelete: "CASCADE",
+        as: "collaborationRequests",
       });
     }
-    if (models.Member && models.User) {
-      Project.belongsToMany(models.User, {
-        through: models.Member,
-        foreignKey: "projectId",
-        otherKey: "userId",
-        as: "members",
-      }); // projectId/userId in Member model
-      Project.hasMany(models.Member, {
-        foreignKey: "projectId",
-        as: "memberships",
-      }); // projectId in Member model
-    }
-    if (models.Comment) {
-      Project.hasMany(models.Comment, {
-        foreignKey: "projectId",
-        as: "comments",
-        onDelete: "CASCADE",
-      });
-    }
-    if (models.Message) {
-      // Add if projects can have messages directly (less common)
-      // Project.hasMany(models.Message, { foreignKey: 'projectId', as: 'projectMessages' });
-    }
+
+    // *** ADDED: Project has many Messages (for the group chat) ***
+    Project.hasMany(models.Message, {
+      foreignKey: "projectId", // Key in Message pointing to Project
+      as: "messages", // Alias to get messages for this project chat
+    });
   };
 
   return Project;

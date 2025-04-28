@@ -14,14 +14,16 @@ const MessageModel = (sequelize) => {
         type: DataTypes.INTEGER.UNSIGNED,
         allowNull: false,
         references: { model: "Users", key: "id" },
-        onDelete: "CASCADE", // Or SET NULL if preferred
+        onDelete: "CASCADE", // Keep: A message always has a sender
         onUpdate: "CASCADE",
       },
-      receiverId: {
+      // --- CHANGED: Renamed groupId to projectId ---
+      projectId: {
+        // Changed from groupId
         type: DataTypes.INTEGER.UNSIGNED,
         allowNull: false,
-        references: { model: "Users", key: "id" },
-        onDelete: "CASCADE", // Or SET NULL
+        references: { model: "Projects", key: "id" }, // Reference Projects table
+        onDelete: "CASCADE", // If project is deleted, delete messages
         onUpdate: "CASCADE",
       },
       content: {
@@ -29,32 +31,35 @@ const MessageModel = (sequelize) => {
         allowNull: false,
         validate: { notEmpty: true },
       },
-      readStatus: {
-        type: DataTypes.BOOLEAN,
-        allowNull: false,
-        defaultValue: false,
-      },
-      // createdAt, updatedAt managed by timestamps:true
+      // REMOVED: receiverId
+      // REMOVED: readStatus (complex for groups)
     },
     {
       tableName: "Messages",
-      timestamps: true, // Expects createdAt, updatedAt columns
-      underscored: false, // <<< DB uses camelCase for this table
+      timestamps: true,
+      underscored: false, // Assuming Messages table uses camelCase
       freezeTableName: true,
       indexes: [
         { fields: ["senderId"] },
-        { fields: ["receiverId"] },
+        // --- CHANGED: Index on projectId ---
+        { fields: ["projectId"] }, // Changed from groupId
         { fields: ["createdAt"] },
       ],
     }
   );
 
   Message.associate = (models) => {
+    // Keep sender association
     Message.belongsTo(models.User, { foreignKey: "senderId", as: "sender" });
-    Message.belongsTo(models.User, {
-      foreignKey: "receiverId",
-      as: "receiver",
-    });
+
+    // --- CHANGED: Associate with Project instead of Group ---
+    // ADDED: Project association
+    Message.belongsTo(models.Project, {
+      foreignKey: "projectId",
+      as: "project",
+    }); // Changed from Group
+
+    // REMOVED: Receiver association
   };
 
   return Message;

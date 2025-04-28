@@ -3,274 +3,235 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import {
-  FaUserCircle,
   FaSearch,
   FaSpinner,
   FaExclamationTriangle,
-  FaProjectDiagram,
-  FaUserClock,
-  FaUserCheck,
+  FaProjectDiagram, // Icon for projects
+  FaComments, // Icon for empty state
 } from "react-icons/fa";
 
-// Adjust paths as needed
+// Adjust import paths as needed
 import LoadingSpinner from "../Component/Common/LoadingSpinner";
 import ErrorMessage from "../Component/Common/ErrorMessage";
 
+// Ensure API_BASE_URL is correctly configured in your .env file
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 function Messages({ currentUser }) {
-  // Pass currentUser for potential checks if needed
-  const [groupedContacts, setGroupedContacts] = useState([]); // State holds array of {projectId, projectName, contacts: [...]}
+  // Accept currentUser if needed for authorization display, etc.
+  // State holds the list of projects the user can chat in
+  const [projects, setProjects] = useState([]); // Array of { projectId, projectName }
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const navigate = useNavigate();
 
-  // Fetch Grouped Contacts (Members and Pending Requesters grouped by project)
-  const fetchGroupedContacts = useCallback(async () => {
+  // Callback to fetch the list of projects for the chat list
+  const fetchProjects = useCallback(async () => {
+    console.log("Messages.jsx: Initiating fetch for project chat list...");
     setIsLoading(true);
-    setError(null);
-    const token = localStorage.getItem("authToken"); // <<< VERIFY THIS KEY IS CORRECT
+    setError(null); // Clear previous errors
+    const token = localStorage.getItem("authToken"); // Verify this is the correct key for your token
+
     if (!token) {
-      setError("Authentication required to view messages. Please log in.");
+      console.error("Messages.jsx: Auth token not found.");
+      setError("Authentication required. Please log in to view your chats.");
       setIsLoading(false);
+      // Optional: Redirect to login
+      // navigate('/login');
       return;
     }
-    console.log("Messages.jsx: Fetching grouped contacts with token:", !!token);
 
     try {
-      // Use the backend endpoint that returns grouped data
+      // Make API call to the backend endpoint that returns the list of projects
       const response = await axios.get(
-        `${API_BASE_URL}/api/messaging/grouped-contacts`,
+        `${API_BASE_URL}/api/messaging/projects`, // Use the updated backend route
         {
           headers: { Authorization: `Bearer ${token}` },
+          // Optional: Add timeout
+          // timeout: 10000, // 10 seconds
         }
       );
 
+      // Validate the response structure
       if (response.data?.success && Array.isArray(response.data.data)) {
         console.log(
-          "Messages.jsx: Received grouped contacts:",
-          response.data.data
+          `Messages.jsx: Successfully fetched ${response.data.data.length} project chats.`
         );
-        setGroupedContacts(response.data.data);
+        setProjects(response.data.data);
       } else {
-        // Handle cases where backend returns success:false or invalid data structure
+        console.error(
+          "Messages.jsx: Received invalid data structure from API.",
+          response.data
+        );
         throw new Error(
           response.data?.message ||
-            "Failed to load contacts or received invalid data."
+            "Failed to load project chats or received unexpected data."
         );
       }
     } catch (err) {
-      console.error("Error fetching grouped message contacts:", err);
-      let errorMsg = "Could not load contacts.";
-      if (err.response) {
-        // Use specific error message from backend if available
-        errorMsg =
-          err.response.data?.message ||
-          `Error ${err.response.status}: ${err.response.statusText}`;
+      console.error("Messages.jsx: Error fetching project chat list:", err);
+      let errorMsg = "Could not load your project chats.";
+      if (axios.isCancel(err)) {
+        console.log("Request canceled:", err.message);
+        errorMsg = "Request timed out."; // Or handle differently
+      } else if (err.response) {
+        // Handle specific HTTP status codes
+        if (err.response.status === 401) {
+          errorMsg = "Your session may have expired. Please log in again.";
+          // Optional: Clear token and redirect
+          // localStorage.removeItem("authToken");
+          // navigate('/login');
+        } else {
+          errorMsg =
+            err.response.data?.message ||
+            `Error ${err.response.status}: Failed to load chats.`;
+        }
       } else if (err.request) {
-        // Network error (no response received)
         errorMsg =
-          "Network error. Please check your connection and the server.";
+          "Network error. Unable to reach the server. Please check your connection.";
       } else {
-        // Other setup errors
-        errorMsg = err.message;
+        errorMsg = err.message || "An unknown error occurred.";
       }
       setError(errorMsg);
-      setGroupedContacts([]); // Clear data on error
+      setProjects([]); // Clear projects on error
     } finally {
-      setIsLoading(false);
+      setIsLoading(false); // Ensure loading is always turned off
     }
-  }, []); // This callback itself doesn't need dependencies unless depending on external state
+  }, []); // No external dependencies needed for the callback definition itself
 
-  // Fetch contacts when the component mounts
+  // Fetch the project list when the component mounts
   useEffect(() => {
-    fetchGroupedContacts();
-  }, [fetchGroupedContacts]); // Run fetchGroupedContacts once on mount
+    fetchProjects();
+  }, [fetchProjects]); // Dependency array ensures fetchProjects is stable
 
-  // Client-side Filtering within the fetched groups
-  const filteredGroupedContacts = groupedContacts
-    .map((group) => ({
-      ...group,
-      // Filter the contacts array within each group based on username search
-      contacts: group.contacts.filter((contact) =>
-        contact.username?.toLowerCase().includes(searchTerm.toLowerCase())
-      ),
-    }))
-    // After filtering contacts, remove any groups that now have zero matching contacts
-    .filter((group) => group.contacts.length > 0);
+  // Client-side filtering based on the search term (filters project names)
+  const filteredProjects = projects.filter((project) =>
+    project.projectName?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-  // Handler to navigate to the specific chat page
-  const handleContactClick = (userId) => {
-    if (!userId) {
-      console.error("Cannot navigate: Invalid user ID provided.");
+  // Handler to navigate to the chat page for a specific project
+  const handleProjectClick = (projectId) => {
+    if (!projectId) {
+      console.error(
+        "Messages.jsx: Cannot navigate, invalid projectId:",
+        projectId
+      );
       return;
     }
-    console.log(`Navigating to chat page for user ID: ${userId}`);
-    navigate(`/messages/${userId}`); // Ensure this route exists and renders ChatPage.jsx
+    console.log(
+      `Messages.jsx: Navigating to chat for project ID: ${projectId}`
+    );
+    // Navigate to the specific project chat route (ensure this route is defined in your router)
+    navigate(`/chat/project/${projectId}`);
   };
 
   // --- Render Logic ---
   return (
-    <div className="flex flex-col h-full max-w-4xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-      {/* Header */}
+    <div className="flex flex-col h-full max-w-4xl mx-auto px-4 py-6 sm:px-6 lg:px-8 bg-gray-50">
+      {/* Page Header */}
       <div className="mb-6 border-b pb-4 border-gray-200">
         <h1 className="text-2xl md:text-3xl font-bold text-gray-800">
-          Messages
+          Project Chats
         </h1>
         <p className="text-sm text-gray-600 mt-1">
-          Contacts from your projects.
+          Select a project to view or start a conversation.
         </p>
       </div>
 
       {/* Search Bar */}
-      <div className="mb-4 sticky top-0 bg-gray-50 py-2 z-10 -mx-4 px-4 border-b border-gray-200">
+      <div className="mb-4 sticky top-0 bg-gray-50 py-3 z-10 -mx-4 px-4 border-b border-gray-200">
         <div className="relative max-w-xl mx-auto">
-          <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4 pointer-events-none" />
           <input
-            type="text"
+            type="search" // Use type="search" for better semantics and potential clear button
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search contacts by username..."
-            className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 shadow-sm"
-            aria-label="Search contacts"
+            placeholder="Search projects by name..."
+            className="w-full pl-10 pr-4 py-2 rounded-full border border-gray-300 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm outline-none"
+            aria-label="Search projects"
           />
         </div>
       </div>
 
-      {/* Content Area: Loading, Error, Empty, or List */}
-      <div className="flex-grow overflow-y-auto -mx-4 px-4 pb-4">
+      {/* Main Content Area */}
+      <div className="flex-grow overflow-y-auto -mx-4 px-4 pb-4 custom-scrollbar">
+        {" "}
+        {/* Added custom-scrollbar class if needed */}
         {isLoading ? (
-          <div className="flex justify-center items-center py-20">
-            {" "}
-            <LoadingSpinner size="lg" />{" "}
-            <span className="ml-3 text-gray-500">Loading Contacts...</span>{" "}
+          // Loading State
+          <div className="flex justify-center items-center py-20 text-center">
+            <LoadingSpinner size="lg" />
+            <span className="ml-3 text-lg font-medium text-gray-500">
+              Loading Chats...
+            </span>
           </div>
         ) : error ? (
+          // Error State
           <div className="py-10">
-            {" "}
             <ErrorMessage
+              title="Failed to Load Chats"
               message={error}
-              onClose={() => {
-                setError(null);
-                fetchGroupedContacts();
-              }}
-            />{" "}
-          </div> // Allow retry on error
-        ) : filteredGroupedContacts.length === 0 ? (
-          <div className="text-center py-16 px-6 bg-white rounded-lg shadow-sm border border-gray-100 mt-4">
-            <FaExclamationTriangle className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+              onRetry={fetchProjects} // Allow user to retry fetching
+              onClose={() => setError(null)} // Allow user to dismiss error
+            />
+          </div>
+        ) : filteredProjects.length === 0 ? (
+          // Empty State (handles both no projects at all, and no search results)
+          <div className="text-center py-16 px-6 bg-white rounded-lg shadow border border-gray-100 mt-4">
+            <FaComments className="mx-auto h-16 w-16 text-gray-300 mb-5" />
             <h3 className="text-xl font-semibold text-gray-700">
-              No Contacts Found
+              {searchTerm ? "No Projects Found" : "No Project Chats Yet"}
             </h3>
-            <p className="mt-2 text-gray-600">
+            <p className="mt-2 text-gray-600 max-w-md mx-auto">
               {searchTerm
-                ? "No contacts match your search."
-                : "Join or create projects and connect with collaborators to message them."}
+                ? "No projects match your search term. Try searching for something else."
+                : "You aren't part of any project chats yet. Join or create a project to start collaborating and chatting with members."}
             </p>
-            {searchTerm && (
+            {searchTerm ? (
               <button
                 onClick={() => setSearchTerm("")}
-                className="mt-4 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 border border-gray-200"
+                className="mt-5 px-5 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                {" "}
-                Clear Search{" "}
+                Clear Search
               </button>
+            ) : (
+              <Link
+                to="/projects" // Link to where users can find/create projects
+                className="mt-5 inline-block px-5 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                Explore Projects
+              </Link>
             )}
           </div>
         ) : (
-          // --- Render Grouped List ---
-          <div className="space-y-5 mt-2">
-            {filteredGroupedContacts.map((group) => (
-              <div
-                key={group.projectId}
-                className="bg-white p-4 rounded-lg shadow-sm border border-gray-200"
-              >
-                {/* Project Header */}
-                <h2 className="text-md font-semibold text-gray-800 mb-3 flex items-center border-b border-gray-100 pb-2">
-                  <FaProjectDiagram className="mr-2 text-indigo-600 flex-shrink-0 w-4 h-4" />
-                  <span
-                    className="truncate flex-grow"
-                    title={group.projectName}
-                  >
-                    {group.projectName}
-                  </span>
-                  {/* Link to view the actual project page */}
-                  <Link
-                    to={`/projects/${group.projectId}`} // Navigate to project detail page
-                    className="ml-auto text-xs text-indigo-500 hover:text-indigo-700 hover:underline flex-shrink-0 px-2 py-0.5 rounded hover:bg-indigo-50"
-                    onClick={(e) => e.stopPropagation()} // Prevent triggering contact click if nested
-                  >
-                    View Project
-                  </Link>
-                </h2>
-                {/* Contacts List within Group */}
-                <ul className="space-y-1">
-                  {group.contacts.map((contact) => (
-                    // Use user ID as the key for the list item itself
-                    <li key={contact.id}>
-                      <button
-                        onClick={() => handleContactClick(contact.id)} // Navigate using user ID
-                        className="w-full flex items-center p-2 rounded-md hover:bg-gray-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-indigo-300 text-left"
-                        title={`Message ${contact.username}`}
-                      >
-                        {/* Avatar */}
-                        <div className="flex-shrink-0 mr-2.5 relative">
-                          {contact.profilePictureUrl ? (
-                            <img
-                              src={contact.profilePictureUrl}
-                              alt={contact.username}
-                              className="w-8 h-8 rounded-full object-cover border border-gray-200"
-                              onError={(e) => {
-                                e.target.onerror = null;
-                                e.target.style.display = "none";
-                                const fb = e.target.nextElementSibling;
-                                if (fb) fb.style.display = "flex";
-                              }}
-                            />
-                          ) : null}
-                          <div
-                            className={`w-8 h-8 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-indigo-700 font-semibold text-xs ${
-                              contact.profilePictureUrl ? "hidden" : "flex"
-                            }`}
-                          >
-                            {(contact.username || "?").charAt(0).toUpperCase()}
-                          </div>
-                        </div>
-                        {/* Info */}
-                        <div className="flex-grow overflow-hidden mr-2">
-                          <p className="text-sm font-medium text-gray-800 truncate">
-                            {contact.username || `User ${contact.id}`}
-                          </p>
-                        </div>
-                        {/* Status/Type Indicator */}
-                        <div className="flex-shrink-0 ml-auto">
-                          {contact.type === "requester" && (
-                            <span
-                              title={`Pending join request`}
-                              className="text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded-full flex items-center font-medium"
-                            >
-                              <FaUserClock className="mr-1 w-3 h-3" /> Pending
-                            </span>
-                          )}
-                          {contact.type === "member" && (
-                            <span
-                              title={`Project member`}
-                              className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full flex items-center font-medium"
-                            >
-                              <FaUserCheck className="mr-1 w-3 h-3" /> Member
-                            </span>
-                          )}
-                        </div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+          // List of Project Chats
+          <ul className="space-y-3 mt-2">
+            {filteredProjects.map((project) => (
+              <li key={project.projectId}>
+                <button
+                  onClick={() => handleProjectClick(project.projectId)}
+                  className="w-full flex items-center p-3 bg-white rounded-lg shadow-sm border border-gray-200 hover:bg-indigo-50 hover:border-indigo-300 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 text-left group"
+                >
+                  {/* Project Icon */}
+                  <div className="flex-shrink-0 mr-4 h-10 w-10 bg-indigo-100 rounded-full flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
+                    <FaProjectDiagram className="w-5 h-5 text-indigo-600" />
+                  </div>
+                  {/* Project Name */}
+                  <div className="flex-grow overflow-hidden mr-2">
+                    <p className="text-sm font-semibold text-gray-900 truncate group-hover:text-indigo-800">
+                      {project.projectName || `Project ${project.projectId}`}
+                    </p>
+                    {/* Placeholder for last message snippet */}
+                    {/* <p className="text-xs text-gray-500 truncate mt-0.5">No messages yet...</p> */}
+                  </div>
+                  {/* Optional: Unread count indicator */}
+                  {/* <span className="ml-auto text-xs bg-red-500 text-white font-bold rounded-full px-2 py-0.5">3</span> */}
+                </button>
+              </li>
             ))}
-          </div>
-          // --- End Grouped List ---
+          </ul>
         )}
       </div>
     </div>
