@@ -6,8 +6,8 @@ import {
   FaBan,
   FaSpinner,
   FaUserCircle,
-  FaUserClock, // Icon for pending
-  FaUserCheck as FaUserCheckIcon, // Icon for approved members
+  FaUserClock,
+  FaUserCheck as FaUserCheckIcon,
 } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
 // Adjust path as needed
@@ -18,26 +18,31 @@ import Notification from "../Common/Notification";
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
+// Helper to get Auth Token
+const getAuthToken = () => localStorage.getItem("authToken");
+
+// --- Component Start ---
 const RequestsModal = ({
   project,
   onClose,
   currentUser,
   onAllRequestsHandled,
 }) => {
-  // Accept callback prop
-  const [pendingRequests, setPendingRequests] = useState([]); // Renamed for clarity
-  const [approvedMembers, setApprovedMembers] = useState([]); // New state for approved members
+  const [pendingRequests, setPendingRequests] = useState([]);
+  const [approvedMembers, setApprovedMembers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [processingRequestId, setProcessingRequestId] = useState(null);
+  const [processingRequestId, setProcessingRequestId] = useState(null); // Tracks which request is being acted upon
   const [notification, setNotification] = useState({
     message: "",
     type: "",
     show: false,
   });
-  const initialRequestCount = useRef(0); // Ref to store initial PENDING count
-  const hasFetched = useRef(false); // Prevent multiple initial fetches
-  const wasLastRequestHandled = useRef(false); // Ref flag to trigger useEffect callback
+
+  // Refs to manage fetch state and callback logic
+  const hasFetched = useRef(false);
+  const initialPendingCount = useRef(0); // Store the initial number of pending requests
+  const wasLastRequestHandled = useRef(false); // Flag to trigger callback after state update
 
   // --- Notification Handler ---
   const showModalNotification = useCallback((message, type = "success") => {
@@ -51,13 +56,21 @@ const RequestsModal = ({
 
   // --- Fetch Pending Requests AND Approved Members ---
   const fetchRequestsAndMembers = useCallback(async () => {
-    if (!project?.id || (isLoading && hasFetched.current)) return;
+    // Prevent fetching if already loading or project ID is missing
+    if (!project?.id) {
+      setError("Project information is missing.");
+      setIsLoading(false);
+      return;
+    }
+    // Don't refetch if already loading
+    if (isLoading) return;
 
     console.log(`Fetching requests & members for project ${project.id}`);
     setIsLoading(true);
-    setError(null);
-    wasLastRequestHandled.current = false; // Reset flag
-    const token = localStorage.getItem("authToken");
+    setError(null); // Clear previous errors
+    wasLastRequestHandled.current = false; // Reset flag on new fetch
+
+    const token = getAuthToken();
     if (!token) {
       setError("Authentication required.");
       setIsLoading(false);
@@ -65,78 +78,122 @@ const RequestsModal = ({
     }
 
     try {
-      // Use the SAME endpoint, backend now returns both lists
+      // --- Use a specific endpoint for fetching both requests and members for a project ---
+      // !!! IMPORTANT: Ensure this backend endpoint exists and returns the expected structure !!!
+      // Example endpoint: GET /api/projects/:projectId/requests-and-members
+      // Or adapt your existing GET /api/collaboration-requests endpoint
       const response = await axios.get(
-        `${API_BASE_URL}/api/projects/${project.id}/requests`, // Removed ?status=pending, backend defaults or handles it
+        `${API_BASE_URL}/api/collaboration-requests?projectId=${project.id}`, // Assuming this endpoint returns both now
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      // <<< Handle new response structure >>>
-      if (response.data?.success && response.data?.data) {
-        const pending = Array.isArray(response.data.data.pendingRequests)
-          ? response.data.data.pendingRequests
-          : [];
-        const approved = Array.isArray(response.data.data.approvedMembers)
-          ? response.data.data.approvedMembers
-          : [];
+      // --- LOG THE RESPONSE TO DEBUG ---
+      console.log(
+        "RequestsModal API Response:",
+        JSON.stringify(response.data, null, 2)
+      );
+
+      // --- CORRECTED DATA VALIDATION AND EXTRACTION ---
+      // Expecting structure: { success: true, data: { pendingRequests: [], approvedMembers: [] } }
+      // OR structure from getReceivedRequests: { success: true, count: X, data: [...] } -> Needs adjustment
+      if (response.data?.success) {
+        let pending = [];
+        let approved = []; // Default to empty
+
+        // Check structure: Is data an object with keys, or just an array (like getReceivedRequests)?
+        if (response.data.data && typeof response.data.data === "object") {
+          // Scenario 1: Backend sends { success: true, data: { pendingRequests: [], approvedMembers: [] } }
+          pending = Array.isArray(response.data.data.pendingRequests)
+            ? response.data.data.pendingRequests
+            : [];
+          approved = Array.isArray(response.data.data.approvedMembers)
+            ? response.data.data.approvedMembers
+            : [];
+          console.log(
+            `Parsed: ${pending.length} pending, ${approved.length} approved.`
+          );
+        } else if (Array.isArray(response.data.data)) {
+          // Scenario 2: Backend sends { success: true, count: X, data: [...] } (only pending requests)
+          // This means we need another call for members, OR the backend needs changing.
+          // For now, assume it only returns pending based on your controller.
+          pending = response.data.data;
+          approved = []; // Cannot get approved members from this endpoint currently
+          console.warn(
+            "RequestsModal: API endpoint only returned pending requests. Approved members list will be empty."
+          );
+          // TODO: Add a separate call to fetch members if needed, e.g., GET /api/projects/:projectId/members
+        } else {
+          // Unexpected structure within 'data'
+          throw new Error(
+            "Invalid data structure received inside 'data' field."
+          );
+        }
 
         setPendingRequests(pending);
-        setApprovedMembers(approved); // Set the approved members state
+        setApprovedMembers(approved); // Set approved members (might be empty)
 
-        initialRequestCount.current = pending.length; // Track initial PENDING count
-        console.log(
-          "Initial pending:",
-          initialRequestCount.current,
-          "Approved fetched:",
-          approved.length
-        );
-        hasFetched.current = true;
+        // Set initial count only on the first successful fetch
+        if (!hasFetched.current) {
+          initialPendingCount.current = pending.length;
+          console.log(
+            "Initial pending count set:",
+            initialPendingCount.current
+          );
+        }
+        hasFetched.current = true; // Mark as fetched
       } else {
-        throw new Error(response.data?.message || "Invalid data received.");
+        // Backend returned success: false or missing success flag
+        throw new Error(
+          response.data?.message || "Invalid data received from API."
+        );
       }
+      // --- END CORRECTION ---
     } catch (err) {
       console.error("Error fetching requests/members:", err);
       const errorMsg =
         err.response?.status === 403
-          ? "Permission denied."
+          ? "Permission denied to view requests/members."
           : err.response?.data?.message ||
             err.message ||
-            "Could not load data.";
+            "Could not load request/member data.";
       setError(errorMsg);
       setPendingRequests([]);
-      setApprovedMembers([]); // Clear both lists on error
-      initialRequestCount.current = 0;
+      setApprovedMembers([]);
+      initialPendingCount.current = 0; // Reset count on error
+      hasFetched.current = true; // Mark fetch attempt even if failed
     } finally {
       setIsLoading(false);
     }
-  }, [project?.id, isLoading]); // Keep isLoading dependency
+    // Depend on project.id; isLoading prevents rapid refetching
+  }, [project?.id, isLoading]);
 
-  // Fetch data only once when modal mounts
+  // Initial Fetch Effect
   useEffect(() => {
-    if (!hasFetched.current) {
+    // Fetch only if project ID exists and fetch hasn't happened yet
+    if (project?.id && !hasFetched.current) {
       fetchRequestsAndMembers();
     }
-  }, [fetchRequestsAndMembers]);
+    // Cleanup ref on unmount if needed (usually not necessary for this pattern)
+    // return () => { hasFetched.current = false; };
+  }, [project?.id, fetchRequestsAndMembers]); // Depend on fetchRequestsAndMembers callback
 
   // --- Handle Request Action (Approve/Reject) ---
   const handleRequestAction = useCallback(
     async (requestId, action, responseMessage = null) => {
-      if (!requestId || !action || processingRequestId) return; // Prevent double clicks
+      if (!requestId || !action || processingRequestId) return;
 
       setProcessingRequestId(requestId);
       setError(null);
-      const token = localStorage.getItem("authToken");
+      const token = getAuthToken();
       if (!token) {
         showModalNotification("Authentication required.", "error");
         setProcessingRequestId(null);
         return;
       }
 
-      // Find the request details BEFORE filtering state (for optimistic UI update)
       const requestBeingHandled = pendingRequests.find(
         (req) => req.id === requestId
       );
-
       console.log(`Attempting to ${action} request ID: ${requestId}`);
 
       try {
@@ -152,43 +209,24 @@ const RequestsModal = ({
         if (response.data?.success) {
           showModalNotification(`Request ${action} successfully.`, "success");
 
-          // Update state using functional updates
-          setPendingRequests((prevPending) => {
-            const updatedPending = prevPending.filter(
-              (req) => req.id !== requestId
-            );
-            // Check if this action resulted in the last pending request being handled
-            if (
-              updatedPending.length === 0 &&
-              initialRequestCount.current > 0 &&
-              prevPending.length > 0
-            ) {
-              console.log(
-                "Setting flag: Last pending request handled for project:",
-                project.id
-              );
-              wasLastRequestHandled.current = true; // Set flag
-            } else if (initialRequestCount.current > 0) {
-              // Decrement initial count *only if* it wasn't the last one, avoids count mismatch issues
-              initialRequestCount.current = Math.max(
-                0,
-                initialRequestCount.current - 1
-              );
-            }
-            return updatedPending;
-          });
+          // --- State Updates ---
+          const wasPreviouslyEmpty = pendingRequests.length === 1; // Was this the only pending request?
 
-          // If approved, optimistically ADD to approved members list
+          // Remove from pending list
+          setPendingRequests((prevPending) =>
+            prevPending.filter((req) => req.id !== requestId)
+          );
+
+          // If approved, add to approved members list (optimistic)
           if (action === "approved" && requestBeingHandled) {
             const newMember = {
-              // Construct structure similar to fetched members
-              id: null, // We don't know the Member table ID yet
+              id: `optimistic-${requestId}`, // Temporary unique key for optimistic update
               userId: requestBeingHandled.requesterId,
               projectId: project.id,
               role: "member",
               status: "active",
               joinedAt: new Date().toISOString(),
-              createdAt: new Date().toISOString(),
+              createdAt: requestBeingHandled.createdAt, // Use request createdAt as approx
               user: requestBeingHandled.requester
                 ? { ...requestBeingHandled.requester }
                 : {
@@ -199,7 +237,17 @@ const RequestsModal = ({
             };
             setApprovedMembers((prevApproved) => [...prevApproved, newMember]);
           }
-          // If rejected, no change to approvedMembers list needed here
+
+          // --- Flag for Callback ---
+          // Set the flag *if* this action cleared the *last* of the *initially fetched* pending requests
+          if (wasPreviouslyEmpty && initialPendingCount.current > 0) {
+            console.log(
+              "Setting flag: Last pending request handled for project:",
+              project.id
+            );
+            wasLastRequestHandled.current = true;
+            initialPendingCount.current = 0; // Reset initial count as they are all handled now
+          }
         } else {
           throw new Error(
             response.data?.message || `Failed to ${action} request.`
@@ -213,50 +261,56 @@ const RequestsModal = ({
           `Could not ${action} request.`;
         setError(errorMsg);
         showModalNotification(errorMsg, "error");
-        // Consider reverting optimistic UI changes here if necessary
+        // TODO: Consider adding logic to revert optimistic UI changes on failure
       } finally {
         setProcessingRequestId(null);
       }
     },
     [showModalNotification, project?.id, processingRequestId, pendingRequests]
-  ); // Added pendingRequests
+  ); // Include pendingRequests
 
-  // --- useEffect to call parent AFTER state update ---
+  // --- useEffect to call parent callback AFTER state update ---
   useEffect(() => {
-    // Check the flag AFTER the render cycle where 'pendingRequests' might have become empty
+    // This effect runs *after* the render cycle caused by setPendingRequests
     if (wasLastRequestHandled.current) {
       if (onAllRequestsHandled) {
         console.log(
           "useEffect triggered: Calling onAllRequestsHandled for project:",
           project.id
         );
-        onAllRequestsHandled(project.id);
+        onAllRequestsHandled(project.id); // Call the callback passed from parent
       }
-      wasLastRequestHandled.current = false; // Reset the flag immediately after calling
+      wasLastRequestHandled.current = false; // Reset the flag immediately
     }
-    // Dependency array: watch changes in pendingRequests (length) and the callback prop itself
-  }, [pendingRequests, onAllRequestsHandled, project?.id]);
+    // Depend on the length of pendingRequests to detect when it becomes zero
+    // Also depend on the callback prop itself and project.id for stability
+  }, [pendingRequests.length, onAllRequestsHandled, project?.id]);
 
   // --- Render Logic ---
 
   // Render Pending Requests Section
   const renderPendingRequests = () => {
-    if (pendingRequests.length === 0) {
-      if (!isLoading && initialRequestCount.current === 0 && !error) {
-        return (
-          <p className="text-sm text-center text-gray-500 py-3 italic">
-            No pending requests.
-          </p>
-        );
-      } else if (!isLoading && initialRequestCount.current > 0 && !error) {
+    // Show message only after initial load and if there was at least one request initially
+    if (pendingRequests.length === 0 && !isLoading && hasFetched.current) {
+      if (initialPendingCount.current > 0) {
+        // Show if there *were* requests initially
         return (
           <p className="text-sm text-center text-green-600 py-3 italic">
             All pending requests handled.
           </p>
         );
+      } else if (!error) {
+        // Show if there were *never* any requests and no error
+        return (
+          <p className="text-sm text-center text-gray-500 py-3 italic">
+            No pending requests.
+          </p>
+        );
       }
-      return null;
     }
+
+    if (pendingRequests.length === 0) return null; // Don't render list if empty
+
     return (
       <ul className="space-y-3">
         {pendingRequests.map((req) => (
@@ -290,7 +344,6 @@ const RequestsModal = ({
               </div>
               {req.requestMessage && (
                 <p className="text-xs text-gray-600 bg-gray-50 p-2 rounded border border-gray-200 mt-1 whitespace-pre-wrap">
-                  {" "}
                   <span className="font-medium">Message:</span>{" "}
                   {req.requestMessage}{" "}
                 </p>
@@ -332,15 +385,13 @@ const RequestsModal = ({
 
   // Render Approved Members Section
   const renderApprovedMembers = () => {
+    // Hide section title if loading OR if there are no approved members AND no pending requests to potentially approve
     if (
       isLoading ||
-      (approvedMembers.length === 0 &&
-        initialRequestCount.current === 0 &&
-        pendingRequests.length === 0 &&
-        !error)
+      (approvedMembers.length === 0 && pendingRequests.length === 0 && !error)
     ) {
       return null;
-    } // Hide if loading or truly empty
+    }
 
     return (
       <>
@@ -357,14 +408,11 @@ const RequestsModal = ({
             {" "}
             {/* Limit height */}
             {approvedMembers.map((member) => (
-              // Use unique key: combination of userId and projectId if member.id is null from optimistic update
               <li
                 key={member.id || `${member.userId}-${member.projectId}`}
                 className="p-2 border rounded-md bg-white shadow-sm flex items-center justify-between gap-3 text-sm"
               >
                 <div className="flex items-center gap-2 overflow-hidden">
-                  {" "}
-                  {/* Prevent long names pushing out date */}
                   {member.user?.profilePictureUrl ? (
                     <img
                       src={member.user.profilePictureUrl}
@@ -383,7 +431,6 @@ const RequestsModal = ({
                   </span>
                 </div>
                 <span className="text-xs text-gray-400 flex-shrink-0">
-                  {/* Use joinedAt if available (from DB or optimistic), fallback to createdAt */}
                   Joined:{" "}
                   {new Date(
                     member.joinedAt || member.createdAt
@@ -397,6 +444,7 @@ const RequestsModal = ({
     );
   };
 
+  // Main Modal Render
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-[70] p-4 animate-fade-in">
       <motion.div
@@ -447,11 +495,11 @@ const RequestsModal = ({
 
         {/* Body - Scrollable */}
         <div className="p-4 overflow-y-auto flex-grow">
-          {/* Global Fetch Error */}
+          {/* Global Fetch Error (Show only if nothing loaded) */}
           {error &&
+            !isLoading &&
             pendingRequests.length === 0 &&
-            approvedMembers.length === 0 &&
-            !isLoading && (
+            approvedMembers.length === 0 && (
               <div className="py-5">
                 {" "}
                 <ErrorMessage
@@ -481,7 +529,7 @@ const RequestsModal = ({
           )}
 
           {/* Approved Members Section */}
-          {!isLoading && renderApprovedMembers()}
+          {renderApprovedMembers()}
         </div>
 
         {/* Footer */}

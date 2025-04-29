@@ -621,21 +621,3 @@ export const adminDeleteUser = asyncHandler(async (req, res) => {
     });
   }
 });
-
-// --- REMOVE THE DUPLICATE EXPORT BLOCK ---
-// export {
-//   // --- Public/User Routes ---
-//   getUserPublicProfile,
-//   updateUserProfile,
-//   updateUserEmail,
-//   updateUserPassword,
-//   getSelectableUsers, // New function for collaborator selection
-
-//   // --- Admin Routes ---
-//   adminGetAllUsers,
-//   adminGetPendingUsers,
-//   adminGetUserById,
-//   adminUpdateUserStatus,
-//   adminUpdateUserRole,
-//   adminDeleteUser, // <<< REMOVE THIS BLOCK
-// };

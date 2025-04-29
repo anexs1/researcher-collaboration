@@ -14,9 +14,6 @@ import {
 import { ChartBarIcon } from "@heroicons/react/24/outline";
 import { motion, AnimatePresence } from "framer-motion";
 
-// src/Page/Admin/AdminDashboardPage.jsx
-
-// --- Adjust imports based on the image ---
 import StatCard from "./StatCard"; // It's in the same folder
 import AdminPageHeader from "../../Component/Admin/AdminPageHeader"; // Verify THIS path - is it in Component/Admin?
 import ErrorMessage from "../../Component/Common/ErrorMessage"; // Verify path
@@ -45,7 +42,6 @@ const itemVariants = {
 };
 
 const AdminDashboardPage = () => {
-  // --- State ---
   const [dashboardData, setDashboardData] = useState({
     counts: { users: {}, publications: {}, projects: {} }, // Init empty for safety
     recentActivities: { users: [], publications: [], projects: [] },
@@ -339,7 +335,13 @@ const AdminDashboardPage = () => {
           {" "}
           <FaNewspaper className="-ml-1 mr-2 h-5 w-5" /> Publications{" "}
         </Link>
-        {/* <Link to="/admin/reports" className="inline-flex items-center px-5 py-2.5 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out"> <ChartBarIcon className="-ml-1 mr-2 h-5 w-5" /> View Reports </Link> */}
+        <Link
+          to="/admin/reports"
+          className="inline-flex items-center px-5 py-2.5 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out"
+        >
+          {" "}
+          <ChartBarIcon className="-ml-1 mr-2 h-5 w-5" /> View Reports{" "}
+        </Link>
         <Link
           to="/admin/settings"
           className="inline-flex items-center px-5 py-2.5 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out"
