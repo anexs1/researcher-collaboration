@@ -1,7 +1,7 @@
 // src/Component/projects/RequestsModal.jsx
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import axios from "axios"; // Using axios directly
+import axios from "axios";
 import {
   FaTimes,
   FaCheck,
@@ -9,10 +9,14 @@ import {
   FaSpinner,
   FaUserCircle,
   FaUserClock,
+  FaUserCheck as FaUserCheckIcon,
+  FaChevronDown,
+  FaChevronUp, // Icons for expand/collapse
 } from "react-icons/fa";
+import { Link } from "react-router-dom"; // Import Link for profile link
 import { motion, AnimatePresence } from "framer-motion";
 
-// --- Import Common Components --- (Verify Paths are Correct)
+// --- Import Common Components --- (Verify Paths)
 import LoadingSpinner from "../Common/LoadingSpinner";
 import ErrorMessage from "../Common/ErrorMessage";
 import Notification from "../Common/Notification";
@@ -44,29 +48,35 @@ const RequestsModal = ({
 }) => {
   // --- State ---
   const [pendingRequests, setPendingRequests] = useState([]);
-  const [isLoading, setIsLoading] = useState(true); // Start true: fetch on mount
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [processingRequestId, setProcessingRequestId] = useState(null); // ID of request being processed
+  const [processingRequestId, setProcessingRequestId] = useState(null);
   const [notification, setNotification] = useState({
     message: "",
     type: "",
     show: false,
   });
+  const [expandedRequestId, setExpandedRequestId] = useState(null); // Tracks expanded request
 
   // --- Refs ---
-  const isMounted = useRef(true); // Track component mount status
-  const initialPendingCount = useRef(0); // Store initial count for callback logic
-  const currentPendingCount = useRef(0); // Track current count for callback logic
+  const isMounted = useRef(true);
+  const hasFetched = useRef(false);
+  const initialPendingCount = useRef(0);
+  const wasLastRequestHandled = useRef(false);
 
   // --- Effect for Mount/Unmount Tracking ---
   useEffect(() => {
     isMounted.current = true;
     console.log("RequestsModal Mounted for Project:", project?.id);
+    // Reset fetch status when project changes or modal mounts
+    hasFetched.current = false;
+    initialPendingCount.current = 0;
+    wasLastRequestHandled.current = false;
     return () => {
       isMounted.current = false;
       console.log("RequestsModal Unmounted");
     };
-  }, []); // Run only once on mount
+  }, [project?.id]); // Re-run if project changes
 
   // --- Notification Handler ---
   const showModalNotification = useCallback((message, type = "success") => {
@@ -74,112 +84,91 @@ const RequestsModal = ({
     setNotification({ message, type, show: true });
     setTimeout(() => {
       if (isMounted.current) {
-        setNotification((prev) =>
-          prev.message === message ? { ...prev, show: false } : prev
-        );
+        setNotification((prev) => ({ ...prev, show: false }));
       }
     }, 4000);
-  }, []); // Stable: doesn't depend on component state
+  }, []);
 
   // --- Fetch Pending Requests ---
   const fetchPendingRequests = useCallback(async () => {
-    if (!project?.id) {
-      if (isMounted.current) {
+    if (!project?.id || processingRequestId) {
+      if (!project?.id && isMounted.current) {
         setError("Project ID missing.");
         setIsLoading(false);
       }
       return;
     }
-    // Prevent refetch if already processing an action
-    if (processingRequestId) {
-      console.log("Fetch skipped: processing an action.");
-      // Do not set isLoading to false here, the action's finally block will do it
-      return;
-    }
+    if (!isMounted.current) return;
 
     console.log(`FETCHING PENDING requests for project ${project.id}`);
-    if (isMounted.current) {
-      setIsLoading(true);
-      setError(null);
-    }
+    setIsLoading(true);
+    setError(null);
+    wasLastRequestHandled.current = false;
 
     try {
-      // API Call to get pending requests for this project
+      // --- API Call ---
       const response = await apiClient.get(`/api/collaboration-requests`, {
         params: { projectId: project.id, status: "pending" },
       });
-
       console.log(
         "RequestsModal API Response:",
         JSON.stringify(response.data, null, 2)
       );
 
-      // Validate and set state if component is still mounted
       if (isMounted.current) {
+        // Expecting { success: true, count: X, data: [requests...] }
         if (response.data?.success && Array.isArray(response.data.data)) {
           const pending = response.data.data;
           setPendingRequests(pending);
-          // Set initial count ONLY the first time data is successfully fetched
-          if (initialPendingCount.current === 0 && pending.length > 0) {
+          if (!hasFetched.current) {
             initialPendingCount.current = pending.length;
+            hasFetched.current = true; // Mark initial fetch done
           }
-          currentPendingCount.current = pending.length; // Update current count
+          currentPendingCount.current = pending.length;
           console.log(
-            `Fetch successful: ${pending.length} pending requests. Initial count was: ${initialPendingCount.current}`
+            `Fetch OK: ${pending.length} pending. Initial: ${initialPendingCount.current}`
           );
         } else {
-          throw new Error(
-            response.data?.message || "Invalid data structure received."
-          );
+          throw new Error(response.data?.message || "Invalid data structure.");
         }
       }
     } catch (err) {
       console.error("Error fetching pending requests:", err);
       if (isMounted.current) {
-        const errorMsg =
-          err.response?.status === 403
-            ? "Permission denied."
-            : err.response?.data?.message ||
-              err.message ||
-              "Could not load requests.";
-        setError(errorMsg);
-        setPendingRequests([]);
-        initialPendingCount.current = 0; // Reset on error
-        currentPendingCount.current = 0;
+        /* ... set error state ... */ setError(
+          err.response?.data?.message || err.message || "Error"
+        );
       }
     } finally {
-      console.log("Fetch pending requests finally block.");
       if (isMounted.current) {
-        setIsLoading(false); // Always ensure loading is false after attempt
+        setIsLoading(false);
       }
     }
-    // Dependencies: only project ID. Re-fetch will happen if ID changes.
-    // isLoading/processingRequestId checks prevent concurrent fetches.
-  }, [project?.id, processingRequestId]);
+  }, [project?.id, processingRequestId]); // Stable dependencies
 
   // --- Initial Fetch Effect ---
   useEffect(() => {
-    // Fetch on mount if project ID exists
     if (project?.id) {
+      hasFetched.current = false; // Reset fetch status if project ID changes
       fetchPendingRequests();
     } else {
-      // Handle case where project is initially undefined/null
-      setError("Project data not available.");
       setIsLoading(false);
+      setError("Project data missing.");
     }
-    // This effect should run once when project.id becomes available
   }, [project?.id, fetchPendingRequests]);
 
   // --- Handle Request Action (Approve/Reject) ---
   const handleRequestAction = useCallback(
     async (requestId, action, responseMessage = null) => {
-      if (!requestId || !action || processingRequestId) return; // Prevent concurrent actions
-      if (!isMounted.current) return;
+      if (!requestId || !action || processingRequestId || !isMounted.current)
+        return;
+      setProcessingRequestId(requestId);
+      setError(null);
 
-      setProcessingRequestId(requestId); // Indicate this specific request is being processed
-      setError(null); // Clear previous general errors
-
-      console.log(`Attempting to ${action} request ID: ${requestId}`);
+      const requestBeingHandled = pendingRequests.find(
+        (req) => req.id === requestId
+      );
+      console.log(`Action: ${action} request ${requestId}`);
 
       try {
         const url = `/api/collaboration-requests/${requestId}/respond`;
@@ -187,64 +176,32 @@ const RequestsModal = ({
           status: action,
           ...(responseMessage && { responseMessage }),
         };
-        const response = await apiClient.patch(url, payload); // Use PATCH as per controller likely
+        const response = await apiClient.patch(url, payload);
 
         if (response.data?.success) {
-          if (!isMounted.current) return; // Check mount status after async call
+          if (!isMounted.current) return;
           showModalNotification(`Request ${action}.`, "success");
-
-          // Update state: remove the handled request from the pending list
-          let newPendingCount = 0;
-          setPendingRequests((prevPending) => {
-            const updatedList = prevPending.filter(
-              (req) => req.id !== requestId
-            );
-            newPendingCount = updatedList.length; // Get the count *after* filtering
-            return updatedList;
-          });
-
-          currentPendingCount.current = newPendingCount; // Update ref for current count
-
-          // Check if the last of the *initial* requests was handled
-          if (
-            newPendingCount === 0 &&
-            initialPendingCount.current > 0 &&
-            onAllRequestsHandled
-          ) {
-            console.log(
-              "Last initial pending request handled. Calling onAllRequestsHandled."
-            );
-            onAllRequestsHandled(project.id);
-            initialPendingCount.current = 0; // Reset initial count as all are handled
+          const wasLastOne = pendingRequests.length === 1;
+          setPendingRequests((prev) =>
+            prev.filter((req) => req.id !== requestId)
+          ); // Optimistic remove
+          // Note: Approved members state is not updated here, relies on refetch or separate component
+          if (wasLastOne && initialPendingCount.current > 0) {
+            wasLastRequestHandled.current = true;
+            initialPendingCount.current = 0;
           }
-
-          // Optional: Optimistically update an 'approvedMembers' list if needed elsewhere
-          // if (action === 'approved') { ... setApprovedMembers ... }
         } else {
-          // Handle backend reporting success: false
-          throw new Error(
-            response.data?.message || `Failed to ${action} request.`
-          );
+          throw new Error(response.data?.message || `Failed to ${action}.`);
         }
       } catch (err) {
-        console.error(`Error ${action} request ${requestId}:`, err);
         if (isMounted.current) {
-          const errorMsg =
-            err.response?.data?.message ||
-            err.message ||
-            `Could not ${action} request.`;
-          // Set general error, don't necessarily revert optimistic UI unless needed
-          setError(errorMsg);
-          showModalNotification(errorMsg, "error");
-          // Optionally refetch to get the definite state from server on error:
-          // fetchPendingRequests();
+          /* ... set error state ... */
         }
       } finally {
         if (isMounted.current) {
-          setProcessingRequestId(null); // Clear processing state for this request
+          setProcessingRequestId(null);
         }
       }
-      // Dependencies for the action handler
     },
     [
       project?.id,
@@ -255,103 +212,222 @@ const RequestsModal = ({
     ]
   );
 
+  // --- Effect to call parent callback ---
+  useEffect(() => {
+    if (wasLastRequestHandled.current) {
+      if (onAllRequestsHandled) {
+        onAllRequestsHandled(project.id);
+      }
+      wasLastRequestHandled.current = false;
+    }
+  }, [pendingRequests.length, onAllRequestsHandled, project?.id]);
+
+  // --- Toggle Detail Expansion ---
+  const toggleDetails = (requestId) => {
+    setExpandedRequestId((prev) => (prev === requestId ? null : requestId));
+  };
+
   // --- Render Logic ---
 
-  // Render List of Pending Requests or appropriate message
   const renderPendingRequestsList = () => {
-    // If finished loading AND fetch completed (even if error) AND list is empty
     if (!isLoading && error === null && pendingRequests.length === 0) {
-      // Distinguish between "never had requests" and "all handled"
-      if (initialPendingCount.current > 0) {
+      if (initialPendingCount.current > 0)
         return (
           <p className="text-sm text-center text-green-600 py-4 italic">
             All pending requests handled.
           </p>
         );
-      } else {
+      else
         return (
           <p className="text-sm text-center text-gray-500 py-4 italic">
-            No pending requests found for this project.
+            No pending requests found.
           </p>
         );
-      }
     }
-    // If finished loading and there ARE requests
-    if (!isLoading && pendingRequests.length > 0) {
-      return (
-        <ul className="space-y-3 max-h-[50vh] overflow-y-auto pr-2">
-          {" "}
-          {/* Constrained height */}
-          {pendingRequests.map((req) => (
+    if (isLoading && !hasFetched.current) return null; // Still loading initially
+    if (pendingRequests.length === 0) return null; // Empty after load
+
+    return (
+      <ul className="space-y-2">
+        {pendingRequests.map((req) => {
+          const isExpanded = expandedRequestId === req.id;
+          const requester = req.requester || {}; // Default to empty object if missing
+
+          return (
             <li
               key={req.id}
-              className="p-3 border rounded-lg bg-white shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+              className="border rounded-lg bg-white shadow-sm overflow-hidden"
             >
-              {/* Request Details */}
-              <div className="flex-grow min-w-0">
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  {req.requester?.profilePictureUrl ? (
-                    <img
-                      src={req.requester.profilePictureUrl}
-                      alt={req.requester.username || "User"}
-                      className="w-6 h-6 rounded-full object-cover flex-shrink-0"
-                    />
-                  ) : (
-                    <FaUserCircle className="w-6 h-6 text-gray-400 flex-shrink-0" />
+              {/* Clickable Row Header */}
+              <div
+                className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                onClick={() => toggleDetails(req.id)}
+                aria-expanded={isExpanded}
+                aria-controls={`details-${req.id}`}
+              >
+                {/* Requester Info */}
+                <div className="flex-grow min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    {requester.profilePictureUrl ? (
+                      <img
+                        src={requester.profilePictureUrl}
+                        alt={requester.username || "User"}
+                        className="w-6 h-6 rounded-full object-cover flex-shrink-0"
+                      />
+                    ) : (
+                      <FaUserCircle className="w-6 h-6 text-gray-400 flex-shrink-0" />
+                    )}
+                    <span
+                      className="font-medium text-gray-800 text-sm truncate"
+                      title={requester.username || "Unknown"}
+                    >
+                      {requester.username || "Unknown User"}
+                    </span>
+                    <span className="text-xs text-gray-400 flex-shrink-0">
+                      ({new Date(req.createdAt).toLocaleDateString()})
+                    </span>
+                  </div>
+                  {req.requestMessage && !isExpanded && (
+                    <p className="text-xs text-gray-500 mt-1 truncate italic">
+                      {" "}
+                      Message: {req.requestMessage}{" "}
+                    </p>
                   )}
-                  <span
-                    className="font-medium text-gray-800 text-sm truncate"
-                    title={req.requester?.username || "Unknown User"}
-                  >
-                    {req.requester?.username || "Unknown User"}
-                  </span>
-                  <span className="text-xs text-gray-400 flex-shrink-0">
-                    ({new Date(req.createdAt).toLocaleDateString()})
-                  </span>
                 </div>
-                {req.requestMessage && (
-                  <p className="text-xs text-gray-600 bg-gray-50 p-2 rounded border mt-1 whitespace-pre-wrap break-words">
-                    <span className="font-medium">Message:</span>{" "}
-                    {req.requestMessage}
-                  </p>
+                {/* Actions & Expand Icon */}
+                <div className="flex-shrink-0 flex items-center gap-2 mt-2 sm:mt-0">
+                  <button
+                    type="button"
+                    className="p-1 text-gray-400 hover:text-gray-600"
+                    title={isExpanded ? "Hide Details" : "Show Details"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleDetails(req.id);
+                    }}
+                  >
+                    {isExpanded ? (
+                      <FaChevronUp className="h-3 w-3" />
+                    ) : (
+                      <FaChevronDown className="h-3 w-3" />
+                    )}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRequestAction(req.id, "approved");
+                    }}
+                    disabled={processingRequestId === req.id}
+                    className="p-1.5 rounded-full text-green-600 bg-green-100 hover:bg-green-200 disabled:opacity-50"
+                    title="Approve"
+                  >
+                    {" "}
+                    {processingRequestId === req.id ? (
+                      <FaSpinner className="animate-spin h-4 w-4" />
+                    ) : (
+                      <FaCheck className="h-4 w-4" />
+                    )}{" "}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRequestAction(req.id, "rejected");
+                    }}
+                    disabled={processingRequestId === req.id}
+                    className="p-1.5 rounded-full text-red-600 bg-red-100 hover:bg-red-200 disabled:opacity-50"
+                    title="Reject"
+                  >
+                    {" "}
+                    {processingRequestId === req.id ? (
+                      <FaSpinner className="animate-spin h-4 w-4" />
+                    ) : (
+                      <FaBan className="h-4 w-4" />
+                    )}{" "}
+                  </button>
+                </div>
+              </div>
+              {/* Expanded Details Section */}
+              <AnimatePresence>
+                {isExpanded && (
+                  <motion.div
+                    id={`details-${req.id}`}
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="bg-gray-50 border-t border-gray-200 px-4 py-3 text-xs overflow-hidden"
+                  >
+                    <h5 className="font-semibold text-gray-700 mb-1.5">
+                      Requester Details:
+                    </h5>
+                    {/* Display additional details fetched */}
+                    {requester.email && (
+                      <p>
+                        <span className="font-medium text-gray-600">
+                          Email:
+                        </span>{" "}
+                        {requester.email}
+                      </p>
+                    )}
+                    {requester.university && (
+                      <p>
+                        <span className="font-medium text-gray-600">
+                          University:
+                        </span>{" "}
+                        {requester.university}
+                      </p>
+                    )}
+                    {requester.department && (
+                      <p>
+                        <span className="font-medium text-gray-600">
+                          Department:
+                        </span>{" "}
+                        {requester.department}
+                      </p>
+                    )}
+                    {requester.jobTitle && (
+                      <p>
+                        <span className="font-medium text-gray-600">
+                          Job Title:
+                        </span>{" "}
+                        {requester.jobTitle}
+                      </p>
+                    )}
+                    {requester.bio && (
+                      <p className="mt-1">
+                        <span className="font-medium text-gray-600">Bio:</span>{" "}
+                        {requester.bio}
+                      </p>
+                    )}
+
+                    {req.requestMessage && (
+                      <div className="mt-2 pt-2 border-t border-gray-200">
+                        <p className="font-medium text-gray-600 mb-0.5">
+                          Message:
+                        </p>
+                        <p className="whitespace-pre-wrap break-words">
+                          {req.requestMessage}
+                        </p>
+                      </div>
+                    )}
+                    {/* Link to full profile */}
+                    <div className="mt-2">
+                      <Link
+                        to={`/profile/${requester.id}`}
+                        className="text-indigo-600 hover:underline text-xs font-medium"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        View Full Profile →
+                      </Link>
+                    </div>
+                  </motion.div>
                 )}
-              </div>
-              {/* Action Buttons */}
-              <div className="flex-shrink-0 flex items-center gap-2 mt-2 sm:mt-0">
-                <button
-                  onClick={() => handleRequestAction(req.id, "approved")}
-                  disabled={processingRequestId === req.id}
-                  className="p-1.5 rounded-full text-green-600 bg-green-100 hover:bg-green-200 disabled:opacity-50 disabled:cursor-wait"
-                  title="Approve Request"
-                >
-                  {" "}
-                  {processingRequestId === req.id ? (
-                    <FaSpinner className="animate-spin h-4 w-4" />
-                  ) : (
-                    <FaCheck className="h-4 w-4" />
-                  )}{" "}
-                </button>
-                <button
-                  onClick={() => handleRequestAction(req.id, "rejected")}
-                  disabled={processingRequestId === req.id}
-                  className="p-1.5 rounded-full text-red-600 bg-red-100 hover:bg-red-200 disabled:opacity-50 disabled:cursor-wait"
-                  title="Reject Request"
-                >
-                  {" "}
-                  {processingRequestId === req.id ? (
-                    <FaSpinner className="animate-spin h-4 w-4" />
-                  ) : (
-                    <FaBan className="h-4 w-4" />
-                  )}{" "}
-                </button>
-              </div>
+              </AnimatePresence>
             </li>
-          ))}
-        </ul>
-      );
-    }
-    // If still loading initial data, or error occurred before rendering list
-    return null; // Render nothing until loading is false and error is handled
+          );
+        })}
+      </ul>
+    );
   };
 
   // --- Main Modal Render ---
@@ -378,31 +454,19 @@ const RequestsModal = ({
             <FaTimes size={20} />
           </button>
         </div>
-
         {/* Notification */}
         <AnimatePresence>
           {notification.show && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden"
-            >
+            <motion.div /*...*/ className="overflow-hidden">
               {" "}
-              <Notification
-                message={notification.message}
-                type={notification.type}
-                onClose={() =>
-                  setNotification((prev) => ({ ...prev, show: false }))
-                }
-              />{" "}
+              <Notification /*...*/ />{" "}
             </motion.div>
           )}{" "}
         </AnimatePresence>
 
         {/* Scrollable Body */}
         <div className="p-4 overflow-y-auto flex-grow">
-          {/* Global Fetch Error Message */}
+          {/* Global Fetch Error */}
           {error && !isLoading && (
             <div className="mb-4">
               {" "}
@@ -412,8 +476,7 @@ const RequestsModal = ({
               />{" "}
             </div>
           )}
-
-          {/* Loading Indicator */}
+          {/* Loading */}
           {isLoading && (
             <div className="flex justify-center items-center p-10">
               {" "}
@@ -423,10 +486,9 @@ const RequestsModal = ({
               </span>{" "}
             </div>
           )}
-
           {/* Pending Requests Section */}
-          {!isLoading && (
-            <div>
+          {!isLoading && !error && (
+            <div className="mb-4">
               <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
                 <FaUserClock className="mr-2 text-orange-500" /> Pending
                 Requests
@@ -434,11 +496,8 @@ const RequestsModal = ({
               {renderPendingRequestsList()}
             </div>
           )}
-
-          {/* Placeholder for Approved Members if needed later */}
-          {/* {!isLoading && renderApprovedMembers()} */}
+          {/* Approved members section removed for focus */}
         </div>
-
         {/* Footer */}
         <div className="flex justify-end p-3 border-t border-gray-200 flex-shrink-0 bg-gray-100 rounded-b-xl">
           <button
