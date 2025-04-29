@@ -1,32 +1,36 @@
 // backend/routes/collaborationRequestRoutes.js
 import express from "express";
+import { protect } from "../middleware/authMiddleware.js"; // Verify path
 import {
   sendRequest,
-  getReceivedRequests, // Assuming you have this controller
-  getSentRequests, // Assuming you have this controller
   respondToRequest,
-  cancelRequest, // Assuming you have this controller
-} from "../controllers/collaborationRequestController.js"; // Verify path
-import { protect } from "../middleware/authMiddleware.js"; // Verify path & middleware name
+  getReceivedRequests, // Controller to handle GET /
+  getSentRequests,
+  cancelRequest,
+} from "../controllers/collaborationRequestController.js"; // Verify path & ensure all are exported
 
 const router = express.Router();
 
 // Apply authentication middleware to all routes in this file
 router.use(protect);
 
-// POST /api/collaboration-requests - User sends a request to join a project
+// POST /api/collaboration-requests - User sends a join request
 router.post("/", sendRequest);
 
-// GET /api/collaboration-requests/received - Get requests for projects owned by the user
-router.get("/received", getReceivedRequests); // Needs implementation in controller
+// --- CORRECTED ROUTE ---
+// GET /api/collaboration-requests - Get requests received OR sent, filtered by query params
+// The controller (getReceivedRequests) MUST handle filtering by query params
+// like ?projectId=X&status=pending or ?requesterId=Y
+router.get("/", getReceivedRequests); // <<< CHANGED PATH from /received to /
+// -----------------------
 
-// GET /api/collaboration-requests/sent - Get requests sent by the user
-router.get("/sent", getSentRequests); // Needs implementation in controller
+// GET /api/collaboration-requests/sent - User gets requests they sent (Still useful route)
+router.get("/sent", getSentRequests);
 
-// PATCH /api/collaboration-requests/:requestId/respond - Owner approves/rejects a request
+// PATCH /api/collaboration-requests/:requestId/respond - Owner responds (approve/reject)
 router.patch("/:requestId/respond", respondToRequest);
 
-// DELETE /api/collaboration-requests/:requestId/cancel - Requester cancels their own pending request
-router.delete("/:requestId/cancel", cancelRequest); // Needs implementation in controller
+// DELETE /api/collaboration-requests/:requestId/cancel - Requester cancels own pending request
+router.delete("/:requestId/cancel", cancelRequest);
 
 export default router;
