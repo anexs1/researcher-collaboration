@@ -4,17 +4,12 @@ import { protect } from "../middleware/authMiddleware.js"; // Your auth middlewa
 
 // Correctly import all needed functions from userController
 import {
-  getUserPublicProfile, // Route target for fetching profile data for chat header
+  getUserPublicProfile,
   updateUserProfile,
   updateUserEmail,
   updateUserPassword,
-  // Admin functions should be imported in adminRoutes.js
-  // adminGetAllUsers,
-  // adminGetPendingUsers,
-  // adminGetUserById,
-  // adminUpdateUserStatus,
-  // adminUpdateUserRole,
-  // adminDeleteUser
+  // --- IMPORT THE NEW FUNCTION ---
+  getSelectableUsers, // <-- Import the function for collaborator selection
 } from "../controllers/userController.js"; // Adjust path if needed
 
 // Optional: Import upload middleware if needed for profile picture
@@ -24,25 +19,22 @@ const router = express.Router();
 
 // --- Public Routes ---
 // GET /api/users/public/:userId - Fetch public profile data for any user
-// This is the route your ChatPage should call
 router.get("/public/:userId", getUserPublicProfile);
 
 // --- Protected 'Me' Routes (Operations on the logged-in user's own data) ---
-// These require the user to be logged in (via 'protect' middleware)
-
-// PUT /api/users/profile - Update the logged-in user's profile details
-router.put(
-  "/profile",
-  protect,
-  // upload.single('profileImage'), // Uncomment and configure if handling uploads
-  updateUserProfile
-);
-
-// PUT /api/users/me/email - Update the logged-in user's email
+router.put("/profile", protect, updateUserProfile);
 router.put("/me/email", protect, updateUserEmail);
-
-// PUT /api/users/me/password - Update the logged-in user's password
 router.put("/me/password", protect, updateUserPassword);
+
+// --- !!! NEW ROUTE FOR COLLABORATOR SELECTION !!! ---
+// GET /api/users/selectable - Fetches users suitable for collaborator selection
+// Requires user to be logged in, but NOT necessarily an admin
+router.get(
+  "/selectable", // <-- The new path
+  protect, // <-- Requires login
+  getSelectableUsers // <-- Points to the new controller function
+);
+// --- END NEW ROUTE ---
 
 // --- Protected Route for Getting OWN profile (optional alternative to /public/:id) ---
 // Example: Could add a route like this if needed, uses req.user.id
