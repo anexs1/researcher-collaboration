@@ -1,7 +1,8 @@
 // src/Component/projects/RequestsModal.jsx
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import axios from "axios";
+import axios from "axios"; // Using axios directly
+import { Link } from "react-router-dom"; // Import Link for profile link
 import {
   FaTimes,
   FaCheck,
@@ -13,10 +14,9 @@ import {
   FaChevronDown,
   FaChevronUp, // Icons for expand/collapse
 } from "react-icons/fa";
-import { Link } from "react-router-dom"; // Import Link for profile link
 import { motion, AnimatePresence } from "framer-motion";
 
-// --- Import Common Components --- (Verify Paths)
+// --- Import Common Components --- (Verify Paths are Correct)
 import LoadingSpinner from "../Common/LoadingSpinner";
 import ErrorMessage from "../Common/ErrorMessage";
 import Notification from "../Common/Notification";
@@ -48,9 +48,9 @@ const RequestsModal = ({
 }) => {
   // --- State ---
   const [pendingRequests, setPendingRequests] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Start true: fetch on mount
   const [error, setError] = useState(null);
-  const [processingRequestId, setProcessingRequestId] = useState(null);
+  const [processingRequestId, setProcessingRequestId] = useState(null); // ID of request being processed
   const [notification, setNotification] = useState({
     message: "",
     type: "",
@@ -59,102 +59,127 @@ const RequestsModal = ({
   const [expandedRequestId, setExpandedRequestId] = useState(null); // Tracks expanded request
 
   // --- Refs ---
-  const isMounted = useRef(true);
-  const hasFetched = useRef(false);
-  const initialPendingCount = useRef(0);
-  const wasLastRequestHandled = useRef(false);
+  const isMounted = useRef(true); // Track component mount status
+  const initialPendingCount = useRef(0); // Store initial number of pending requests
+  const fetchAttempted = useRef(false); // Track if initial fetch has been tried
 
   // --- Effect for Mount/Unmount Tracking ---
   useEffect(() => {
     isMounted.current = true;
     console.log("RequestsModal Mounted for Project:", project?.id);
-    // Reset fetch status when project changes or modal mounts
-    hasFetched.current = false;
+    // Reset fetch status when component mounts or project ID changes
+    fetchAttempted.current = false;
     initialPendingCount.current = 0;
-    wasLastRequestHandled.current = false;
     return () => {
       isMounted.current = false;
       console.log("RequestsModal Unmounted");
     };
-  }, [project?.id]); // Re-run if project changes
+  }, [project?.id]); // Rerun if project ID changes
 
   // --- Notification Handler ---
   const showModalNotification = useCallback((message, type = "success") => {
     if (!isMounted.current) return;
     setNotification({ message, type, show: true });
-    setTimeout(() => {
+    const timerId = setTimeout(() => {
       if (isMounted.current) {
-        setNotification((prev) => ({ ...prev, show: false }));
+        // Only clear if the message is still the current one, prevents race conditions
+        setNotification((prev) =>
+          prev.message === message ? { ...prev, show: false } : prev
+        );
       }
     }, 4000);
-  }, []);
+    // Optional: Store timerId if you need to clear it manually, e.g., on unmount
+  }, []); // Stable dependency
 
   // --- Fetch Pending Requests ---
   const fetchPendingRequests = useCallback(async () => {
-    if (!project?.id || processingRequestId) {
-      if (!project?.id && isMounted.current) {
+    // Basic validation and concurrency check
+    if (!project?.id) {
+      if (isMounted.current) {
         setError("Project ID missing.");
         setIsLoading(false);
       }
       return;
     }
-    if (!isMounted.current) return;
+    if (processingRequestId) {
+      console.log("Fetch skipped: processing an action.");
+      return; // Don't fetch while an approve/reject is in progress
+    }
+    if (!isMounted.current) return; // Extra safety check
 
     console.log(`FETCHING PENDING requests for project ${project.id}`);
-    setIsLoading(true);
-    setError(null);
-    wasLastRequestHandled.current = false;
+    setIsLoading(true); // Set loading BEFORE the API call
+    setError(null); // Clear previous errors
 
     try {
       // --- API Call ---
+      // Assumes GET /api/collaboration-requests?projectId=X&status=pending returns pending requests
       const response = await apiClient.get(`/api/collaboration-requests`, {
         params: { projectId: project.id, status: "pending" },
       });
+
       console.log(
         "RequestsModal API Response:",
         JSON.stringify(response.data, null, 2)
       );
 
-      if (isMounted.current) {
-        // Expecting { success: true, count: X, data: [requests...] }
-        if (response.data?.success && Array.isArray(response.data.data)) {
-          const pending = response.data.data;
-          setPendingRequests(pending);
-          if (!hasFetched.current) {
-            initialPendingCount.current = pending.length;
-            hasFetched.current = true; // Mark initial fetch done
-          }
-          currentPendingCount.current = pending.length;
+      if (!isMounted.current) return; // Check again after await
+
+      // --- Validate and Process Response ---
+      if (response.data?.success && Array.isArray(response.data.data)) {
+        const pending = response.data.data;
+        setPendingRequests(pending);
+
+        // Set initial count only ONCE per modal instance/project change
+        // Use fetchAttempted ref to ensure it's only set after the *first* successful fetch
+        if (!fetchAttempted.current) {
+          initialPendingCount.current = pending.length;
           console.log(
-            `Fetch OK: ${pending.length} pending. Initial: ${initialPendingCount.current}`
+            "Initial pending count set:",
+            initialPendingCount.current
           );
-        } else {
-          throw new Error(response.data?.message || "Invalid data structure.");
         }
+      } else {
+        // Handle cases where backend reports success: false or data isn't an array
+        throw new Error(
+          response.data?.message || "Invalid data structure received from API."
+        );
       }
     } catch (err) {
       console.error("Error fetching pending requests:", err);
       if (isMounted.current) {
-        /* ... set error state ... */ setError(
-          err.response?.data?.message || err.message || "Error"
-        );
+        const errorMsg =
+          err.response?.status === 404
+            ? `API Route Not Found (${err.config?.url})`
+            : err.response?.status === 403
+            ? "Permission Denied."
+            : err.response?.data?.message ||
+              err.message ||
+              "Could not load requests.";
+        setError(errorMsg);
+        setPendingRequests([]); // Clear data on error
+        initialPendingCount.current = 0; // Reset initial count on error
       }
     } finally {
+      console.log("Fetch pending requests finally block.");
       if (isMounted.current) {
-        setIsLoading(false);
+        setIsLoading(false); // ALWAYS set loading false after attempt
+        fetchAttempted.current = true; // Mark that an attempt was made
       }
     }
-  }, [project?.id, processingRequestId]); // Stable dependencies
+  }, [project?.id, processingRequestId]); // Dependencies: project.id and processingRequestId
 
   // --- Initial Fetch Effect ---
   useEffect(() => {
-    if (project?.id) {
-      hasFetched.current = false; // Reset fetch status if project ID changes
+    // Fetch only when project ID is available and fetch hasn't been attempted yet
+    if (project?.id && !fetchAttempted.current) {
       fetchPendingRequests();
-    } else {
+    } else if (!project?.id) {
+      // If component mounts without project ID, set loading false and show error
       setIsLoading(false);
-      setError("Project data missing.");
+      setError("Project data unavailable.");
     }
+    // This effect depends on project.id and the stable fetch callback
   }, [project?.id, fetchPendingRequests]);
 
   // --- Handle Request Action (Approve/Reject) ---
@@ -162,13 +187,11 @@ const RequestsModal = ({
     async (requestId, action, responseMessage = null) => {
       if (!requestId || !action || processingRequestId || !isMounted.current)
         return;
-      setProcessingRequestId(requestId);
-      setError(null);
 
-      const requestBeingHandled = pendingRequests.find(
-        (req) => req.id === requestId
-      );
-      console.log(`Action: ${action} request ${requestId}`);
+      setProcessingRequestId(requestId); // Set loading state *for this specific request*
+      setError(null); // Clear general modal error
+
+      console.log(`Attempting to ${action} request ID: ${requestId}`);
 
       try {
         const url = `/api/collaboration-requests/${requestId}/respond`;
@@ -176,32 +199,65 @@ const RequestsModal = ({
           status: action,
           ...(responseMessage && { responseMessage }),
         };
-        const response = await apiClient.patch(url, payload);
+        const response = await apiClient.patch(url, payload); // Assuming PATCH method
+
+        if (!isMounted.current) return; // Check after await
 
         if (response.data?.success) {
-          if (!isMounted.current) return;
           showModalNotification(`Request ${action}.`, "success");
-          const wasLastOne = pendingRequests.length === 1;
-          setPendingRequests((prev) =>
-            prev.filter((req) => req.id !== requestId)
-          ); // Optimistic remove
-          // Note: Approved members state is not updated here, relies on refetch or separate component
-          if (wasLastOne && initialPendingCount.current > 0) {
-            wasLastRequestHandled.current = true;
-            initialPendingCount.current = 0;
+
+          // Update state: remove the handled request
+          // Use functional update to get the latest state length correctly
+          let wasLastInitialRequest = false;
+          setPendingRequests((prevPending) => {
+            const initialLength = initialPendingCount.current; // Capture initial count before state update
+            const currentLength = prevPending.length;
+            const newList = prevPending.filter((req) => req.id !== requestId);
+            // Check if this action clears the list AND if there were initial requests
+            if (
+              newList.length === 0 &&
+              initialLength > 0 &&
+              currentLength === 1
+            ) {
+              wasLastInitialRequest = true;
+            }
+            return newList;
+          });
+
+          // If it was the last initial request, call the parent callback
+          if (wasLastInitialRequest && onAllRequestsHandled) {
+            console.log(
+              "Last initial request handled. Calling onAllRequestsHandled."
+            );
+            onAllRequestsHandled(project.id);
+            initialPendingCount.current = 0; // Reset as all initial ones are done
           }
+
+          // Optional: Optimistic update for an approved members list elsewhere if needed
+          // if (action === 'approved') { /* ... */ }
         } else {
-          throw new Error(response.data?.message || `Failed to ${action}.`);
+          throw new Error(
+            response.data?.message || `Failed to ${action} request.`
+          );
         }
       } catch (err) {
+        console.error(`Error ${action} request ${requestId}:`, err);
         if (isMounted.current) {
-          /* ... set error state ... */
+          const errorMsg =
+            err.response?.data?.message ||
+            err.message ||
+            `Could not ${action} request.`;
+          setError(errorMsg); // Show error in the modal
+          showModalNotification(errorMsg, "error");
+          // Consider refetching on error? Depends on desired behavior
+          // fetchPendingRequests();
         }
       } finally {
         if (isMounted.current) {
-          setProcessingRequestId(null);
+          setProcessingRequestId(null); // Clear loading state for this specific request
         }
       }
+      // Dependencies
     },
     [
       project?.id,
@@ -212,16 +268,6 @@ const RequestsModal = ({
     ]
   );
 
-  // --- Effect to call parent callback ---
-  useEffect(() => {
-    if (wasLastRequestHandled.current) {
-      if (onAllRequestsHandled) {
-        onAllRequestsHandled(project.id);
-      }
-      wasLastRequestHandled.current = false;
-    }
-  }, [pendingRequests.length, onAllRequestsHandled, project?.id]);
-
   // --- Toggle Detail Expansion ---
   const toggleDetails = (requestId) => {
     setExpandedRequestId((prev) => (prev === requestId ? null : requestId));
@@ -230,40 +276,54 @@ const RequestsModal = ({
   // --- Render Logic ---
 
   const renderPendingRequestsList = () => {
-    if (!isLoading && error === null && pendingRequests.length === 0) {
-      if (initialPendingCount.current > 0)
-        return (
-          <p className="text-sm text-center text-green-600 py-4 italic">
-            All pending requests handled.
-          </p>
-        );
-      else
-        return (
-          <p className="text-sm text-center text-gray-500 py-4 italic">
-            No pending requests found.
-          </p>
-        );
+    // Only show messages or list *after* the initial fetch attempt is complete
+    if (!isLoading && fetchAttempted.current) {
+      if (error) {
+        // Error is displayed globally, so don't show specific message here
+        return null;
+      }
+      if (pendingRequests.length === 0) {
+        if (initialPendingCount.current > 0) {
+          // Initial fetch had requests, now empty
+          return (
+            <p className="text-sm text-center text-green-600 py-4 italic">
+              All pending requests handled.
+            </p>
+          );
+        } else {
+          // Initial fetch had no requests
+          return (
+            <p className="text-sm text-center text-gray-500 py-4 italic">
+              No pending requests found for this project.
+            </p>
+          );
+        }
+      }
     }
-    if (isLoading && !hasFetched.current) return null; // Still loading initially
-    if (pendingRequests.length === 0) return null; // Empty after load
+    // If still loading initially or list is empty before fetch attempt completes
+    if (isLoading || pendingRequests.length === 0) {
+      return null;
+    }
 
+    // Render the list
     return (
       <ul className="space-y-2">
         {pendingRequests.map((req) => {
           const isExpanded = expandedRequestId === req.id;
-          const requester = req.requester || {}; // Default to empty object if missing
+          const requester = req.requester || {}; // Default for safety
+          const isProcessingThis = processingRequestId === req.id;
 
           return (
             <li
               key={req.id}
-              className="border rounded-lg bg-white shadow-sm overflow-hidden"
+              className="border rounded-lg bg-white shadow-sm overflow-hidden transition-shadow hover:shadow-md"
             >
               {/* Clickable Row Header */}
               <div
-                className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-gray-50 transition-colors"
-                onClick={() => toggleDetails(req.id)}
-                aria-expanded={isExpanded}
-                aria-controls={`details-${req.id}`}
+                className={`p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                  isExpanded ? "bg-gray-50" : "hover:bg-gray-50"
+                } transition-colors`}
+                // No onClick here, use button for explicit action
               >
                 {/* Requester Info */}
                 <div className="flex-grow min-w-0">
@@ -300,10 +360,7 @@ const RequestsModal = ({
                     type="button"
                     className="p-1 text-gray-400 hover:text-gray-600"
                     title={isExpanded ? "Hide Details" : "Show Details"}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleDetails(req.id);
-                    }}
+                    onClick={() => toggleDetails(req.id)}
                   >
                     {isExpanded ? (
                       <FaChevronUp className="h-3 w-3" />
@@ -312,32 +369,26 @@ const RequestsModal = ({
                     )}
                   </button>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRequestAction(req.id, "approved");
-                    }}
-                    disabled={processingRequestId === req.id}
-                    className="p-1.5 rounded-full text-green-600 bg-green-100 hover:bg-green-200 disabled:opacity-50"
+                    onClick={() => handleRequestAction(req.id, "approved")}
+                    disabled={isProcessingThis}
+                    className="p-1.5 rounded-full text-green-600 bg-green-100 hover:bg-green-200 disabled:opacity-50 disabled:cursor-wait"
                     title="Approve"
                   >
                     {" "}
-                    {processingRequestId === req.id ? (
+                    {isProcessingThis ? (
                       <FaSpinner className="animate-spin h-4 w-4" />
                     ) : (
                       <FaCheck className="h-4 w-4" />
                     )}{" "}
                   </button>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRequestAction(req.id, "rejected");
-                    }}
-                    disabled={processingRequestId === req.id}
-                    className="p-1.5 rounded-full text-red-600 bg-red-100 hover:bg-red-200 disabled:opacity-50"
+                    onClick={() => handleRequestAction(req.id, "rejected")}
+                    disabled={isProcessingThis}
+                    className="p-1.5 rounded-full text-red-600 bg-red-100 hover:bg-red-200 disabled:opacity-50 disabled:cursor-wait"
                     title="Reject"
                   >
                     {" "}
-                    {processingRequestId === req.id ? (
+                    {isProcessingThis ? (
                       <FaSpinner className="animate-spin h-4 w-4" />
                     ) : (
                       <FaBan className="h-4 w-4" />
@@ -359,7 +410,6 @@ const RequestsModal = ({
                     <h5 className="font-semibold text-gray-700 mb-1.5">
                       Requester Details:
                     </h5>
-                    {/* Display additional details fetched */}
                     {requester.email && (
                       <p>
                         <span className="font-medium text-gray-600">
@@ -398,9 +448,8 @@ const RequestsModal = ({
                         {requester.bio}
                       </p>
                     )}
-
                     {req.requestMessage && (
-                      <div className="mt-2 pt-2 border-t border-gray-200">
+                      <div className="mt-2 pt-2 border-t border-gray-100">
                         <p className="font-medium text-gray-600 mb-0.5">
                           Message:
                         </p>
@@ -409,7 +458,6 @@ const RequestsModal = ({
                         </p>
                       </div>
                     )}
-                    {/* Link to full profile */}
                     <div className="mt-2">
                       <Link
                         to={`/profile/${requester.id}`}
@@ -454,20 +502,30 @@ const RequestsModal = ({
             <FaTimes size={20} />
           </button>
         </div>
+
         {/* Notification */}
         <AnimatePresence>
           {notification.show && (
-            <motion.div /*...*/ className="overflow-hidden">
+            <motion.div /* ... */ className="overflow-hidden">
               {" "}
-              <Notification /*...*/ />{" "}
+              <Notification /* ... */ />{" "}
             </motion.div>
           )}{" "}
         </AnimatePresence>
 
         {/* Scrollable Body */}
         <div className="p-4 overflow-y-auto flex-grow">
-          {/* Global Fetch Error */}
-          {error && !isLoading && (
+          {/* Loading Indicator - Centered */}
+          {isLoading && (
+            <div className="flex justify-center items-center p-10">
+              {" "}
+              <LoadingSpinner />
+              <span className="ml-3 text-gray-500">Loading...</span>{" "}
+            </div>
+          )}
+
+          {/* Error Message - Shown when not loading */}
+          {!isLoading && error && (
             <div className="mb-4">
               {" "}
               <ErrorMessage
@@ -476,17 +534,8 @@ const RequestsModal = ({
               />{" "}
             </div>
           )}
-          {/* Loading */}
-          {isLoading && (
-            <div className="flex justify-center items-center p-10">
-              {" "}
-              <LoadingSpinner />
-              <span className="ml-3 text-gray-500">
-                Loading Requests...
-              </span>{" "}
-            </div>
-          )}
-          {/* Pending Requests Section */}
+
+          {/* Pending Requests Section - Shown when not loading and no error */}
           {!isLoading && !error && (
             <div className="mb-4">
               <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
@@ -496,8 +545,10 @@ const RequestsModal = ({
               {renderPendingRequestsList()}
             </div>
           )}
-          {/* Approved members section removed for focus */}
+
+          {/* Approved Members section removed for simplicity, add back if needed */}
         </div>
+
         {/* Footer */}
         <div className="flex justify-end p-3 border-t border-gray-200 flex-shrink-0 bg-gray-100 rounded-b-xl">
           <button
