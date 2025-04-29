@@ -1,12 +1,38 @@
 // backend/controllers/projectController.js
 import asyncHandler from "express-async-handler";
-import db from "../models/index.js"; // Adjust path if necessary
+import db from "../models/index.js";
 import { Op } from "sequelize";
+import fs from "fs/promises"; // Use promises version of fs
+import path from "path";
+import { fileURLToPath } from "url";
 
-// Destructure needed models - ensure all are loaded in index.js
-const { Project, User, CollaborationRequest, Member, sequelize } = db;
+// ES Module __dirname setup
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+// Define uploads directory relative to this controller file
+const UPLOADS_DIR = path.resolve(__dirname, "..", "uploads", "projects"); // Specific subfolder
 
-// Define fields using MODEL's camelCase keys for consistency
+const { Project, User, Member, CollaborationRequest, sequelize } = db; // Ensure all models are loaded
+
+// --- Helper to ensure directory exists ---
+const ensureUploadsDirExists = async () => {
+  try {
+    await fs.access(UPLOADS_DIR);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      console.log(`Uploads directory ${UPLOADS_DIR} not found, creating...`);
+      await fs.mkdir(UPLOADS_DIR, { recursive: true });
+    } else {
+      throw error;
+    }
+  }
+};
+// Ensure directory exists on server startup
+ensureUploadsDirExists().catch((err) =>
+  console.error("Failed to create initial uploads directory:", err)
+);
+
+// --- Field Definitions (using MODEL camelCase names) ---
 const projectListSelectFields = [
   "id",
   "title",
@@ -15,6 +41,11 @@ const projectListSelectFields = [
   "ownerId",
   "createdAt",
   "updatedAt",
+  "requiredCollaborators",
+  "imageUrl", // Use model name (mapped to image_url)
+  "category",
+  "duration",
+  "funding", // Add fields needed for list display
 ];
 const projectDetailSelectFields = [
   "id",
@@ -25,69 +56,119 @@ const projectDetailSelectFields = [
   "ownerId",
   "createdAt",
   "updatedAt",
+  "imageUrl", // Model uses imageUrl
+  "category",
+  "duration",
+  "funding",
+  "skillsNeeded", // Model uses skillsNeeded
+  "progress",
+  "views",
+  "likes",
+  "comments",
 ];
-const userPublicSelectFields = ["id", "username", "profilePictureUrl"]; // Fields safe to expose
+const userPublicSelectFields = ["id", "username", "profilePictureUrl"];
+
+// --- Controller Functions ---
 
 /**
- * @desc    Get all projects (paginated, searchable)
+ * @desc    Get all projects (paginated, searchable, with user membership status)
  * @route   GET /api/projects
- * @access  Private (or Public if `protect` removed from route)
+ * @access  Private (Requires login)
  */
 export const getAllProjects = asyncHandler(async (req, res) => {
   console.log("API: getAllProjects invoked");
+  const currentUserId = req.user?.id;
+  if (!currentUserId) {
+    res.status(401);
+    throw new Error("Authentication required.");
+  }
+
   try {
     const { status, search, page = 1, limit = 10 } = req.query;
     const where = {};
-    // Add filters based on query parameters
-    if (status) where.status = status; // Filter by status
+    if (status) where.status = status;
     if (search) {
-      // Filter by title or description
       where[Op.or] = [
         { title: { [Op.like]: `%${search}%` } },
         { description: { [Op.like]: `%${search}%` } },
       ];
     }
+    if (!status || status.toLowerCase() !== "archived") {
+      where.status = { [Op.ne]: "Archived" };
+    }
 
-    // Validate and parse pagination parameters
     const parsedLimit = parseInt(limit, 10);
     const parsedPage = parseInt(page, 10);
     if (
       isNaN(parsedLimit) ||
-      parsedLimit <= 0 ||
       isNaN(parsedPage) ||
+      parsedLimit <= 0 ||
       parsedPage <= 0
     ) {
       res.status(400);
-      throw new Error("Invalid pagination parameters.");
+      throw new Error("Invalid pagination.");
     }
     const offset = (parsedPage - 1) * parsedLimit;
 
+    if (!Project || !Member || !CollaborationRequest || !User)
+      throw new Error("DB models not loaded.");
+
     const { count, rows: projects } = await Project.findAndCountAll({
       where,
-      attributes: projectListSelectFields,
+      attributes: projectListSelectFields, // Uses model camelCase names
       include: [
         {
           model: User,
-          as: "owner", // Alias from Project.associate
-          attributes: userPublicSelectFields, // Select only public fields
-          required: false, // Use LEFT JOIN
+          as: "owner",
+          attributes: userPublicSelectFields,
+          required: false,
+        },
+        {
+          model: Member,
+          as: "memberships",
+          attributes: ["status"],
+          where: { userId: currentUserId },
+          required: false,
+        },
+        {
+          model: CollaborationRequest,
+          as: "collaborationRequests",
+          attributes: ["status"],
+          where: { requesterId: currentUserId, status: "pending" },
+          required: false,
         },
       ],
       order: [["createdAt", "DESC"]],
       limit: parsedLimit,
       offset,
-      distinct: true, // Important for correct count with includes
+      distinct: true,
+    });
+
+    const processedProjects = projects.map((p) => {
+      const projectJson = p.toJSON();
+      const currentUserMembership = projectJson.memberships?.[0];
+      const currentUserPendingRequest = projectJson.collaborationRequests?.[0];
+      if (currentUserMembership?.status === "active") {
+        projectJson.currentUserMembershipStatus = "approved";
+      } else if (currentUserPendingRequest?.status === "pending") {
+        projectJson.currentUserMembershipStatus = "pending";
+      } else {
+        projectJson.currentUserMembershipStatus = null;
+      }
+      delete projectJson.memberships;
+      delete projectJson.collaborationRequests;
+      return projectJson;
     });
 
     console.log(
-      `Found ${count} projects total, returning page ${parsedPage} (${projects.length} items).`
+      `Found ${count} projects total, returning page ${parsedPage} (${processedProjects.length} items).`
     );
     res.status(200).json({
       success: true,
       count,
       totalPages: Math.ceil(count / parsedLimit),
       currentPage: parsedPage,
-      data: projects,
+      data: processedProjects,
     });
   } catch (error) {
     console.error("Error in getAllProjects:", error);
@@ -109,27 +190,20 @@ export const getAllProjects = asyncHandler(async (req, res) => {
 export const getMyProjects = asyncHandler(async (req, res) => {
   const userId = req.user?.id;
   console.log(`API: getMyProjects invoked by User ${userId}`);
-
   if (!userId) {
     res.status(401);
     throw new Error("Authentication required.");
   }
-
   try {
+    if (!Project || !User) throw new Error("DB models not loaded.");
     const projects = await Project.findAll({
       where: { ownerId: userId },
-      attributes: projectListSelectFields,
+      attributes: projectListSelectFields, // Uses model camelCase names
       include: [
-        {
-          // Include owner details even though it's the current user
-          model: User,
-          as: "owner",
-          attributes: userPublicSelectFields,
-        },
+        { model: User, as: "owner", attributes: userPublicSelectFields },
       ],
       order: [["updatedAt", "DESC"]],
     });
-
     console.log(`Found ${projects.length} projects owned by user ${userId}.`);
     res
       .status(200)
@@ -148,36 +222,30 @@ export const getMyProjects = asyncHandler(async (req, res) => {
 /**
  * @desc    Get a single project by ID
  * @route   GET /api/projects/:id
- * @access  Private (or Public if `protect` removed)
+ * @access  Private (Requires login)
  */
 export const getProjectById = asyncHandler(async (req, res) => {
   const projectIdParam = req.params.id;
   console.log(`API: getProjectById invoked for ID: ${projectIdParam}`);
-
   const projectId = parseInt(projectIdParam, 10);
   if (isNaN(projectId) || projectId <= 0) {
     res.status(400);
     throw new Error("Invalid Project ID format.");
   }
-
   try {
+    if (!Project || !User) throw new Error("DB models not loaded.");
     const project = await Project.findByPk(projectId, {
-      attributes: projectDetailSelectFields,
+      attributes: projectDetailSelectFields, // Uses model camelCase names
       include: [
-        {
-          model: User,
-          as: "owner",
-          attributes: userPublicSelectFields,
-        },
+        { model: User, as: "owner", attributes: userPublicSelectFields },
       ],
     });
-
     if (!project) {
       res.status(404);
       throw new Error("Project not found.");
     }
     console.log(`Project ${projectId} found successfully.`);
-    res.status(200).json({ success: true, project: project }); // Changed 'data' key to 'project' for clarity maybe?
+    res.status(200).json({ success: true, project: project }); // Return under 'project' key
   } catch (error) {
     console.error(`Error in getProjectById for ID ${projectIdParam}:`, error);
     const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
@@ -198,97 +266,152 @@ export const getProjectById = asyncHandler(async (req, res) => {
 export const createProject = asyncHandler(async (req, res) => {
   const ownerId = req.user?.id;
   console.log(`API: createProject invoked by User ${ownerId}`);
+  console.log("createProject - req.body:", req.body);
+  console.log("createProject - req.file:", req.file);
 
   if (!ownerId) {
     res.status(401);
     throw new Error("Authentication required.");
   }
 
-  // Extract and validate required fields from request body
+  // Destructure ALL expected fields from req.body
   const {
     title,
     description,
     requiredCollaborators,
     status = "Planning",
+    category,
+    duration,
+    funding,
+    skillsNeeded,
+    progress,
+    views,
+    likes,
+    comments,
   } = req.body;
-  if (!title || !description) {
+
+  // --- VALIDATION ---
+  if (
+    !title ||
+    title.trim() === "" ||
+    !description ||
+    description.trim() === ""
+  ) {
+    console.error(
+      "Validation Failed: Title or Description missing/empty in req.body."
+    );
     res.status(400);
     throw new Error("Title and description are required fields.");
   }
+  // --- END VALIDATION ---
+
+  let parsedSkills = [];
+  if (skillsNeeded) {
+    try {
+      parsedSkills = JSON.parse(skillsNeeded);
+      if (!Array.isArray(parsedSkills)) throw new Error();
+    } catch (e) {
+      res.status(400);
+      throw new Error("Invalid skillsNeeded format.");
+    }
+  }
   const collaborators = requiredCollaborators
     ? parseInt(requiredCollaborators, 10)
-    : 1; // Default or parse
+    : 1;
   if (isNaN(collaborators) || collaborators < 0) {
     res.status(400);
-    throw new Error("Number of collaborators must be a non-negative number.");
+    throw new Error("Collaborators must be valid number.");
   }
 
-  // Use a transaction to ensure atomicity (project creation + owner membership)
+  let savedImageUrl = null; // Variable holds value for model's imageUrl field
+
+  if (req.file) {
+    await ensureUploadsDirExists();
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    const filename =
+      uniqueSuffix + "-" + req.file.originalname.replace(/\s+/g, "_");
+    const absoluteFilePath = path.join(UPLOADS_DIR, filename);
+    savedImageUrl = `/uploads/projects/${filename}`; // Relative path for DB field 'imageUrl' (maps to image_url)
+    try {
+      await fs.writeFile(absoluteFilePath, req.file.buffer);
+      console.log(
+        `File saved: ${absoluteFilePath}, DB Value (imageUrl): ${savedImageUrl}`
+      );
+    } catch (uploadError) {
+      res.status(500);
+      throw new Error("Failed to save image.");
+    }
+  }
+
   const transaction = await sequelize.transaction();
   try {
-    // Create the project
+    if (!Project || !Member) throw new Error("DB models not loaded.");
     const newProject = await Project.create(
       {
-        title,
-        description,
+        // Use MODEL field names (camelCase)
+        title: title.trim(),
+        description: description.trim(),
+        ownerId,
         requiredCollaborators: collaborators,
         status,
-        ownerId,
+        category: category || null,
+        duration: duration || null,
+        funding: funding || null,
+        skillsNeeded: parsedSkills,
+        imageUrl: savedImageUrl, // Maps to image_url via 'field' in model
+        progress: progress || 0,
+        views: views || 0,
+        likes: likes || 0,
+        comments: comments || 0,
       },
       { transaction }
     );
-    console.log(`Project created with ID: ${newProject.id}`);
+    console.log(`Project created ID: ${newProject.id}`);
 
-    // Add the owner as an active member with the 'owner' role
     await Member.create(
       {
         userId: ownerId,
         projectId: newProject.id,
-        role: "owner", // Assign specific role
-        status: "active", // Owner is active immediately
+        role: "owner",
+        status: "active",
       },
       { transaction }
     );
-    console.log(
-      `Owner ${ownerId} added as active 'owner' member to project ${newProject.id}`
-    );
+    console.log(`Owner added as member.`);
 
-    // Commit the transaction if both operations succeed
     await transaction.commit();
-    console.log("Transaction committed successfully.");
+    console.log("Transaction committed.");
 
-    // Fetch the newly created project with owner details to return
     const createdProject = await Project.findByPk(newProject.id, {
-      attributes: projectDetailSelectFields,
+      attributes: projectDetailSelectFields, // Uses model names
       include: [
         { model: User, as: "owner", attributes: userPublicSelectFields },
       ],
     });
-
-    res.status(201).json({ success: true, data: createdProject });
+    res.status(201).json({ success: true, data: createdProject }); // Use 'data' key
   } catch (error) {
-    // Rollback transaction if any step failed
-    if (
-      transaction &&
-      transaction.finished !== "commit" &&
-      transaction.finished !== "rollback"
-    ) {
+    if (transaction && !transaction.finished) {
       await transaction.rollback();
-      console.log("Transaction rolled back due to error.");
+      console.log("Transaction rolled back.");
+    }
+    if (savedImageUrl) {
+      try {
+        const fileToDelete = path.resolve(
+          __dirname,
+          "..",
+          savedImageUrl.substring(1)
+        );
+        await fs.unlink(fileToDelete);
+        console.log("Deleted orphaned upload.");
+      } catch (e) {
+        console.error("Error deleting orphaned file:", e);
+      }
     }
     console.error("Error creating project:", error);
-    if (error.name === "SequelizeValidationError") {
-      // Handle validation errors specifically
-      const messages = error.errors.map((err) => err.message).join(". ");
-      res.status(400).json({ success: false, message: messages });
-    } else {
-      res
-        .status(500)
-        .json({
-          success: false,
-          message: error.message || "Server error creating project.",
-        });
-    }
+    const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
+    res
+      .status(statusCode)
+      .json({ success: false, message: error.message || "Server error." });
   }
 });
 
@@ -301,90 +424,163 @@ export const updateProject = asyncHandler(async (req, res) => {
   const projectIdParam = req.params.id;
   const userId = req.user?.id;
   console.log(
-    `API: updateProject invoked for ID: ${projectIdParam} by User ${userId}`
+    `API: updateProject invoked ID: ${projectIdParam} by User ${userId}`
   );
+  console.log("updateProject - req.body:", req.body);
+  console.log("updateProject - req.file:", req.file);
 
   if (!userId) {
     res.status(401);
-    throw new Error("Authentication required.");
+    throw new Error("Auth required.");
+  }
+  const projectId = parseInt(projectIdParam);
+  if (isNaN(projectId)) {
+    res.status(400);
+    throw new Error("Invalid ID.");
   }
 
-  const projectId = parseInt(projectIdParam, 10);
-  if (isNaN(projectId) || projectId <= 0) {
-    res.status(400);
-    throw new Error("Invalid Project ID format.");
-  }
+  const transaction = await sequelize.transaction();
+  let newImageUrl = null;
+  let oldImageUrl = null;
 
   try {
-    const project = await Project.findByPk(projectId);
+    if (!Project) throw new Error("Project model not loaded");
+    const project = await Project.findByPk(projectId, { transaction });
     if (!project) {
       res.status(404);
       throw new Error("Project not found.");
     }
-
-    // Authorization: Only owner can update
     if (project.ownerId !== userId) {
       res.status(403);
-      throw new Error("Not authorized to update this project.");
+      throw new Error("Not authorized.");
     }
 
-    // Extract valid fields to update from request body
-    const { title, description, requiredCollaborators, status } = req.body;
+    oldImageUrl = project.imageUrl; // Get current value (which maps to image_url)
+
+    if (req.file) {
+      await ensureUploadsDirExists();
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      const filename =
+        uniqueSuffix + "-" + req.file.originalname.replace(/\s+/g, "_");
+      const absoluteFilePath = path.join(UPLOADS_DIR, filename);
+      newImageUrl = `/uploads/projects/${filename}`; // This value will be saved in the model's imageUrl field
+      try {
+        await fs.writeFile(absoluteFilePath, req.file.buffer);
+        console.log(`New file saved: ${absoluteFilePath}`);
+      } catch (uploadError) {
+        res.status(500);
+        throw new Error("Failed to save updated image.");
+      }
+    }
+
+    const {
+      title,
+      description,
+      requiredCollaborators,
+      status,
+      category,
+      duration,
+      funding,
+      skillsNeeded,
+      progress,
+      views,
+      likes,
+      comments,
+    } = req.body;
     const updates = {};
-    if (title !== undefined && title.trim() !== "")
+    // Use MODEL field names (camelCase) for keys in 'updates' object
+    if (title !== undefined) {
+      if (title.trim() === "") throw new Error("Title cannot be empty.");
       updates.title = title.trim();
-    if (description !== undefined) updates.description = description; // Allow empty description
+    }
+    if (description !== undefined) updates.description = description;
     if (requiredCollaborators !== undefined) {
       const c = parseInt(requiredCollaborators);
-      if (!isNaN(c) && c >= 0) updates.requiredCollaborators = c;
-      else {
-        res.status(400);
-        throw new Error("Invalid required collaborators value.");
-      }
+      if (isNaN(c) || c < 0) throw new Error("Invalid collaborators.");
+      updates.requiredCollaborators = c;
     }
     if (status !== undefined) {
-      const validStatuses = Project.getAttributes().status.values; // Get valid ENUM values
-      if (validStatuses && validStatuses.includes(status))
-        updates.status = status;
-      else {
-        res.status(400);
-        throw new Error(
-          `Invalid status value. Must be one of: ${validStatuses.join(", ")}`
+      const vs = Project.getAttributes().status?.values;
+      if (vs && vs.includes(status)) updates.status = status;
+      else throw new Error(`Invalid status.`);
+    }
+    if (category !== undefined) updates.category = category || null;
+    if (duration !== undefined) updates.duration = duration || null;
+    if (funding !== undefined) updates.funding = funding || null;
+    if (skillsNeeded !== undefined) {
+      try {
+        let ps = [];
+        if (typeof skillsNeeded === "string") ps = JSON.parse(skillsNeeded);
+        else if (Array.isArray(skillsNeeded)) ps = skillsNeeded;
+        else throw new Error();
+        updates.skillsNeeded = ps;
+      } catch (e) {
+        throw new Error("Invalid skillsNeeded format.");
+      }
+    }
+    if (newImageUrl) updates.imageUrl = newImageUrl; // Update model field
+    if (progress !== undefined) updates.progress = parseInt(progress) || 0;
+    if (views !== undefined) updates.views = parseInt(views) || project.views; // Don't reset if not provided
+    if (likes !== undefined) updates.likes = parseInt(likes) || project.likes;
+    if (comments !== undefined)
+      updates.comments = parseInt(comments) || project.comments;
+
+    if (Object.keys(updates).length === 0) {
+      await transaction.rollback();
+      return res
+        .status(400)
+        .json({ success: false, message: "No fields provided for update." });
+    }
+
+    console.log("Applying updates:", updates);
+    await project.update(updates, { transaction });
+    await transaction.commit();
+    console.log(`Project ${projectId} updated successfully.`);
+
+    if (newImageUrl && oldImageUrl) {
+      try {
+        const fileToDelete = path.resolve(
+          __dirname,
+          "..",
+          oldImageUrl.substring(1)
         );
+        await fs.unlink(fileToDelete);
+        console.log(`Deleted old image file: ${fileToDelete}`);
+      } catch (deleteError) {
+        console.error("Error deleting old image:", deleteError);
       }
     }
 
-    // Check if there's anything valid to update
-    if (Object.keys(updates).length === 0) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "No valid fields provided for update.",
-        });
-    }
-
-    // Perform the update
-    await project.update(updates);
-    console.log(`Project ${projectId} updated successfully.`);
-
-    // Return the updated project data
     const updatedProject = await Project.findByPk(project.id, {
       attributes: projectDetailSelectFields,
       include: [
-        { model: User, as: "owner", attributes: userPublicSelectFields },
+        /* owner */
       ],
     });
-    res.status(200).json({ success: true, data: updatedProject });
+    res.status(200).json({ success: true, project: updatedProject }); // Use 'project' key
   } catch (error) {
+    if (transaction && !transaction.finished) {
+      await transaction.rollback();
+      console.log("Update rolled back.");
+    }
+    if (newImageUrl) {
+      try {
+        const fileToDelete = path.resolve(
+          __dirname,
+          "..",
+          newImageUrl.substring(1)
+        );
+        await fs.unlink(fileToDelete);
+        console.log("Deleted new upload due to error.");
+      } catch (e) {
+        console.error("Error deleting new file:", e);
+      }
+    }
     console.error(`Error updating project ${projectIdParam}:`, error);
     const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
     res
       .status(statusCode)
-      .json({
-        success: false,
-        message: error.message || "Server error updating project.",
-      });
+      .json({ success: false, message: error.message || "Server error." });
   }
 });
 
@@ -397,49 +593,75 @@ export const deleteProject = asyncHandler(async (req, res) => {
   const projectIdParam = req.params.id;
   const userId = req.user?.id;
   console.log(
-    `API: deleteProject invoked for ID: ${projectIdParam} by User ${userId}`
+    `API: deleteProject invoked ID: ${projectIdParam} by User ${userId}`
   );
-
   if (!userId) {
     res.status(401);
-    throw new Error("Authentication required.");
+    throw new Error("Auth required.");
   }
-
-  const projectId = parseInt(projectIdParam, 10);
-  if (isNaN(projectId) || projectId <= 0) {
+  const projectId = parseInt(projectIdParam);
+  if (isNaN(projectId)) {
     res.status(400);
-    throw new Error("Invalid Project ID format.");
+    throw new Error("Invalid ID.");
   }
 
+  let imagePathToDelete = null; // Use model field name imageUrl
+  const transaction = await sequelize.transaction();
   try {
-    const project = await Project.findByPk(projectId);
+    if (!Project) throw new Error("Project model not loaded");
+    const project = await Project.findByPk(projectId, {
+      transaction,
+      attributes: ["id", "ownerId", "imageUrl"],
+    }); // Get imageUrl
     if (!project) {
       res.status(404);
       throw new Error("Project not found.");
     }
-
-    // Authorization: Only owner can delete
     if (project.ownerId !== userId) {
       res.status(403);
-      throw new Error("Not authorized to delete this project.");
+      throw new Error("Not authorized.");
     }
 
-    // Delete the project (associated data like Members, Messages should cascade if defined in models)
-    await project.destroy();
-    console.log(
-      `Project ${projectId} deleted successfully by owner ${userId}.`
-    );
+    imagePathToDelete = project.imageUrl; // Store path/URL (model field name)
+
+    await project.destroy({ transaction });
+    await transaction.commit();
+    console.log(`Project ${projectId} DB record deleted.`);
+
+    if (imagePathToDelete) {
+      try {
+        // Assuming imagePathToDelete stores relative path like /uploads/projects/...
+        const fileToDelete = path.resolve(
+          __dirname,
+          "..",
+          imagePathToDelete.substring(1)
+        );
+        await fs.unlink(fileToDelete);
+        console.log(`Deleted associated image file: ${fileToDelete}`);
+      } catch (deleteError) {
+        // ENOENT (File not found) is okay, might have been deleted manually or never existed
+        if (deleteError.code !== "ENOENT") {
+          console.error("Error deleting image file:", deleteError);
+        } else {
+          console.log(
+            "Image file not found for deletion (ENOENT), possibly already deleted."
+          );
+        }
+      }
+    }
     res
       .status(200)
       .json({ success: true, message: "Project deleted successfully." });
   } catch (error) {
+    if (transaction && !transaction.finished) {
+      await transaction.rollback();
+      console.log("Delete transaction rolled back.");
+    }
     console.error(`Error deleting project ${projectIdParam}:`, error);
+    const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
     res
-      .status(500)
-      .json({
-        success: false,
-        message: error.message || "Server error deleting project.",
-      });
+      .status(statusCode)
+      .json({ success: false, message: error.message || "Server error." });
   }
 });
 
@@ -454,19 +676,19 @@ export const getProjectRequests = asyncHandler(async (req, res) => {
   console.log(
     `API: getProjectRequests invoked for project ${projectIdParam} by user ${userId}`
   );
-
   if (!userId) {
     res.status(401);
-    throw new Error("Authentication required.");
+    throw new Error("Auth required.");
   }
-  const projectId = parseInt(projectIdParam, 10);
+  const projectId = parseInt(projectIdParam);
   if (isNaN(projectId)) {
     res.status(400);
-    throw new Error("Invalid Project ID.");
+    throw new Error("Invalid ID.");
   }
 
   try {
-    // Find project and verify ownership
+    if (!Project || !CollaborationRequest || !User)
+      throw new Error("DB models not loaded");
     const project = await Project.findByPk(projectId, {
       attributes: ["id", "ownerId", "title"],
     });
@@ -476,30 +698,28 @@ export const getProjectRequests = asyncHandler(async (req, res) => {
     }
     if (project.ownerId !== userId) {
       res.status(403);
-      throw new Error("Forbidden: Only the project owner can view requests.");
+      throw new Error("Forbidden.");
     }
 
-    // Find pending requests, including requester details
     const pendingRequests = await CollaborationRequest.findAll({
-      where: { projectId: projectId, status: "pending" }, // Filter by project and status
+      where: { projectId: projectId, status: "pending" },
       include: [
-        {
-          model: User,
-          as: "requester", // Alias from CollaborationRequest.associate
-          attributes: userPublicSelectFields,
-        },
+        { model: User, as: "requester", attributes: userPublicSelectFields },
       ],
-      order: [["createdAt", "DESC"]], // Show newest requests first
+      order: [["createdAt", "DESC"]],
     });
 
     console.log(
       `Found ${pendingRequests.length} pending requests for project ${projectId}.`
     );
-    res.status(200).json({
-      success: true,
-      projectTitle: project.title, // Include project title for context
-      requests: pendingRequests, // Changed key name for clarity
-    });
+    // Return requests array under 'data' key
+    res
+      .status(200)
+      .json({
+        success: true,
+        count: pendingRequests.length,
+        data: pendingRequests,
+      });
   } catch (error) {
     console.error(
       `Error in getProjectRequests for Project ${projectIdParam}:`,
@@ -508,14 +728,10 @@ export const getProjectRequests = asyncHandler(async (req, res) => {
     const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
     res
       .status(statusCode)
-      .json({
-        success: false,
-        message: error.message || "Server error fetching requests.",
-      });
+      .json({ success: false, message: error.message || "Server error." });
   }
 });
 
-// --- *** NEW CONTROLLER FUNCTION *** ---
 /**
  * @desc    Get ACTIVE members of a specific project
  * @route   GET /api/projects/:projectId/members
@@ -527,39 +743,31 @@ export const getProjectMembers = asyncHandler(async (req, res) => {
   console.log(
     `API: getProjectMembers invoked for Project ${projectIdParam} by User ${currentUserId}`
   );
-
   if (!currentUserId) {
     res.status(401);
-    throw new Error("Authentication required.");
+    throw new Error("Auth required.");
   }
-  const projectId = parseInt(projectIdParam, 10);
-  if (isNaN(projectId) || projectId <= 0) {
+  const projectId = parseInt(projectIdParam);
+  if (isNaN(projectId)) {
     res.status(400);
-    throw new Error("Invalid Project ID format.");
+    throw new Error("Invalid ID.");
   }
 
   try {
-    // 1. Find Project and Owner (verifies project exists)
+    if (!Project || !Member || !User) throw new Error("DB models not loaded");
     const project = await Project.findByPk(projectId, {
-      attributes: ["id", "ownerId"], // Need ownerId for checks
+      attributes: ["id", "ownerId", "createdAt"],
       include: [
-        {
-          // Include owner details directly
-          model: User,
-          as: "owner",
-          attributes: userPublicSelectFields,
-        },
+        { model: User, as: "owner", attributes: userPublicSelectFields },
       ],
     });
     if (!project) {
       res.status(404);
       throw new Error("Project not found.");
     }
-
     const ownerId = project.ownerId;
-    const projectOwner = project.owner?.toJSON(); // Get plain owner object
+    const projectOwner = project.owner?.toJSON();
 
-    // 2. Authorization Check: User must be owner or an active member
     const isOwner = ownerId === currentUserId;
     let isMember = false;
     if (!isOwner) {
@@ -569,71 +777,59 @@ export const getProjectMembers = asyncHandler(async (req, res) => {
           projectId: projectId,
           status: "active",
         },
-        attributes: ["userId"],
       });
       isMember = !!membership;
     }
     if (!isOwner && !isMember) {
       res.status(403);
-      throw new Error("Access Denied: Not authorized to view members.");
+      throw new Error("Access Denied.");
     }
     console.log(
       `Auth Passed for getProjectMembers (Owner: ${isOwner}, Member: ${isMember})`
     );
 
-    // 3. Fetch Active Members including their User details
     const members = await Member.findAll({
       where: { projectId: projectId, status: "active" },
       include: [
         { model: User, as: "user", attributes: userPublicSelectFields },
       ],
-      attributes: ["userId", "role", "status", "joinedAt"], // Select Member fields
-      order: [["joinedAt", "ASC"]], // Order by when they joined
+      attributes: ["userId", "role", "status", "joinedAt", "id"],
+      order: [["joinedAt", "ASC"]],
     });
 
-    // 4. Format response: Combine owner/members, assign roles, sort
     let formattedMembers = members
-      .map((member) => ({
-        id: member.user?.id,
-        username: member.user?.username,
-        profilePictureUrl: member.user?.profilePictureUrl,
-        role: member.userId === ownerId ? "Owner" : member.role || "Member", // Assign Owner role, fallback
-        joinedAt: member.joinedAt,
+      .map((m) => ({
+        id: m.id,
+        userId: m.user?.id,
+        username: m.user?.username,
+        profilePictureUrl: m.user?.profilePictureUrl,
+        role: m.userId === ownerId ? "Owner" : m.role || "Member",
+        joinedAt: m.joinedAt,
       }))
-      .filter((member) => member.id); // Filter out potential null users
-
-    // Ensure owner is in the list with the correct role
-    if (
-      projectOwner &&
-      !formattedMembers.some((m) => m.id === projectOwner.id)
-    ) {
+      .filter((m) => m.userId);
+    if (projectOwner && !formattedMembers.some((m) => m.userId === ownerId)) {
       formattedMembers.unshift({
+        id: `owner-${ownerId}`,
+        userId: ownerId,
         ...projectOwner,
         role: "Owner",
         joinedAt: project.createdAt,
-      }); // Add owner if missing
+      });
     } else {
       formattedMembers = formattedMembers.map((m) =>
-        m.id === projectOwner?.id ? { ...m, role: "Owner" } : m
-      ); // Correct role if present
+        m.userId === ownerId ? { ...m, role: "Owner" } : m
+      );
     }
-
-    // Sort: Owner first, then alphabetically by username
     formattedMembers.sort((a, b) => {
-      if (a.role === "Owner" && b.role !== "Owner") return -1;
-      if (a.role !== "Owner" && b.role === "Owner") return 1;
+      if (a.role === "Owner") return -1;
+      if (b.role === "Owner") return 1;
       return (a.username || "").localeCompare(b.username || "");
     });
 
     console.log(
       `Returning ${formattedMembers.length} members for project ${projectId}`
     );
-    res.status(200).json({
-      success: true,
-      members: formattedMembers, // Send the formatted list
-      // Optional: Send owner separately if frontend prefers, but list includes them
-      // owner: projectOwner
-    });
+    res.status(200).json({ success: true, data: formattedMembers }); // Return under 'data' key
   } catch (error) {
     console.error(
       `Error in getProjectMembers for Project ${projectIdParam}:`,
@@ -642,19 +838,16 @@ export const getProjectMembers = asyncHandler(async (req, res) => {
     const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
     res
       .status(statusCode)
-      .json({
-        success: false,
-        message: error.message || "Server error fetching project members.",
-      });
+      .json({ success: false, message: error.message || "Server error." });
   }
 });
-// --- *** END OF NEW CONTROLLER FUNCTION *** ---
 
 /** @desc Admin get all projects (placeholder) */
+// Ensure this is exported if imported in any router
 export const adminGetAllProjects = asyncHandler(async (req, res) => {
   console.log("API: adminGetAllProjects invoked");
   // Add actual admin logic here (e.g., fetch all projects regardless of status)
   res
     .status(501)
-    .json({ success: false, message: "Admin route not implemented" });
+    .json({ success: false, message: "Admin route not implemented yet" });
 });

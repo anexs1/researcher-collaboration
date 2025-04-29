@@ -5,6 +5,7 @@ const ProjectModel = (sequelize) => {
   const Project = sequelize.define(
     "Project",
     {
+      // --- Model attributes use camelCase ---
       id: {
         type: DataTypes.INTEGER.UNSIGNED,
         primaryKey: true,
@@ -15,63 +16,119 @@ const ProjectModel = (sequelize) => {
         allowNull: false,
         validate: { notEmpty: true },
       },
-      description: {
-        type: DataTypes.TEXT,
-        allowNull: true,
-      },
+      description: { type: DataTypes.TEXT, allowNull: true }, // Allows NULL based on DB data
+      category: { type: DataTypes.STRING, allowNull: true },
       ownerId: {
+        // Matches DB column name
         type: DataTypes.INTEGER.UNSIGNED,
         allowNull: false,
         references: { model: "Users", key: "id" },
-        onDelete: "CASCADE", // Or restrict/set null based on your rules
+        onDelete: "CASCADE",
         onUpdate: "CASCADE",
-        field: "ownerId", // Explicit mapping if needed
       },
-      // Add other project fields as needed (e.g., status, category)
+      requiredCollaborators: {
+        // Matches DB column name
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 1,
+        validate: { min: 0 },
+      },
+      progress: {
+        // Matches DB column name
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0,
+        validate: { min: 0, max: 100 },
+      },
+      status: {
+        // Matches DB column name
+        type: DataTypes.ENUM(
+          "Planning",
+          "Active",
+          "Completed",
+          "On Hold",
+          "Archived"
+        ),
+        allowNull: false,
+        defaultValue: "Planning",
+      },
+      duration: { type: DataTypes.STRING, allowNull: true }, // Matches DB column name
+      funding: { type: DataTypes.STRING, allowNull: true }, // Matches DB column name
+      skillsNeeded: {
+        // Model: camelCase
+        type: DataTypes.JSON,
+        allowNull: true,
+        defaultValue: [],
+        field: "skills_needed", // <<< Map to DB snake_case column
+      },
+      imageUrl: {
+        // Model: camelCase
+        type: DataTypes.STRING,
+        allowNull: true,
+        field: "image_url", // <<< Map to DB snake_case column
+      },
+      views: {
+        type: DataTypes.INTEGER.UNSIGNED,
+        allowNull: false,
+        defaultValue: 0,
+      }, // Matches DB column name
+      likes: {
+        type: DataTypes.INTEGER.UNSIGNED,
+        allowNull: false,
+        defaultValue: 0,
+      }, // Matches DB column name
+      comments: {
+        type: DataTypes.INTEGER.UNSIGNED,
+        allowNull: false,
+        defaultValue: 0,
+      }, // Matches DB column name
+      // createdAt, updatedAt match DB column names (Sequelize defaults to camelCase unless underscored:true)
+      createdAt: { type: DataTypes.DATE, allowNull: false },
+      updatedAt: { type: DataTypes.DATE, allowNull: false },
     },
     {
-      tableName: "Projects", // Ensure this matches your actual table name
-      timestamps: true, // Expects createdAt, updatedAt
-      // Set based on your Projects table column naming (e.g., ownerId vs owner_id)
-      underscored: false, // <<< ADJUST THIS based on your Projects table columns
+      tableName: "Projects",
+      timestamps: true, // Sequelize handles createdAt, updatedAt columns
+      underscored: false, // <<< SET TO FALSE because DB uses mixed case
       freezeTableName: true,
       indexes: [
-        // Use MODEL field names unless underscored:true maps them
+        // Use model field names here because underscored: false
         { fields: ["ownerId"] },
+        { fields: ["status"] },
         { fields: ["title"] },
       ],
     }
   );
 
   Project.associate = (models) => {
-    // Project belongs to a User (Owner)
+    // Use model field name (camelCase) for foreignKey
+    if (
+      !models.User ||
+      !models.Member ||
+      !models.CollaborationRequest ||
+      !models.Message
+    ) {
+      console.error("Project Model Error: Assoc models missing!");
+      return;
+    }
     Project.belongsTo(models.User, { foreignKey: "ownerId", as: "owner" });
-
-    // Project has many Members (through Member table)
     Project.belongsToMany(models.User, {
-      through: models.Member, // Join table
-      foreignKey: "projectId", // Key in Member pointing to Project
-      otherKey: "userId", // Key in Member pointing to User
-      as: "members", // Alias to get users who are members
+      through: models.Member,
+      foreignKey: "projectId",
+      otherKey: "userId",
+      as: "members",
     });
-    // Project has many direct Membership records
     Project.hasMany(models.Member, {
       foreignKey: "projectId",
-      as: "projectMemberships",
+      as: "memberships",
     });
-
-    // Project receives CollaborationRequests
-    if (models.CollaborationRequest) {
-      Project.hasMany(models.CollaborationRequest, {
-        foreignKey: "projectId",
-        as: "collaborationRequests",
-      });
-    }
-
-    // *** ADDED: Project has many Messages (for the group chat) ***
+    Project.hasMany(models.CollaborationRequest, {
+      foreignKey: "projectId",
+      as: "collaborationRequests",
+    });
     Project.hasMany(models.Message, {
-      foreignKey: "projectId", // Key in Message pointing to Project
-      as: "messages", // Alias to get messages for this project chat
+      foreignKey: "projectId",
+      as: "messages",
     });
   };
 

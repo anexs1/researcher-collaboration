@@ -7,17 +7,34 @@ import { FaPlus, FaSpinner, FaImage, FaTimes } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
 
 // --- Import Common Components ---
-// CRITICAL: Adjust paths if needed
 import Notification from "../Component/Common/Notification";
 import ErrorMessage from "../Component/Common/ErrorMessage";
-import TagInput from "../Component/Common/TagInput"; // Assumes this component works correctly
+import TagInput from "../Component/Common/TagInput";
 import LoadingSpinner from "../Component/Common/LoadingSpinner";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
+// --- Setup Axios Instance ---
+const apiClient = axios.create({ baseURL: API_BASE_URL });
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem("authToken");
+    if (token && !config.headers.Authorization) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// --- Style Constants ---
+const labelClasses = "block text-sm font-medium text-gray-700 mb-1";
+const inputClasses =
+  "w-full px-3 py-2 border rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors placeholder-gray-400 disabled:bg-gray-100";
+
 // --- Component Constants ---
-const projectStatuses = ["Planning", "Active", "Completed", "On Hold"]; // Align with your backend/DB enum if possible
+const projectStatuses = ["Planning", "Active", "Completed", "On Hold"];
 const projectCategories = [
   "Artificial Intelligence",
   "Data Science",
@@ -38,22 +55,19 @@ function CreateProjectPage() {
   // --- State Definitions ---
   const [formData, setFormData] = useState({
     title: "",
-    category: "", // Ensure this exists in your Project model/table if used
+    category: "",
     description: "",
-    requiredCollaborators: "", // <<< Changed: Start empty to force user input
+    requiredCollaborators: "1",
     status: "Planning",
-    duration: "", // Ensure this exists in your Project model/table if used
-    funding: "", // Ensure this exists in your Project model/table if used
-    skillsNeeded: [], // Ensure this exists in your Project model/table if used
-    // Add other relevant fields from your Project model if needed (e.g., progress, imageUrl)
-    // imageUrl: null, // Usually handled by file upload state
-    // progress: 0, // Example if you have progress
+    duration: "",
+    funding: "",
+    skillsNeeded: [],
   });
   const [projectImageFile, setProjectImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(""); // For displaying persistent errors
-  const [validationErrors, setValidationErrors] = useState({}); // For inline field errors
+  const [error, setError] = useState("");
+  const [validationErrors, setValidationErrors] = useState({});
   const [notification, setNotification] = useState({
     message: "",
     type: "",
@@ -62,7 +76,7 @@ function CreateProjectPage() {
 
   const fileInputRef = useRef(null);
 
-  // --- Define Utilities FIRST ---
+  // --- Utilities & Handlers ---
   const showNotification = useCallback((message, type = "success") => {
     setNotification({ message, type, show: true });
     const timer = setTimeout(
@@ -72,46 +86,39 @@ function CreateProjectPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  // --- Event Handlers ---
   const handleChange = useCallback((e) => {
     const { name, value } = e.target;
-    // Clear specific field validation error when user types
     setValidationErrors((prev) => ({ ...prev, [name]: undefined }));
     setFormData((prev) => ({ ...prev, [name]: value }));
+    console.log(`handleChange: ${name} = ${value}`); // Log state changes
   }, []);
 
   const handleFileChange = useCallback(
     (e) => {
       const file = e.target.files ? e.target.files[0] : null;
-      // Reset previous state
       setProjectImageFile(null);
       setImagePreview(null);
-      if (fileInputRef.current) fileInputRef.current.value = null; // Clear native input
+      if (fileInputRef.current) fileInputRef.current.value = null;
 
       if (file) {
-        // Validation
         if (!file.type.startsWith("image/")) {
-          showNotification(
-            "Invalid file type. Please select an image.",
-            "error"
-          );
+          showNotification("Invalid file type.", "error");
           return;
         }
         const maxSize = 5 * 1024 * 1024; // 5MB
         if (file.size > maxSize) {
-          showNotification(
-            `File is too large (Max ${maxSize / 1024 / 1024}MB).`,
-            "error"
-          );
+          showNotification(`File too large (Max 5MB).`, "error");
           return;
         }
-        // Set state and preview
         setProjectImageFile(file);
         const reader = new FileReader();
         reader.onloadend = () => setImagePreview(reader.result);
         reader.onerror = () =>
           showNotification("Could not read image file.", "error");
         reader.readAsDataURL(file);
+        console.log("File selected:", file.name);
+      } else {
+        console.log("File selection cleared.");
       }
     },
     [showNotification]
@@ -122,20 +129,22 @@ function CreateProjectPage() {
       ...prev,
       skillsNeeded: Array.isArray(newSkills) ? newSkills : [],
     }));
-    // Clear validation error for skills if needed
     setValidationErrors((prev) => ({ ...prev, skillsNeeded: undefined }));
   }, []);
 
   // --- Frontend Validation Logic ---
   const validateForm = useCallback(() => {
+    console.log("Running validateForm...");
     const errors = {};
-    if (!formData.title?.trim()) errors.title = "Project title is required.";
-    else if (formData.title.length < 5)
+    const currentTitle = formData.title?.trim(); // Trim before validating
+    const currentDescription = formData.description?.trim(); // Trim before validating
+
+    if (!currentTitle) errors.title = "Project title is required.";
+    else if (currentTitle.length < 5)
       errors.title = "Title must be at least 5 characters.";
 
-    if (!formData.description?.trim())
-      errors.description = "Description is required.";
-    else if (formData.description.length < 20)
+    if (!currentDescription) errors.description = "Description is required.";
+    else if (currentDescription.length < 20)
       errors.description = "Description must be at least 20 characters.";
 
     const collabValue = formData.requiredCollaborators;
@@ -150,137 +159,127 @@ function CreateProjectPage() {
       if (isNaN(numCollaborators) || numCollaborators < 0) {
         errors.requiredCollaborators = "Must be a valid, non-negative number.";
       }
-      // Optional: Set a minimum like 1 if 0 is not allowed
-      // if (numCollaborators < 1) errors.requiredCollaborators = "Must need at least 1 collaborator (or 0).";
     }
-
-    // Add validation for other required fields if necessary (e.g., category)
-    // if (!formData.category) errors.category = "Category is required.";
+    // Add other validations...
 
     setValidationErrors(errors);
-    return Object.keys(errors).length === 0; // Return true if no errors
+    console.log("Validation Errors:", errors);
+    return Object.keys(errors).length === 0;
   }, [formData]);
 
   // --- Form Submission Handler ---
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(""); // Clear general error
-    setValidationErrors({}); // Clear field errors
+    setError("");
+    setValidationErrors({});
 
+    console.log("handleSubmit triggered.");
     if (!validateForm()) {
+      console.log("Frontend validation FAILED.");
       showNotification("Please fix the errors in the form.", "warning");
-      return; // Stop submission if frontend validation fails
-    }
-
-    setIsLoading(true);
-    console.log(
-      "Attempting to submit project. Validated form state:",
-      formData
-    );
-
-    const token = localStorage.getItem("authToken");
-    if (!token) {
-      const errorMsg = "Authentication required. Please log in.";
-      setError(errorMsg);
-      setIsLoading(false);
-      showNotification(errorMsg, "error");
       return;
     }
+    console.log("Frontend validation PASSED.");
 
-    // --- Prepare FormData for Submission ---
-    const dataToSubmit = new FormData();
+    setIsLoading(true);
 
-    // Append fields carefully, ensuring correct types/names for backend
-    Object.entries(formData).forEach(([key, value]) => {
-      // Use the correct key name expected by the backend controller
-      // In this case, frontend state key 'requiredCollaborators' matches backend
-      const backendKey = key;
+    let dataToSend;
+    let requestConfig = { headers: {} }; // Initialize headers object
 
-      if (key === "skillsNeeded") {
-        // Stringify the array for FormData
-        dataToSubmit.append(backendKey, JSON.stringify(value || []));
-        console.log(
-          `Appending ${backendKey} (JSON): ${JSON.stringify(value || [])}`
-        );
-      } else if (value !== null && value !== undefined && value !== "") {
-        // Only append if value is not null, undefined, or an empty string
-        // Exception: Allow title/description empty strings if backend handles it? Check backend validation.
-        // If backend requires non-empty title/description, frontend validation already catches it.
-        dataToSubmit.append(backendKey, value);
-        console.log(`Appending field ${backendKey}: '${value}'`);
-      } else if (value === "") {
-        // Log fields that are empty strings but not appended (unless backend expects them)
-        console.log(
-          `Field ${backendKey} is an empty string, not appending (unless specifically handled).`
-        );
-      } else {
-        console.log(
-          `Skipping appending field ${backendKey} because it is null or undefined.`
-        );
-      }
-    });
+    // Get token *before* constructing payload
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+      showNotification("Authentication Error. Please log in again.", "error");
+      setError("Authentication token not found.");
+      setIsLoading(false);
+      return;
+    }
+    requestConfig.headers.Authorization = `Bearer ${token}`; // Add token for both cases
 
-    // Append the file if it exists
+    // Prepare data based on whether a file is present
     if (projectImageFile) {
-      dataToSubmit.append(
+      console.log("Preparing FormData (with file)...");
+      dataToSend = new FormData();
+      // Append fields exactly as expected by backend (match req.body keys and multer field name)
+      dataToSend.append("title", formData.title.trim());
+      dataToSend.append("description", formData.description.trim());
+      dataToSend.append(
+        "requiredCollaborators",
+        formData.requiredCollaborators
+      ); // Send as string
+      dataToSend.append("status", formData.status);
+      if (formData.category) dataToSend.append("category", formData.category);
+      if (formData.duration) dataToSend.append("duration", formData.duration);
+      if (formData.funding) dataToSend.append("funding", formData.funding);
+      if (formData.skillsNeeded.length > 0)
+        dataToSend.append(
+          "skillsNeeded",
+          JSON.stringify(formData.skillsNeeded)
+        );
+      // Field name MUST match multer setup in projectRoutes.js
+      dataToSend.append(
         "projectImageFile",
         projectImageFile,
         projectImageFile.name
       );
-      console.log(`Appending file: ${projectImageFile.name}`);
+
+      // DO NOT set Content-Type for FormData; browser does it with boundary
+      console.log("FormData prepared. Sending multipart/form-data request.");
     } else {
-      console.log("No project image file selected to append.");
-    }
-
-    // Log FormData content for final verification before sending
-    console.log("--- FormData Prepared ---");
-    for (let [key, value] of dataToSubmit.entries()) {
+      console.log("Preparing JSON payload (no file)...");
+      dataToSend = {
+        title: formData.title.trim(),
+        description: formData.description.trim(),
+        requiredCollaborators: parseInt(formData.requiredCollaborators, 10), // Send as number
+        status: formData.status,
+        category: formData.category || null,
+        duration: formData.duration || null,
+        funding: formData.funding || null,
+        skillsNeeded: formData.skillsNeeded,
+      };
+      // Set Content-Type for JSON
+      requestConfig.headers["Content-Type"] = "application/json";
       console.log(
-        `  ${key}:`,
-        value instanceof File ? `File(${value.name})` : value
+        "JSON payload prepared:",
+        JSON.stringify(dataToSend, null, 2)
       );
+      console.log("Sending application/json request.");
     }
-    console.log("-------------------------");
 
-    // --- API Call ---
+    // API Call
     try {
-      const response = await axios.post(
-        `${API_BASE_URL}/api/projects`,
-        dataToSubmit,
-        { headers: { Authorization: `Bearer ${token}` } }
-        // Content-Type is automatically set to 'multipart/form-data' by browser when using FormData
+      const response = await apiClient.post(
+        "/api/projects",
+        dataToSend,
+        requestConfig
       );
+      console.log("Backend Success Response:", response.data);
 
       if (response.data?.success && response.data?.data?.id) {
         showNotification("Project created successfully!", "success");
-        navigate(`/projects/${response.data.data.id}`); // Redirect to the new project page
+        navigate(`/projects/${response.data.data.id}`);
       } else {
-        // Handle cases where success is true but data might be missing
         throw new Error(
           response.data?.message ||
-            "Project created, but unexpected response received."
+            "Project created, but unexpected success response structure."
         );
       }
     } catch (err) {
       console.error("--- Project Creation Axios Error ---");
       console.error("Status:", err.response?.status);
-      console.error("Backend Response Data:", err.response?.data); // <<< CHECK THIS FOR 400 REASON FROM BACKEND
+      console.error("Backend Response Data:", err.response?.data); // <<< THIS IS THE IMPORTANT PART
+      console.error("Request Config:", err.config); // Log request config for headers etc.
       console.error("Error Message:", err.message);
       console.error("----------------------------------");
 
       let displayError = "An error occurred while creating the project.";
-      // Prioritize backend error message if available
+      // Use the specific backend message if available
       if (err.response?.data?.message) {
         displayError = err.response.data.message;
-        // Optionally map backend validation errors to frontend fields
-        if (err.response?.data?.errors) {
-          // Assuming backend might send structured errors
-          setValidationErrors(err.response.data.errors);
-        }
       } else if (err.message) {
         displayError = err.message;
       }
-      setError(displayError); // Show general error message
+      setError(displayError);
       showNotification(`Project creation failed: ${displayError}`, "error");
     } finally {
       setIsLoading(false);
@@ -293,51 +292,35 @@ function CreateProjectPage() {
       {/* Notification Area */}
       <AnimatePresence>
         {notification.show && (
-          <motion.div
-            initial={{ opacity: 0, y: -30, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -30, scale: 0.9 }}
-            transition={{ type: "spring", stiffness: 300, damping: 20 }}
-            className="fixed top-5 right-5 z-[100] w-full max-w-sm sm:max-w-md"
-          >
+          <motion.div /* ... */>
+            {" "}
             <Notification
               message={notification.message}
               type={notification.type}
-              onClose={() =>
-                setNotification((prev) => ({ ...prev, show: false }))
-              }
-            />
+              onClose={() => setNotification({ ...notification, show: false })}
+            />{" "}
           </motion.div>
-        )}
+        )}{" "}
       </AnimatePresence>
 
-      {/* Form Container */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
         className="bg-white p-6 sm:p-8 rounded-lg shadow-xl border border-gray-200"
       >
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-6 border-b border-gray-200 pb-4 flex items-center">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-6 border-b pb-4 flex items-center">
           <FaPlus className="mr-3 text-indigo-500" /> Create New Project
         </h1>
-
-        {/* Display General Error Message */}
         {error && (
           <div className="mb-5">
             <ErrorMessage message={error} onClose={() => setError("")} />
           </div>
         )}
-
         <form onSubmit={handleSubmit} className="space-y-5" noValidate>
-          {" "}
-          {/* Disable native browser validation */}
-          {/* Project Title */}
+          {/* Title */}
           <div>
-            <label
-              htmlFor="title"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
+            <label htmlFor="title" className={labelClasses}>
               Project Title <span className="text-red-500">*</span>
             </label>
             <input
@@ -346,8 +329,9 @@ function CreateProjectPage() {
               name="title"
               value={formData.title}
               onChange={handleChange}
-              maxLength="150" // Match DB/model limit if applicable
-              className={`w-full px-3 py-2 border rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors ${
+              required
+              maxLength="150"
+              className={`${inputClasses} ${
                 validationErrors.title ? "border-red-500" : "border-gray-300"
               }`}
               placeholder="A clear and concise title"
@@ -363,12 +347,9 @@ function CreateProjectPage() {
               </p>
             )}
           </div>
-          {/* Project Description */}
+          {/* Description */}
           <div>
-            <label
-              htmlFor="description"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
+            <label htmlFor="description" className={labelClasses}>
               Description <span className="text-red-500">*</span>
             </label>
             <textarea
@@ -377,18 +358,19 @@ function CreateProjectPage() {
               rows="5"
               value={formData.description}
               onChange={handleChange}
-              className={`w-full px-3 py-2 border rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors ${
+              required
+              className={`${inputClasses} ${
                 validationErrors.description
                   ? "border-red-500"
                   : "border-gray-300"
               }`}
-              placeholder="Detailed description: goals, methods, expected outcomes..."
+              placeholder="Detailed description..."
               disabled={isLoading}
               aria-invalid={!!validationErrors.description}
               aria-describedby={
                 validationErrors.description ? "description-error" : undefined
               }
-            />
+            ></textarea>
             {validationErrors.description && (
               <p id="description-error" className="mt-1 text-xs text-red-600">
                 {validationErrors.description}
@@ -398,27 +380,21 @@ function CreateProjectPage() {
           {/* Category & Status */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
             <div>
-              <label
-                htmlFor="category"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                {" "}
-                Category{" "}
+              <label htmlFor="category" className={labelClasses}>
+                Category
               </label>
               <select
                 id="category"
                 name="category"
                 value={formData.category}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white text-sm transition-colors"
+                className={`${inputClasses} bg-white`}
                 disabled={isLoading}
-                // Add validation styling if category becomes required
               >
-                <option value="">-- Select Category --</option>
+                <option value="">-- Select --</option>
                 {projectCategories.map((cat) => (
                   <option key={cat} value={cat}>
-                    {" "}
-                    {cat}{" "}
+                    {cat}
                   </option>
                 ))}
               </select>
@@ -429,38 +405,29 @@ function CreateProjectPage() {
               )}
             </div>
             <div>
-              <label
-                htmlFor="status"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                {" "}
-                Initial Status{" "}
+              <label htmlFor="status" className={labelClasses}>
+                Initial Status
               </label>
               <select
                 id="status"
                 name="status"
                 value={formData.status}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white text-sm transition-colors"
+                className={`${inputClasses} bg-white`}
                 disabled={isLoading}
               >
                 {projectStatuses.map((stat) => (
                   <option key={stat} value={stat}>
-                    {" "}
-                    {stat}{" "}
+                    {stat}
                   </option>
                 ))}
               </select>
-              {/* No validation needed usually as it defaults */}
             </div>
           </div>
-          {/* Collaborators Needed & Duration */}
+          {/* Collaborators & Duration */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
             <div>
-              <label
-                htmlFor="requiredCollaborators"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
+              <label htmlFor="requiredCollaborators" className={labelClasses}>
                 Collaborators Needed <span className="text-red-500">*</span>
               </label>
               <input
@@ -468,15 +435,16 @@ function CreateProjectPage() {
                 id="requiredCollaborators"
                 name="requiredCollaborators"
                 min="0"
-                step="1" // Or min="1" depending on requirement
+                step="1"
                 value={formData.requiredCollaborators}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors ${
+                required
+                className={`${inputClasses} ${
                   validationErrors.requiredCollaborators
                     ? "border-red-500"
                     : "border-gray-300"
                 }`}
-                placeholder="Enter number (e.g., 3)"
+                placeholder="e.g., 3"
                 disabled={isLoading}
                 aria-invalid={!!validationErrors.requiredCollaborators}
                 aria-describedby={
@@ -495,12 +463,8 @@ function CreateProjectPage() {
               )}
             </div>
             <div>
-              <label
-                htmlFor="duration"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                {" "}
-                Estimated Duration{" "}
+              <label htmlFor="duration" className={labelClasses}>
+                Est. Duration
               </label>
               <input
                 type="text"
@@ -508,21 +472,16 @@ function CreateProjectPage() {
                 name="duration"
                 value={formData.duration}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
-                placeholder="e.g., 6-12 Months"
+                className={inputClasses}
+                placeholder="e.g., 6 Months"
                 disabled={isLoading}
               />
-              {/* Optional validation */}
             </div>
           </div>
           {/* Funding */}
           <div>
-            <label
-              htmlFor="funding"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              {" "}
-              Funding Status{" "}
+            <label htmlFor="funding" className={labelClasses}>
+              Funding Status
             </label>
             <input
               type="text"
@@ -530,45 +489,32 @@ function CreateProjectPage() {
               name="funding"
               value={formData.funding}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
-              placeholder="e.g., Grant Funded, Self-Funded"
+              className={inputClasses}
+              placeholder="e.g., Grant Funded"
               disabled={isLoading}
             />
-            {/* Optional validation */}
           </div>
-          {/* Skills Needed (Requires TagInput Component) */}
+          {/* Skills Needed */}
           <div>
-            <label
-              htmlFor="skillsNeeded"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              {" "}
-              Skills Needed{" "}
+            <label htmlFor="skillsNeeded" className={labelClasses}>
+              Skills Needed
             </label>
             <TagInput
               tags={formData.skillsNeeded || []}
               setTags={handleSkillsChange}
-              placeholder="Add skills & press Enter (e.g., Python)"
+              placeholder="Add skills & press Enter"
               disabled={isLoading}
-              // Add validation styling if needed
-              // className={validationErrors.skillsNeeded ? 'border-red-500' : ''}
             />
             {validationErrors.skillsNeeded && (
               <p className="mt-1 text-xs text-red-600">
                 {validationErrors.skillsNeeded}
               </p>
             )}
-            <p className="text-xs text-gray-500 mt-1">
-              {" "}
-              List key skills required from collaborators.{" "}
-            </p>
+            <p className="text-xs text-gray-500 mt-1">Key skills required.</p>
           </div>
-          {/* Project Image Upload */}
+          {/* Project Image */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {" "}
-              Project Image (Optional){" "}
-            </label>
+            <label className={labelClasses}>Project Image (Optional)</label>
             <div className="mt-1 flex flex-wrap items-center gap-4">
               <span className="inline-block h-20 w-32 rounded border border-dashed border-gray-300 bg-gray-50 overflow-hidden flex items-center justify-center text-gray-400 flex-shrink-0">
                 {imagePreview ? (
@@ -587,13 +533,13 @@ function CreateProjectPage() {
                 name="projectImageFile"
                 type="file"
                 className="sr-only"
-                accept="image/png, image/jpeg, image/gif, image/webp"
+                accept="image/*"
                 onChange={handleFileChange}
                 disabled={isLoading}
               />
               <label
                 htmlFor="project-image-upload"
-                className={`cursor-pointer bg-white py-1.5 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors ${
+                className={`cursor-pointer bg-white py-1.5 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 ${
                   isLoading ? "opacity-50 cursor-not-allowed" : ""
                 }`}
               >
@@ -614,17 +560,14 @@ function CreateProjectPage() {
                 </button>
               )}
             </div>
-            <p className="text-xs text-gray-500 mt-1">
-              {" "}
-              PNG, JPG, GIF, WEBP up to 5MB.{" "}
-            </p>
+            <p className="text-xs text-gray-500 mt-1">Max 5MB.</p>
           </div>
-          {/* Submit Button */}
-          <div className="pt-5 border-t border-gray-200 mt-6">
+          {/* Submit */}
+          <div className="pt-5 border-t mt-6">
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="w-full flex justify-center items-center gap-2 py-2.5 px-4 border rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
             >
               {isLoading ? (
                 <>
