@@ -9,8 +9,8 @@ import { motion, AnimatePresence } from "framer-motion";
 // --- Import Common Components ---
 import Notification from "../Component/Common/Notification";
 import ErrorMessage from "../Component/Common/ErrorMessage";
-import TagInput from "../Component/Common/TagInput";
-import LoadingSpinner from "../Component/Common/LoadingSpinner";
+import TagInput from "../Component/Common/TagInput"; // Assuming this component exists
+import LoadingSpinner from "../Component/Common/LoadingSpinner"; // Only used implicitly via isLoading
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
@@ -23,6 +23,8 @@ apiClient.interceptors.request.use(
     if (token && !config.headers.Authorization) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // Let browser set Content-Type for FormData
+    // Axios sets application/json for objects automatically
     return config;
   },
   (error) => Promise.reject(error)
@@ -57,17 +59,17 @@ function CreateProjectPage() {
     title: "",
     category: "",
     description: "",
-    requiredCollaborators: "1",
+    requiredCollaborators: "1", // Default as string for input type='number'
     status: "Planning",
     duration: "",
     funding: "",
-    skillsNeeded: [],
+    skillsNeeded: [], // Initialize as empty array
   });
   const [projectImageFile, setProjectImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [validationErrors, setValidationErrors] = useState({});
+  const [error, setError] = useState(""); // For general submission errors
+  const [validationErrors, setValidationErrors] = useState({}); // For field-specific errors
   const [notification, setNotification] = useState({
     message: "",
     type: "",
@@ -88,7 +90,12 @@ function CreateProjectPage() {
 
   const handleChange = useCallback((e) => {
     const { name, value } = e.target;
-    setValidationErrors((prev) => ({ ...prev, [name]: undefined }));
+    // Clear validation error for the specific field being changed
+    setValidationErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors[name]; // Remove error for this field
+      return newErrors;
+    });
     setFormData((prev) => ({ ...prev, [name]: value }));
     console.log(`handleChange: ${name} = ${value}`); // Log state changes
   }, []);
@@ -98,16 +105,19 @@ function CreateProjectPage() {
       const file = e.target.files ? e.target.files[0] : null;
       setProjectImageFile(null);
       setImagePreview(null);
-      if (fileInputRef.current) fileInputRef.current.value = null;
+      if (fileInputRef.current) fileInputRef.current.value = null; // Reset file input visually
 
       if (file) {
         if (!file.type.startsWith("image/")) {
-          showNotification("Invalid file type.", "error");
+          showNotification(
+            "Invalid file type. Please select an image.",
+            "error"
+          );
           return;
         }
         const maxSize = 5 * 1024 * 1024; // 5MB
         if (file.size > maxSize) {
-          showNotification(`File too large (Max 5MB).`, "error");
+          showNotification(`File is too large (Max 5MB).`, "error");
           return;
         }
         setProjectImageFile(file);
@@ -136,8 +146,8 @@ function CreateProjectPage() {
   const validateForm = useCallback(() => {
     console.log("Running validateForm...");
     const errors = {};
-    const currentTitle = formData.title?.trim(); // Trim before validating
-    const currentDescription = formData.description?.trim(); // Trim before validating
+    const currentTitle = formData.title?.trim();
+    const currentDescription = formData.description?.trim();
 
     if (!currentTitle) errors.title = "Project title is required.";
     else if (currentTitle.length < 5)
@@ -160,54 +170,55 @@ function CreateProjectPage() {
         errors.requiredCollaborators = "Must be a valid, non-negative number.";
       }
     }
-    // Add other validations...
+    // Add other validations if needed...
 
     setValidationErrors(errors);
     console.log("Validation Errors:", errors);
-    return Object.keys(errors).length === 0;
+    return Object.keys(errors).length === 0; // True if no errors
   }, [formData]);
 
   // --- Form Submission Handler ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    setValidationErrors({});
+    setValidationErrors({}); // Clear errors on new submission attempt
 
     console.log("handleSubmit triggered.");
     if (!validateForm()) {
       console.log("Frontend validation FAILED.");
       showNotification("Please fix the errors in the form.", "warning");
-      return;
+      // Scroll to the first error field? Optional enhancement.
+      return; // Stop submission
     }
     console.log("Frontend validation PASSED.");
 
     setIsLoading(true);
 
     let dataToSend;
-    let requestConfig = { headers: {} }; // Initialize headers object
-
-    // Get token *before* constructing payload
+    let requestConfig = { headers: {} }; // Initialize headers
     const token = localStorage.getItem("authToken");
+
     if (!token) {
       showNotification("Authentication Error. Please log in again.", "error");
       setError("Authentication token not found.");
       setIsLoading(false);
       return;
     }
-    requestConfig.headers.Authorization = `Bearer ${token}`; // Add token for both cases
+    requestConfig.headers.Authorization = `Bearer ${token}`;
 
-    // Prepare data based on whether a file is present
+    // Prepare data based on file presence
     if (projectImageFile) {
       console.log("Preparing FormData (with file)...");
       dataToSend = new FormData();
-      // Append fields exactly as expected by backend (match req.body keys and multer field name)
+      // Append required fields first
       dataToSend.append("title", formData.title.trim());
       dataToSend.append("description", formData.description.trim());
       dataToSend.append(
         "requiredCollaborators",
         formData.requiredCollaborators
-      ); // Send as string
+      ); // Send as string; backend parses
       dataToSend.append("status", formData.status);
+      // Append optional fields only if they have a value
       if (formData.category) dataToSend.append("category", formData.category);
       if (formData.duration) dataToSend.append("duration", formData.duration);
       if (formData.funding) dataToSend.append("funding", formData.funding);
@@ -216,15 +227,14 @@ function CreateProjectPage() {
           "skillsNeeded",
           JSON.stringify(formData.skillsNeeded)
         );
-      // Field name MUST match multer setup in projectRoutes.js
+      // Append file (Match key 'projectImageFile' with backend route's multer middleware)
       dataToSend.append(
         "projectImageFile",
         projectImageFile,
         projectImageFile.name
       );
-
-      // DO NOT set Content-Type for FormData; browser does it with boundary
-      console.log("FormData prepared. Sending multipart/form-data request.");
+      // Let browser set Content-Type header for multipart/form-data
+      console.log("FormData prepared.");
     } else {
       console.log("Preparing JSON payload (no file)...");
       dataToSend = {
@@ -232,19 +242,37 @@ function CreateProjectPage() {
         description: formData.description.trim(),
         requiredCollaborators: parseInt(formData.requiredCollaborators, 10), // Send as number
         status: formData.status,
-        category: formData.category || null,
-        duration: formData.duration || null,
-        funding: formData.funding || null,
-        skillsNeeded: formData.skillsNeeded,
+        // Conditionally add optional fields only if they have values
+        ...(formData.category && { category: formData.category }),
+        ...(formData.duration && { duration: formData.duration }),
+        ...(formData.funding && { funding: formData.funding }),
+        ...(formData.skillsNeeded.length > 0 && {
+          skillsNeeded: formData.skillsNeeded,
+        }), // Send as array
       };
-      // Set Content-Type for JSON
-      requestConfig.headers["Content-Type"] = "application/json";
+      requestConfig.headers["Content-Type"] = "application/json"; // Set correct header for JSON
       console.log(
         "JSON payload prepared:",
         JSON.stringify(dataToSend, null, 2)
       );
-      console.log("Sending application/json request.");
     }
+
+    // --- Log final data just before sending ---
+    if (dataToSend instanceof FormData) {
+      console.log("--- Sending FormData ---");
+      for (let [key, value] of dataToSend.entries()) {
+        console.log(
+          `  ${key}:`,
+          value instanceof File ? `File(${value.name})` : value
+        );
+      }
+      console.log("-------------------------");
+    } else {
+      console.log("--- Sending JSON Payload ---");
+      console.log(JSON.stringify(dataToSend, null, 2));
+      console.log("--------------------------");
+    }
+    console.log("Request Config Headers:", requestConfig.headers);
 
     // API Call
     try {
@@ -255,27 +283,30 @@ function CreateProjectPage() {
       );
       console.log("Backend Success Response:", response.data);
 
+      // Use the 'data' key returned by your controller's success response
       if (response.data?.success && response.data?.data?.id) {
         showNotification("Project created successfully!", "success");
-        navigate(`/projects/${response.data.data.id}`);
+        navigate(`/projects`); // Redirect to projects list page
       } else {
         throw new Error(
           response.data?.message ||
-            "Project created, but unexpected success response structure."
+            "Project created, but unexpected success response."
         );
       }
     } catch (err) {
       console.error("--- Project Creation Axios Error ---");
       console.error("Status:", err.response?.status);
-      console.error("Backend Response Data:", err.response?.data); // <<< THIS IS THE IMPORTANT PART
-      console.error("Request Config:", err.config); // Log request config for headers etc.
+      console.error("Backend Response Data:", err.response?.data); // <<< Check this for the specific 400 reason
+      console.error("Request Config:", err.config);
       console.error("Error Message:", err.message);
       console.error("----------------------------------");
 
       let displayError = "An error occurred while creating the project.";
-      // Use the specific backend message if available
       if (err.response?.data?.message) {
+        // Use specific backend message
         displayError = err.response.data.message;
+        // If backend sends structured validation errors, map them here
+        // e.g., if(err.response.data.errors) { setValidationErrors(mapBackendErrors(err.response.data.errors)); }
       } else if (err.message) {
         displayError = err.message;
       }
@@ -292,12 +323,20 @@ function CreateProjectPage() {
       {/* Notification Area */}
       <AnimatePresence>
         {notification.show && (
-          <motion.div /* ... */>
+          <motion.div
+            initial={{ opacity: 0, y: -30, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -30, scale: 0.9 }}
+            transition={{ type: "spring", stiffness: 300, damping: 20 }}
+            className="fixed top-5 right-5 z-[100] w-full max-w-sm sm:max-w-md"
+          >
             {" "}
             <Notification
               message={notification.message}
               type={notification.type}
-              onClose={() => setNotification({ ...notification, show: false })}
+              onClose={() =>
+                setNotification((prev) => ({ ...prev, show: false }))
+              }
             />{" "}
           </motion.div>
         )}{" "}
@@ -309,7 +348,7 @@ function CreateProjectPage() {
         transition={{ duration: 0.5 }}
         className="bg-white p-6 sm:p-8 rounded-lg shadow-xl border border-gray-200"
       >
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-6 border-b pb-4 flex items-center">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-6 border-b border-gray-200 pb-4 flex items-center">
           <FaPlus className="mr-3 text-indigo-500" /> Create New Project
         </h1>
         {error && (
