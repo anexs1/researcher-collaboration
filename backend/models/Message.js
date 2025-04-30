@@ -6,47 +6,47 @@ const MessageModel = (sequelize) => {
     "Message",
     {
       id: {
-        type: DataTypes.INTEGER.UNSIGNED, // Assuming message IDs are unsigned integers
+        type: DataTypes.INTEGER.UNSIGNED,
         primaryKey: true,
         autoIncrement: true,
         allowNull: false,
       },
       senderId: {
-        type: DataTypes.INTEGER.UNSIGNED, // Match User ID type (int unsigned)
+        type: DataTypes.INTEGER.UNSIGNED,
         allowNull: false,
-        references: { model: "Users", key: "id" }, // Ensure 'Users' matches your actual table name
-        onDelete: "CASCADE", // Or SET NULL if sender can be deleted but messages remain
+        references: { model: "Users", key: "id" },
+        onDelete: "CASCADE",
         onUpdate: "CASCADE",
       },
       projectId: {
-        type: DataTypes.INTEGER, // Match Project ID type (int signed based on previous schema)
+        type: DataTypes.INTEGER,
         allowNull: false,
-        references: { model: "Projects", key: "id" }, // Ensure 'Projects' matches table name
-        onDelete: "CASCADE", // If project is deleted, delete messages
+        references: { model: "Projects", key: "id" },
+        onDelete: "CASCADE",
         onUpdate: "CASCADE",
       },
-      // --- MODIFIED content ---
       content: {
         type: DataTypes.TEXT,
-        allowNull: true, // <<< CHANGED: Can be null for file messages
-        validate: {
-          // Keep validation if text, but allow null/empty for file messages
-          // Custom validation might be needed if you enforce content for text only
-        },
+        allowNull: true, // Can be null for file messages
+        // NOTE: Consider adding custom validation later if you need to ensure
+        // content is present ONLY for messageType 'text'
+        validate: {}, // Keeping validate block empty for now
       },
-      // --- NEW Fields for File Uploads ---
       messageType: {
         type: DataTypes.ENUM("text", "file"), // Type of message
         allowNull: false,
         defaultValue: "text",
       },
+      // --- EDITED fileUrl field ---
       fileUrl: {
-        type: DataTypes.STRING(2048), // Store URL to the file (e.g., S3 or server path)
+        type: DataTypes.STRING(2048), // Store relative path or full URL
         allowNull: true, // Only populated for 'file' type messages
-        validate: {
-          isUrl: true, // Optional: Basic URL format validation
-        },
+        // REMOVED the validation block that contained 'isUrl: true'
+        // validate: {
+        //  isUrl: true, // <-- REMOVED THIS LINE
+        // },
       },
+      // --- End EDITED fileUrl field ---
       fileName: {
         type: DataTypes.STRING, // Store the original filename
         allowNull: true, // Only for 'file' type
@@ -56,27 +56,21 @@ const MessageModel = (sequelize) => {
         allowNull: true, // Only for 'file' type
       },
       fileSize: {
-        type: DataTypes.INTEGER.UNSIGNED, // Store file size in bytes (use BIGINT if > 4GB needed)
+        type: DataTypes.INTEGER.UNSIGNED, // Store file size in bytes
         allowNull: true, // Only for 'file' type
       },
-      // --- End NEW Fields ---
-
-      // Timestamps are automatically added by `timestamps: true` below
-      // createdAt
-      // updatedAt
+      // createdAt, updatedAt added by timestamps: true
     },
     {
-      tableName: "Messages", // Explicitly set table name
-      timestamps: true, // Enable createdAt and updatedAt
-      underscored: false, // Use camelCase column names (e.g., senderId)
-      freezeTableName: true, // Prevent Sequelize from pluralizing table name
+      tableName: "Messages",
+      timestamps: true,
+      underscored: false,
+      freezeTableName: true,
       indexes: [
-        // Existing indexes are still good
         { fields: ["senderId"] },
         { fields: ["projectId"] },
         { fields: ["createdAt"] },
-        // Optional: Index messageType if you frequently query by type
-        // { fields: ["messageType"] },
+        // { fields: ["messageType"] }, // Optional index
       ],
     }
   );
@@ -85,13 +79,13 @@ const MessageModel = (sequelize) => {
     // Message belongs to a User (Sender)
     Message.belongsTo(models.User, {
       foreignKey: "senderId",
-      as: "sender",
+      as: "sender", // Alias used in includes
     });
 
     // Message belongs to a Project
     Message.belongsTo(models.Project, {
       foreignKey: "projectId",
-      as: "project",
+      as: "project", // Alias used in includes
     });
   };
 
