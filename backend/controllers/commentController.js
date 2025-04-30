@@ -1,50 +1,57 @@
 // backend/controllers/commentController.js
-import db from "../models/index.js";
-const { Comment, User, Publication } = db; // Include Publication to check existence
+
+import db from "../models/index.js"; // Import the database object
+const { Comment, User, Publication } = db; // Destructure necessary models
 import asyncHandler from "express-async-handler";
 
 /**
- * @desc    Get comments for a specific publication
+ * @desc    Get all comments for a specific publication
  * @route   GET /api/publications/:publicationId/comments
- * @access  Public
+ * @access  Public (Anyone can view comments)
  */
 export const getCommentsForPublication = asyncHandler(async (req, res) => {
-  const { publicationId } = req.params;
-  const page = parseInt(req.query.page, 10) || 1;
-  const limit = parseInt(req.query.limit, 10) || 20; // Comments per page
-  const offset = (page - 1) * limit;
+  const publicationId = parseInt(req.params.publicationId, 10);
 
-  if (!publicationId || isNaN(parseInt(publicationId))) {
+  // --- Validation ---
+  if (isNaN(publicationId)) {
     res.status(400);
     throw new Error("Invalid Publication ID.");
   }
 
-  // Optionally check if publication exists first (good practice)
-  const publicationExists = await Publication.count({
-    where: { id: publicationId },
+  // --- Optional: Check if publication exists ---
+  const publicationExists = await Publication.findByPk(publicationId, {
+    attributes: ["id"],
   });
-  if (publicationExists === 0) {
+  if (!publicationExists) {
     res.status(404);
     throw new Error("Publication not found.");
   }
 
-  const { count, rows } = await Comment.findAndCountAll({
+  // --- Fetch Comments ---
+  const page = parseInt(req.query.page, 10) || 1;
+  const limit = parseInt(req.query.limit, 10) || 15; // Adjust limit as needed
+  const offset = (page - 1) * limit;
+
+  const { count, rows: comments } = await Comment.findAndCountAll({
     where: { publicationId: publicationId },
     include: [
       {
         model: User,
-        as: "author", // Use the alias defined in Comment.associate
-        attributes: ["id", "username", "profilePictureUrl"], // Select author details needed
+        as: "author", // Use the alias defined in Comment model association
+        attributes: ["id", "username", "profilePictureUrl"], // Select necessary author fields
       },
     ],
-    order: [["createdAt", "DESC"]], // Show newest comments first
+    order: [
+      ["createdAt", "DESC"], // Show newest comments first (or ASC for oldest first)
+    ],
     limit: limit,
     offset: offset,
+    distinct: true, // Important with includes and count
   });
 
   res.status(200).json({
     success: true,
-    data: rows,
+    data: comments,
     pagination: {
       totalItems: count,
       totalPages: Math.ceil(count / limit),
@@ -54,99 +61,95 @@ export const getCommentsForPublication = asyncHandler(async (req, res) => {
   });
 });
 
+// =====================================================
+//        *** CREATE COMMENT FUNCTION ***
+// =====================================================
+
 /**
  * @desc    Create a new comment for a publication
  * @route   POST /api/publications/:publicationId/comments
- * @access  Private (Requires login via 'protect' middleware)
+ * @access  Private (Requires logged-in user via 'protect' middleware)
  */
 export const createComment = asyncHandler(async (req, res) => {
-  const { publicationId } = req.params;
-  const { content } = req.body;
-  const userId = req.user?.id; // From 'protect' middleware
+  const publicationId = parseInt(req.params.publicationId, 10);
+  const userId = req.user?.id; // Get user ID from auth middleware (req.user)
+  const { content } = req.body; // Get comment content from request body
 
+  // --- 1. Validation ---
   if (!userId) {
+    // Should be caught by 'protect' middleware, but good to double-check
     res.status(401);
-    throw new Error("Authentication required.");
+    throw new Error("Authentication required to post a comment.");
   }
-  if (!publicationId || isNaN(parseInt(publicationId))) {
+  if (isNaN(publicationId)) {
     res.status(400);
-    throw new Error("Invalid Publication ID.");
+    throw new Error("Invalid Publication ID provided in URL.");
   }
+  // Validate content presence and type
   if (!content || typeof content !== "string" || content.trim().length === 0) {
     res.status(400);
     throw new Error("Comment content cannot be empty.");
   }
-  if (content.trim().length > 1000) {
-    // Match model validation
+  // Optional: Validate content length
+  if (content.trim().length > 2000) {
+    // Adjust max length as needed
     res.status(400);
-    throw new Error("Comment exceeds maximum length (1000 characters).");
+    throw new Error(
+      "Comment content exceeds maximum length (2000 characters)."
+    );
   }
 
-  // Check if publication exists
-  const publication = await Publication.findByPk(publicationId);
-  if (!publication) {
-    res.status(404);
-    throw new Error("Cannot comment on a non-existent publication.");
-  }
-
-  // Create the comment
-  const newComment = await Comment.create({
-    content: content.trim(),
-    userId: userId,
-    publicationId: parseInt(publicationId), // Ensure it's an integer
+  // --- 2. Check if Target Publication exists ---
+  const publicationExists = await Publication.findByPk(publicationId, {
+    attributes: ["id"], // Only need to check existence
   });
+  if (!publicationExists) {
+    res.status(404); // Not Found
+    throw new Error("Cannot comment on a publication that does not exist.");
+  }
 
-  // Refetch the comment with author details to return in response
-  const commentWithAuthor = await Comment.findByPk(newComment.id, {
+  // --- 3. Create the Comment in the Database ---
+  let newComment;
+  try {
+    newComment = await Comment.create({
+      publicationId: publicationId,
+      userId: userId,
+      content: content.trim(), // Store trimmed content
+    });
+  } catch (dbError) {
+    console.error("Database error creating comment:", dbError);
+    res.status(500); // Internal Server Error for DB issues
+    throw new Error("Failed to save comment due to a server error.");
+  }
+
+  // --- 4. Respond with the created comment (including author details) ---
+  // Fetch the newly created comment again to include the associated author info
+  const createdCommentWithAuthor = await Comment.findByPk(newComment.id, {
     include: [
       {
         model: User,
-        as: "author",
-        attributes: ["id", "username", "profilePictureUrl"],
+        as: "author", // Make sure 'as: author' matches your Comment model association
+        attributes: ["id", "username", "profilePictureUrl"], // Send necessary author info
       },
     ],
   });
 
-  res.status(201).json({ success: true, data: commentWithAuthor });
+  if (!createdCommentWithAuthor) {
+    // Should not happen if create succeeded, but handle defensively
+    console.error(
+      `Failed to fetch newly created comment ${newComment.id} with author.`
+    );
+    res.status(500);
+    throw new Error("Failed to retrieve comment details after creation.");
+  }
+
+  // --- Success Response ---
+  res.status(201).json({ success: true, data: createdCommentWithAuthor }); // 201 Created status
 });
 
 /**
  * @desc    Delete a comment
- * @route   DELETE /api/comments/:commentId
- * @access  Private (Owner or Admin)
+ * @route   DELETE /api/comments/:commentId  (Note: Recommend separate route)
+ * @access  Private (Comment owner or Admin)
  */
-export const deleteComment = asyncHandler(async (req, res) => {
-  const { commentId } = req.params;
-  const userId = req.user?.id; // Logged in user ID
-  const userRole = req.user?.role; // Logged in user role
-
-  if (!userId) {
-    res.status(401);
-    throw new Error("Authentication required.");
-  }
-  if (!commentId || isNaN(parseInt(commentId))) {
-    res.status(400);
-    throw new Error("Invalid Comment ID.");
-  }
-
-  const comment = await Comment.findByPk(commentId);
-
-  if (!comment) {
-    res.status(404);
-    throw new Error("Comment not found.");
-  }
-
-  // Authorization Check: Allow deletion if user is the comment author OR an admin
-  if (comment.userId !== userId && userRole !== "admin") {
-    res.status(403);
-    throw new Error("Forbidden: You cannot delete this comment.");
-  }
-
-  await comment.destroy();
-
-  res
-    .status(200)
-    .json({ success: true, message: "Comment deleted successfully." });
-});
-
-// Optional: Add updateComment controller if needed
+// export const deleteComment = asyncHandler(async (req, res) => { ... }); // Keep implementation if needed

@@ -5,15 +5,15 @@ import sequelize from "../config/db.js"; // Your configured sequelize instance
 
 // Import all model definition functions
 import UserModel from "./User.js";
-import PublicationModel from "./Publication.js";
+import PublicationModel from "./publication.js";
 import CollaborationRequestModel from "./CollaborationRequest.js";
 import MemberModel from "./Member.js";
 import ProjectModel from "./Project.js";
-import CommentModel from "./Comment.js";
+import CommentModel from "./comment.js"; // <<< Corrected filename if needed
 import MessageModel from "./Message.js";
-// Keep GroupModel if you are actually using Groups elsewhere, otherwise consider removing
-import GroupModel from "./Group.js";
-import SettingModel from "./Setting.js"; // <<<--- IMPORT the Setting model
+import GroupModel from "./Group.js"; // Keep if used
+import SettingModel from "./Setting.js";
+import UserBookmarkModel from "./UserBookmark.js"; // <<< IMPORT UserBookmark Model
 
 const db = {};
 
@@ -24,11 +24,11 @@ db.Publication = PublicationModel(sequelize, DataTypes);
 db.CollaborationRequest = CollaborationRequestModel(sequelize, DataTypes);
 db.Project = ProjectModel(sequelize, DataTypes);
 db.Member = MemberModel(sequelize, DataTypes);
-db.Comment = CommentModel(sequelize, DataTypes);
+db.Comment = CommentModel(sequelize, DataTypes); // <<< Use Corrected import
 db.Message = MessageModel(sequelize, DataTypes);
-// Keep Group if needed, otherwise remove
-db.Group = GroupModel(sequelize, DataTypes);
-db.Setting = SettingModel(sequelize, DataTypes); // <<<--- INITIALIZE the Setting model
+db.Group = GroupModel(sequelize, DataTypes); // Keep if used
+db.Setting = SettingModel(sequelize, DataTypes);
+db.UserBookmark = UserBookmarkModel(sequelize, DataTypes); // <<< INITIALIZE UserBookmark Model
 console.log("Models initialized:", Object.keys(db).join(", "));
 
 // Apply associations
@@ -41,6 +41,10 @@ Object.keys(db).forEach((modelName) => {
   } else if (!db[modelName]) {
     console.warn(`Model ${modelName} not found during association setup.`);
   }
+  // Add specific checks if a model doesn't have .associate
+  // else if (db[modelName]) {
+  //   console.log(`Model ${modelName} does not have an associate method.`);
+  // }
 });
 console.log("Model associations setup complete.");
 

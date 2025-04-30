@@ -6,49 +6,59 @@ const CommentModel = (sequelize) => {
     "Comment",
     {
       id: {
+        // Assuming comments.id is likely INT (signed) auto-increment in DB
         type: DataTypes.INTEGER,
         primaryKey: true,
         autoIncrement: true,
+        allowNull: false,
       },
       content: {
-        type: DataTypes.TEXT,
+        type: DataTypes.TEXT, // Matches common practice for comment content
         allowNull: false,
         validate: {
           notEmpty: {
             msg: "Comment content cannot be empty.",
           },
           len: {
-            args: [1, 1000], // Min 1 char, Max 1000 chars (adjust as needed)
-            msg: "Comment must be between 1 and 1000 characters.",
+            args: [1, 2000], // Adjust max length as needed
+            msg: "Comment must be between 1 and 2000 characters.",
           },
         },
       },
       // Foreign Key for the User who wrote the comment
       userId: {
-        type: DataTypes.INTEGER, // Ensure this matches the User ID type (e.g., INTEGER UNSIGNED if User ID is unsigned)
+        // *** CRITICAL FIX: Match users.id type ***
+        type: DataTypes.INTEGER.UNSIGNED, // Matches DB int(10) unsigned
         allowNull: false,
         references: {
-          model: "users", // <<< Name of the Users table (check case)
+          model: "users", // Ensure this matches the actual users table name
           key: "id",
         },
         onUpdate: "CASCADE",
-        onDelete: "CASCADE", // Or 'SET NULL' if you want comments to remain if user deleted
+        onDelete: "CASCADE", // Decide: CASCADE or SET NULL (if userId allows NULL)
       },
       // Foreign Key for the Publication the comment belongs to
       publicationId: {
-        type: DataTypes.INTEGER, // Ensure this matches the Publication ID type
+        // *** Match publications.id type ***
+        type: DataTypes.INTEGER, // Matches DB int(11) (signed)
         allowNull: false,
         references: {
-          model: "publications", // <<< Name of the Publications table
+          model: "publications", // Ensure this matches the actual publications table name
           key: "id",
         },
         onUpdate: "CASCADE",
-        onDelete: "CASCADE", // Delete comments if publication is deleted
+        onDelete: "CASCADE", // Usually correct: delete comments if publication is deleted
       },
+      // createdAt and updatedAt are handled by timestamps: true
     },
     {
       timestamps: true, // Adds createdAt and updatedAt
-      tableName: "comments", // Explicitly set table name
+      tableName: "comments", // Explicitly set table name to match DB
+      // Add indexes if needed, mirroring the DB
+      indexes: [
+        { fields: ["publicationId", "createdAt"] }, // Good for fetching comments ordered
+        { fields: ["userId"] },
+      ],
     }
   );
 
@@ -56,13 +66,13 @@ const CommentModel = (sequelize) => {
     // A Comment belongs to one User (Author)
     Comment.belongsTo(models.User, {
       foreignKey: "userId",
-      as: "author", // Alias to fetch author details
+      as: "author", // Alias to fetch author details easily (e.g., include: [{ model: db.User, as: 'author' }])
     });
 
     // A Comment belongs to one Publication
     Comment.belongsTo(models.Publication, {
       foreignKey: "publicationId",
-      as: "publication", // Alias if needed
+      as: "publication", // Alias if needed when fetching comment's publication
     });
   };
 
