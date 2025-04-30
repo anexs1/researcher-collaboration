@@ -2,11 +2,10 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import axios from "axios";
-import { io } from "socket.io-client"; // Removed unused 'Socket' type
+import { io } from "socket.io-client";
 import {
   FaPaperPlane,
   FaSpinner,
-  // FaUserCircle, // Removed if not used
   FaArrowLeft,
   FaProjectDiagram,
   FaExclamationCircle,
@@ -15,9 +14,9 @@ import {
   FaComments,
   FaCalendarAlt,
   FaUsers,
-  FaPaperclip, // <-- Added File Upload icon
-  FaTimesCircle, // <-- Added Clear File icon
-  FaFileAlt, // <-- Added Generic File icon for messages
+  FaPaperclip,
+  FaTimesCircle,
+  FaFileAlt,
 } from "react-icons/fa";
 import { AnimatePresence, motion } from "framer-motion";
 import { format, isToday, isYesterday, parseISO } from "date-fns";
@@ -104,19 +103,16 @@ function ChatPage({ currentUser }) {
     }, 150); // Slight delay allows layout to settle
   }, []);
 
-  // Effect to scroll down when new messages arrive (if needed)
+  // Effect to scroll down when new messages arrive
   useEffect(() => {
     if (messages.length > 0) {
-      // Consider only auto-scrolling if user is already near the bottom
-      // This prevents jumping if user scrolled up to read history
       scrollToBottom("smooth");
     }
   }, [messages, scrollToBottom]);
 
-  // --- Fetch Initial Data (Project Info & Message History) ---
+  // --- Fetch Initial Data ---
   const fetchInitialData = useCallback(async () => {
-    setCanAttemptConnect(false); // Don't try socket connection until data fetched
-    // Disconnect existing socket if fetching again
+    setCanAttemptConnect(false);
     if (socketRef.current) {
       console.log(
         "fetchInitialData: Disconnecting existing socket before fetch."
@@ -125,7 +121,6 @@ function ChatPage({ currentUser }) {
       socketRef.current = null;
       setIsConnected(false);
     }
-    // Reset state
     setProjectDetails(null);
     setMessages([]);
 
@@ -153,13 +148,11 @@ function ChatPage({ currentUser }) {
     let allowConnection = false;
 
     try {
-      // Fetch history and project info concurrently
       const [historyResponse, projectInfoResponse] = await Promise.all([
         axios.get(
           `${API_BASE_URL}/api/messaging/history/project/${projectId}`,
           { headers: { Authorization: `Bearer ${token}` } }
         ),
-        // Fetch project details separately to confirm existence/name
         axios
           .get(`${API_BASE_URL}/api/projects/${projectId}`, {
             headers: { Authorization: `Bearer ${token}` },
@@ -169,37 +162,30 @@ function ChatPage({ currentUser }) {
               "Failed to fetch project details separately:",
               err.message
             );
-            // Return null but don't fail the whole fetch yet
             return null;
           }),
       ]);
 
-      // Process Project Details Response
       const projectData =
         projectInfoResponse?.data?.data || projectInfoResponse?.data?.project;
       if (projectData?.id && projectData?.title) {
         fetchedDetails = { id: projectData.id, name: projectData.title };
-        allowConnection = true; // Project confirmed to exist and user likely has access
+        allowConnection = true;
       } else {
-        // Fallback if project details fetch failed but history might exist
         fetchedDetails = { id: projectId, name: `Project ${projectId}` };
-        // We might still allow connection if history fetch worked, indicates membership
       }
 
-      // Process Message History Response
       if (
         historyResponse.data?.success &&
         Array.isArray(historyResponse.data.data)
       ) {
         fetchedMsgs = historyResponse.data.data;
-        allowConnection = true; // If history fetched, user has access
+        allowConnection = true;
         console.log(
           `FETCH: Message history success. ${fetchedMsgs.length} messages.`
         );
       } else {
-        // History fetch failed, might be okay if project exists but no messages
         if (!allowConnection) {
-          // If project details also failed, then it's likely an error
           throw new Error(
             historyResponse.data?.message || "Failed to load message history."
           );
@@ -211,7 +197,7 @@ function ChatPage({ currentUser }) {
       }
     } catch (err) {
       console.error(`FETCH: Error during initial data fetch:`, err);
-      allowConnection = false; // Assume no connection if fetch fails severely
+      allowConnection = false;
       if (err.response) {
         errorMsg = err.response.data?.message || `Error ${err.response.status}`;
         if (err.response.status === 403)
@@ -225,7 +211,6 @@ function ChatPage({ currentUser }) {
       } else {
         errorMsg = err.message || "An unknown error occurred during fetch.";
       }
-      // Keep fallback project details if possible
       fetchedDetails = fetchedDetails ||
         projectDetails || { id: projectId, name: `Project ${projectId}` };
       fetchedMsgs = [];
@@ -235,21 +220,19 @@ function ChatPage({ currentUser }) {
       setMessages(fetchedMsgs);
       setFetchError(errorMsg);
       setIsLoading(false);
-      setCanAttemptConnect(allowConnection); // Only allow socket connection if fetch was successful enough
+      setCanAttemptConnect(allowConnection);
       console.log(
         `FETCH: Final state - errorMsg=${errorMsg}, allowConnection=${allowConnection}`
       );
-      // Scroll to bottom only if messages were successfully fetched
       if (fetchedMsgs.length > 0 && allowConnection && !errorMsg) {
-        scrollToBottom("auto"); // Instant scroll on initial load
+        scrollToBottom("auto");
       }
     }
-  }, [currentUserId, projectId, scrollToBottom]); // Dependencies
+  }, [currentUserId, projectId, scrollToBottom]);
 
   // Effect to run initial data fetch
   useEffect(() => {
     fetchInitialData();
-    // Cleanup function for socket when component unmounts
     return () => {
       if (socketRef.current) {
         console.log(
@@ -258,10 +241,10 @@ function ChatPage({ currentUser }) {
         );
         socketRef.current.disconnect();
         socketRef.current = null;
-        setIsConnected(false); // Update state on unmount
+        setIsConnected(false);
       }
     };
-  }, [fetchInitialData]); // Rerun if projectId changes
+  }, [fetchInitialData]);
 
   // --- Fetch Members ---
   const fetchMembers = useCallback(async () => {
@@ -270,6 +253,7 @@ function ChatPage({ currentUser }) {
     setMembersError(null);
     const token = localStorage.getItem("authToken");
     if (!token) {
+      setMembersError("Authentication token not found.");
       setLoadingMembers(false);
       return;
     }
@@ -278,34 +262,28 @@ function ChatPage({ currentUser }) {
         `${API_BASE_URL}/api/projects/${projectId}/members`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      if (res.data?.success && Array.isArray(res.data.members)) {
-        const owner = res.data.owner;
-        let members = res.data.members.map((m) => ({
-          ...m,
-          id: m.user?.id || m.id,
-          username: m.user?.username || m.username,
-          profilePictureUrl: m.user?.profilePictureUrl || m.profilePictureUrl,
-          role: m.role || "Member",
-        }));
-        if (owner && !members.some((m) => m.id === owner.id))
-          members.unshift({ ...owner, role: "Owner" });
-        else
-          members = members.map((m) =>
-            m.id === owner?.id ? { ...m, role: "Owner" } : m
-          );
-        members.sort((a, b) => {
-          if (a.role === "Owner" && b.role !== "Owner") return -1;
-          if (a.role !== "Owner" && b.role === "Owner") return 1;
-          return (a.username || "").localeCompare(b.username || "");
-        });
-        setMemberList(members);
-      } else throw new Error(res.data?.message || "Failed load members.");
+
+      // *** CORRECTED to use res.data.data ***
+      if (res.data?.success && Array.isArray(res.data.data)) {
+        // The backend controller now sends the fully formatted list in 'data'
+        const formattedMemberList = res.data.data;
+        setMemberList(formattedMemberList);
+      } else {
+        // Backend reported failure or unexpected structure
+        throw new Error(
+          res.data?.message || "Failed to process member list from server."
+        );
+      }
     } catch (err) {
+      console.error("Fetch members error:", err); // Log the full error
       let msg = "Could not load members.";
-      if (err.response)
-        msg = err.response.data?.message || `Err ${err.response.status}`;
-      else if (err.request) msg = "Network Error";
-      else msg = err.message;
+      if (err.response) {
+        msg = err.response.data?.message || `Error ${err.response.status}`;
+      } else if (err.request) {
+        msg = "Network Error. Could not reach server.";
+      } else {
+        msg = err.message;
+      }
       setMembersError(msg);
       setMemberList([]);
     } finally {
@@ -315,6 +293,7 @@ function ChatPage({ currentUser }) {
 
   const handleOpenMembersModal = () => {
     setShowMembersModal(true);
+    // Fetch only if list is empty and not already loading/error
     if (memberList.length === 0 && !loadingMembers && !membersError) {
       fetchMembers();
     }
@@ -390,7 +369,6 @@ function ChatPage({ currentUser }) {
         }
       });
     });
-
     newSocket.on("disconnect", (reason) => {
       console.log(
         `>>> Socket DISCONNECTED: ${newSocket.id}, Reason: ${reason}. Setting isConnected=false.`
@@ -403,7 +381,6 @@ function ChatPage({ currentUser }) {
         socketRef.current = null;
       }
     });
-
     newSocket.on("connect_error", (err) => {
       console.error(
         `>>> Socket CONNECT_ERROR: ${err.message}. Setting isConnected=false. Data:`,
@@ -417,7 +394,6 @@ function ChatPage({ currentUser }) {
         socketRef.current = null;
       }
     });
-
     newSocket.on("newMessage", (message) => {
       console.log("<<< Received newMessage event:", message);
       if (!message || !message.projectId || !message.id) {
@@ -442,7 +418,6 @@ function ChatPage({ currentUser }) {
         );
       }
     });
-
     newSocket.on("userTyping", ({ userId, username }) => {
       if (userId?.toString() === currentUserId?.toString()) return;
       setTypingUsers((prev) => {
@@ -461,7 +436,6 @@ function ChatPage({ currentUser }) {
         return map;
       });
     });
-
     newSocket.on("userStopTyping", ({ userId }) => {
       if (userId?.toString() === currentUserId?.toString()) return;
       setTypingUsers((prev) => {
@@ -526,7 +500,7 @@ function ChatPage({ currentUser }) {
         if (fileInputRef.current) fileInputRef.current.value = "";
         return;
       }
-      console.log("File selected:", file.name, file.size, file.type);
+      console.log("File selected:", file.name);
       setSelectedFile(file);
       setUploadError(null);
       setNewMessage("");
@@ -609,7 +583,7 @@ function ChatPage({ currentUser }) {
               fileName: fileData.fileName,
               mimeType: fileData.mimeType,
               fileSize: fileData.fileSize,
-              content: `File: ${fileData.fileName}`,
+              content: `File: ${fileData.fileName}`, // Placeholder or filename
             };
             currentSocket
               .timeout(SOCKET_TIMEOUT)
@@ -688,7 +662,7 @@ function ChatPage({ currentUser }) {
       isSending,
       isUploading,
       API_BASE_URL,
-      isConnected, // isConnected for logging, guard uses socketRef.current.connected
+      isConnected,
     ]
   );
 
@@ -710,6 +684,7 @@ function ChatPage({ currentUser }) {
 
   // --- Render Logic ---
 
+  // Initial Loading State
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-[calc(100vh-8rem)] p-4">
@@ -731,9 +706,9 @@ function ChatPage({ currentUser }) {
     const isNotFound =
       fetchError.includes("Not Found") ||
       fetchError.includes("Invalid Project ID");
-    const isAuthError = fetchError.includes("Authentication"); // Added check for auth errors
+    const isAuthError = fetchError.includes("Authentication");
 
-    // *** RESTORED JSX FOR FATAL ERROR DISPLAY ***
+    // Correct JSX for Fatal Error Display
     return (
       <div className="p-4 sm:p-8 max-w-2xl mx-auto text-center">
         <Link
@@ -760,7 +735,7 @@ function ChatPage({ currentUser }) {
                 : "Error Loading Chat"
             }
             message={fetchError}
-            // Only show retry if it's not a permission/existence issue
+            // Only show retry if it's not a permission/existence/auth issue
             onRetry={
               !isForbidden && !isNotFound && !isAuthError
                 ? fetchInitialData
@@ -770,7 +745,7 @@ function ChatPage({ currentUser }) {
         </div>
       </div>
     );
-    // *** END RESTORED JSX ***
+    // End Correct JSX
   }
 
   // Get typing users list
