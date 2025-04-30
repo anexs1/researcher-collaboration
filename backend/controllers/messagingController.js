@@ -1,90 +1,53 @@
 // backend/controllers/messagingController.js
 import asyncHandler from "express-async-handler";
-import db from "../models/index.js"; // Assuming index.js exports all models in 'db'
+import db from "../models/index.js";
 import { Op } from "sequelize";
+import path from "path"; // Needed for constructing URL potentially
 
-// Destructure models for easier access
-const { User, Project, Member, Message } = db; // Add any other needed models like CollaborationRequest if used
+const { User, Project, Member, Message } = db;
 
-/**
- * @desc    Get list of projects the user is an active member/owner of (for chat list)
- * @route   GET /api/messaging/projects
- * @access  Private
- */
+// --- getProjectChatList function (keep as is) ---
 export const getProjectChatList = asyncHandler(async (req, res) => {
-  const currentUserId = req.user?.id; // Assumes 'protect' middleware adds user to req
-
+  // ... your existing code ...
+  const currentUserId = req.user?.id;
   console.log(`API: getProjectChatList invoked by user ${currentUserId}`);
-
   if (!currentUserId) {
-    res.status(401); // Unauthorized
+    res.status(401);
     throw new Error("Authentication required.");
   }
   if (!Project || !Member) {
-    console.error(
-      "Server Configuration Error: Project or Member model not loaded."
-    );
+    console.error("Server Config Error: Project/Member model not loaded.");
     res.status(500);
-    throw new Error(
-      "Server configuration error: Required models not available."
-    );
+    throw new Error("Server config error.");
   }
-
   try {
-    // Find all project IDs where the user is an ACTIVE member
     const userMemberships = await Member.findAll({
-      where: {
-        userId: currentUserId,
-        status: "active", // Only include projects where the user is an active member
-      },
-      attributes: ["projectId"], // Select only the project ID
-      raw: true, // Return plain data objects
+      where: { userId: currentUserId, status: "active" },
+      attributes: ["projectId"],
+      raw: true,
     });
     const memberProjectIds = userMemberships.map((m) => m.projectId);
-    console.log(
-      `User ${currentUserId} is member of project IDs:`,
-      memberProjectIds
-    );
-
-    // Find all project IDs owned by the user
     const ownedProjects = await Project.findAll({
       where: { ownerId: currentUserId },
       attributes: ["id"],
       raw: true,
     });
     const ownedProjectIds = ownedProjects.map((p) => p.id);
-    console.log(`User ${currentUserId} owns project IDs:`, ownedProjectIds);
-
-    // Combine owned and member project IDs, ensuring uniqueness
     const allRelevantProjectIds = [
       ...new Set([...memberProjectIds, ...ownedProjectIds]),
     ];
-
     if (allRelevantProjectIds.length === 0) {
-      console.log(
-        `User ${currentUserId} has no relevant projects for chat list.`
-      );
-      return res.status(200).json({ success: true, data: [] }); // Return empty list
+      return res.status(200).json({ success: true, data: [] });
     }
-
-    // Fetch details (id, title) for these projects
     const projects = await Project.findAll({
-      where: {
-        id: { [Op.in]: allRelevantProjectIds },
-      },
-      attributes: ["id", "title"], // Only fetch necessary fields for the list
-      order: [["title", "ASC"]], // Order projects alphabetically by title
+      where: { id: { [Op.in]: allRelevantProjectIds } },
+      attributes: ["id", "title"],
+      order: [["title", "ASC"]],
     });
-
-    // Format the data for the frontend response
     const projectChatList = projects.map((project) => ({
       projectId: project.id,
       projectName: project.title,
-      // Placeholder for future enhancement:
-      // lastMessage: null, // Could fetch last message snippet later
-      // unreadCount: 0,    // Could calculate unread count later
     }));
-
     console.log(
       `Returning ${projectChatList.length} project chats for user ${currentUserId}.`
     );
@@ -94,7 +57,6 @@ export const getProjectChatList = asyncHandler(async (req, res) => {
       `Error in getProjectChatList for user ${currentUserId}:`,
       error
     );
-    // Avoid sending detailed error messages in production
     const message =
       process.env.NODE_ENV === "development"
         ? error.message
@@ -103,108 +65,78 @@ export const getProjectChatList = asyncHandler(async (req, res) => {
   }
 });
 
-/**
- * @desc    Get chat history for a specific project
- * @route   GET /api/messaging/history/project/:projectId
- * @access  Private (User must be an active member or owner of the project)
- */
+// --- getProjectChatHistory function (keep as is) ---
 export const getProjectChatHistory = asyncHandler(async (req, res) => {
+  // ... your existing code ...
   const currentUserId = req.user?.id;
   const projectIdParam = req.params.projectId;
-
   console.log(
     `API: getProjectChatHistory invoked for project ${projectIdParam} by user ${currentUserId}`
   );
-
   if (!currentUserId) {
     res.status(401);
     throw new Error("Authentication required.");
   }
-
   const projectId = parseInt(projectIdParam, 10);
   if (isNaN(projectId) || projectId <= 0) {
     res.status(400);
     throw new Error("Invalid project ID format.");
   }
-
   if (!Message || !Member || !User || !Project) {
-    console.error(
-      "Server Configuration Error: Required models not loaded for chat history."
-    );
+    console.error("Server Config Error: Required models not loaded.");
     res.status(500);
-    throw new Error("Server configuration error.");
+    throw new Error("Server config error.");
   }
-
   try {
-    // --- Authorization Check ---
-    // 1. Check if the project exists and find its owner
     const project = await Project.findByPk(projectId, {
       attributes: ["id", "ownerId"],
     });
     if (!project) {
-      res.status(404); // Not Found
+      res.status(404);
       throw new Error("Project not found.");
     }
-
-    // 2. Check if the current user is the owner
     const isOwner = project.ownerId === currentUserId;
-
-    // 3. If not the owner, check if they are an active member
     let isMember = false;
     if (!isOwner) {
       const membership = await Member.findOne({
         where: {
           userId: currentUserId,
           projectId: projectId,
-          status: "active", // Crucial: only active members can access chat
+          status: "active",
         },
-        attributes: ["userId"], // Only need to know if it exists
+        attributes: ["userId"],
       });
-      isMember = !!membership; // True if a membership record was found
+      isMember = !!membership;
     }
-
-    // 4. If neither owner nor active member, deny access
     if (!isOwner && !isMember) {
       console.warn(
-        `Authorization Failed: User ${currentUserId} attempted to access chat for project ${projectId} without permission.`
+        `Auth Failed: User ${currentUserId} tried project ${projectId}`
       );
-      res.status(403); // Forbidden
-      throw new Error(
-        "Access Denied: You are not authorized to view this project's chat."
-      );
+      res.status(403);
+      throw new Error("Access Denied.");
     }
     console.log(
-      `Authorization Passed: User ${currentUserId} is authorized for project ${projectId} chat (Owner: ${isOwner}, Member: ${isMember}).`
+      `Auth Passed: User ${currentUserId} for project ${projectId} (Owner: ${isOwner}, Member: ${isMember}).`
     );
-    // --- End Authorization Check ---
-
-    // Pagination parameters
-    const limit = parseInt(req.query.limit, 10) || 50; // Default to 50 messages per page
-    const offset = parseInt(req.query.offset, 10) || 0; // Default to the first page
+    const limit = parseInt(req.query.limit, 10) || 50;
+    const offset = parseInt(req.query.offset, 10) || 0;
     if (limit <= 0 || offset < 0) {
       res.status(400);
-      throw new Error("Invalid pagination parameters (limit/offset).");
+      throw new Error("Invalid pagination.");
     }
-
-    // Fetch messages for the specified project
     const messages = await Message.findAll({
-      where: {
-        projectId: projectId, // Filter messages by the project ID
-      },
+      where: { projectId: projectId },
       include: [
         {
           model: User,
-          as: "sender", // Use the alias defined in Message.associate
-          attributes: ["id", "username", "profilePictureUrl"], // Fetch necessary sender details
+          as: "sender",
+          attributes: ["id", "username", "profilePictureUrl"],
         },
-        // Do NOT include the Project details here unless specifically needed
-        // { model: Project, as: 'project', attributes: ['id', 'title'] } // Usually not needed
       ],
-      order: [["createdAt", "ASC"]], // Fetch messages in chronological order (oldest first)
+      order: [["createdAt", "ASC"]],
       limit: limit,
       offset: offset,
     });
-
     console.log(
       `Found ${messages.length} messages for project ${projectId} (limit: ${limit}, offset: ${offset}).`
     );
@@ -214,16 +146,121 @@ export const getProjectChatHistory = asyncHandler(async (req, res) => {
       `Error in getProjectChatHistory for project ${projectId}, user ${currentUserId}:`,
       error
     );
-    const statusCode = res.statusCode >= 400 ? res.statusCode : 500; // Use status code set by throw if available
+    const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
     const message = error.message || "Server error fetching chat history.";
     const responseMessage =
       statusCode === 500 && process.env.NODE_ENV !== "development"
         ? "Server error fetching chat history."
         : message;
-
-    // Ensure response is only sent once
     if (!res.headersSent) {
       res.status(statusCode).json({ success: false, message: responseMessage });
     }
   }
+});
+
+// --- ** NEW File Upload Controller ** ---
+
+/**
+ * @desc    Handle file upload for a project chat
+ * @route   POST /api/messaging/upload/project/:projectId
+ * @access  Private (User must be active member/owner)
+ */
+export const uploadProjectFile = asyncHandler(async (req, res) => {
+  const currentUserId = req.user?.id;
+  const projectIdParam = req.params.projectId;
+
+  console.log(
+    `API: uploadProjectFile invoked for project ${projectIdParam} by user ${currentUserId}`
+  );
+
+  // --- Basic Validations ---
+  if (!currentUserId) {
+    res.status(401);
+    throw new Error("Authentication required.");
+  }
+  const projectId = parseInt(projectIdParam, 10);
+  if (isNaN(projectId) || projectId <= 0) {
+    res.status(400);
+    throw new Error("Invalid project ID format.");
+  }
+
+  // --- File Check (Multer puts file info in req.file) ---
+  if (!req.file) {
+    console.log("Upload Error: No file received in req.file.");
+    res.status(400);
+    throw new Error("No file uploaded or file rejected by filter.");
+  }
+
+  // --- Authorization Check (Same as fetching history) ---
+  try {
+    const project = await Project.findByPk(projectId, {
+      attributes: ["id", "ownerId"],
+    });
+    if (!project) {
+      res.status(404);
+      throw new Error("Project not found.");
+    }
+    const isOwner = project.ownerId === currentUserId;
+    let isMember = false;
+    if (!isOwner) {
+      const membership = await Member.findOne({
+        where: {
+          userId: currentUserId,
+          projectId: projectId,
+          status: "active",
+        },
+        attributes: ["userId"],
+      });
+      isMember = !!membership;
+    }
+    if (!isOwner && !isMember) {
+      console.warn(
+        `Auth Failed: User ${currentUserId} tried to upload to project ${projectId}`
+      );
+      res.status(403);
+      throw new Error("Access Denied: Not authorized for this project chat.");
+    }
+    console.log(
+      `Auth Passed: User ${currentUserId} can upload to project ${projectId}`
+    );
+  } catch (authError) {
+    console.error("Auth check error during upload:", authError);
+    res.status(authError.statusCode || 500); // Use specific status if set
+    throw new Error(authError.message || "Failed to verify project access.");
+  }
+  // --- End Authorization Check ---
+
+  // --- Process File ---
+  const file = req.file;
+  console.log("File received by controller:", {
+    filename: file.filename, // The unique name saved by multer
+    originalname: file.originalname,
+    mimetype: file.mimetype,
+    size: file.size,
+    path: file.path, // Full path on server where file is temporarily saved
+  });
+
+  // --- Construct File URL ---
+  // IMPORTANT: This assumes your 'public/uploads/project_files' directory is served statically
+  // by your Express app. Adjust the base URL and path segment as needed.
+  // Example: If Express serves 'public' at '/', the URL is '/uploads/project_files/filename'
+  // If you upload to S3/Cloud Storage, use the URL returned from that service instead.
+  const fileUrl = `/uploads/project_files/${file.filename}`; // ** ADJUST THIS BASED ON YOUR STATIC SERVING **
+
+  // --- Respond to Frontend ---
+  // Send back the necessary details for the frontend to then send via socket
+  res.status(200).json({
+    success: true,
+    message: "File uploaded successfully.",
+    data: {
+      fileUrl: fileUrl,
+      fileName: file.originalname, // Send original name back
+      mimeType: file.mimetype,
+      fileSize: file.size,
+    },
+  });
+
+  // Note: We don't save the Message record here. The frontend receives the file details,
+  // THEN emits a 'sendMessage' socket event with messageType='file' and these details.
+  // The socket handler on the backend will save the Message record.
 });
