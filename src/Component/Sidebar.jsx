@@ -1,27 +1,26 @@
 import React from "react";
-import { NavLink, Link, useLocation } from "react-router-dom"; // Import useLocation
+import { NavLink, Link } from "react-router-dom";
 import {
   FaUser,
-  FaBook, // Explore / Publications
-  FaFolderOpen, // Projects
-  FaPlusSquare, // Post Publication
-  FaRocket, // New Project
-  FaFeatherAlt, // Post Idea
-  FaEnvelope, // Messages
-  FaCog, // Settings
-  FaSignOutAlt, // Logout
+  FaBook,
+  FaFolderOpen,
+  FaPlus,
+  FaCog,
+  FaSignOutAlt,
+  FaPlusSquare,
+  FaRocket,
+  FaEnvelope, // <<< Added Messages icon
 } from "react-icons/fa";
 
 // --- Menu Items Array ---
 const menuItems = [
   { path: "/profile", label: "Profile", Icon: FaUser },
-  { path: "/explore", label: "Explore Logs", Icon: FaBook },
-  { path: "/logs/new", label: "Post Idea", Icon: FaFeatherAlt }, // <<< UPDATED PATH
+  { path: "/explore", label: "Explore", Icon: FaBook }, // Consider specific Explore icon if available
   { path: "/publications", label: "Publications", Icon: FaBook },
   { path: "/publications/new", label: "Post Publication", Icon: FaPlusSquare },
   { path: "/projects", label: "Projects", Icon: FaFolderOpen },
-  { path: "/projects/new", label: "New Project", Icon: FaRocket },
-  { path: "/messages", label: "Messages", Icon: FaEnvelope },
+  { path: "/projects/new", label: "New Project", Icon: FaRocket }, // Corrected label casing
+  { path: "/messages", label: "Messages", Icon: FaEnvelope }, // <<< Added Messages Link
 ];
 
 // --- Styling Classes ---
@@ -36,11 +35,8 @@ const iconClasses =
 const activeIconClasses = "text-indigo-600";
 
 function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
-  const location = useLocation(); // Get current location
-
   // Helper function to get initials safely
   const getInitials = (user) => {
-    /* ... (keep existing function) ... */
     const first = user?.firstName || "";
     const last = user?.lastName || "";
     const usernameInitial = user?.username ? user.username.charAt(0) : "";
@@ -50,6 +46,7 @@ function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
 
   const userInitials = currentUser ? getInitials(currentUser) : "?";
   const profilePictureUrl = currentUser?.profilePictureUrl;
+  // Prioritize username display if first/last name missing
   const userName = currentUser
     ? currentUser.firstName && currentUser.lastName
       ? `${currentUser.firstName} ${currentUser.lastName}`
@@ -62,13 +59,19 @@ function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
     currentUser?.role ||
     "Researcher";
 
-  // Show menu items only if logged in
-  const visibleMenuItems = isLoggedIn ? menuItems : [];
-
   return (
+    // --- Main Sidebar Container ---
+    // - `w-64`: Fixed width
+    // - `h-screen`: Full viewport height
+    // - `sticky top-0`: Keeps it fixed during page scroll
+    // - `flex flex-col`: Arranges children (header, nav, footer) vertically
+    // - `border-r`, `bg-white`, `shadow-lg`: Styling
+    // - `flex-shrink-0`: Prevents shrinking if parent is flex container
+    // - `overflow-y-auto`: Allows the *entire* sidebar to scroll *if* its content exceeds screen height (fallback)
     <div className="bg-white border-r border-gray-200 h-screen w-64 flex flex-col shadow-lg flex-shrink-0 sticky top-0 overflow-y-auto">
       {/* Profile Header Section */}
       {isLoggedIn && currentUser && (
+        // - `flex-shrink-0`: Prevents header from shrinking when nav grows
         <div className="p-4 border-b border-gray-200 flex-shrink-0">
           <Link to="/profile" className="block group text-center">
             {/* Avatar */}
@@ -79,10 +82,15 @@ function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
                   alt={`${userName}'s profile`}
                   className="w-full h-full object-cover"
                   onError={(e) => {
-                    /* ... error handling ... */
+                    const parent = e.target.parentNode;
+                    const initialsEl =
+                      parent.querySelector(".initials-fallback");
+                    if (initialsEl) initialsEl.style.display = "flex";
+                    e.target.style.display = "none";
                   }}
                 />
               ) : null}
+              {/* Initials Fallback */}
               <div
                 className="initials-fallback absolute inset-0 flex items-center justify-center bg-gradient-to-br from-indigo-200 to-purple-200"
                 style={{ display: profilePictureUrl ? "none" : "flex" }}
@@ -92,13 +100,14 @@ function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
                 </span>
               </div>
             </div>
-            {/* User Info */}
+            {/* User Name */}
             <h3
               className="text-sm sm:text-md font-semibold text-gray-800 group-hover:text-indigo-600 transition-colors truncate"
               title={userName}
             >
               {userName}
             </h3>
+            {/* User Headline */}
             <p
               className="text-xs text-gray-500 group-hover:text-gray-700 transition-colors mt-0.5 sm:mt-1 truncate"
               title={userHeadline}
@@ -110,6 +119,8 @@ function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
       )}
 
       {/* Navigation Section */}
+      {/* - `flex-grow`: Takes up available vertical space between header and footer */}
+      {/* - `overflow-y-auto`: Allows *only this section* to scroll if menu items exceed space */}
       <nav
         className={`flex-grow px-2 sm:px-3 overflow-y-auto ${
           isLoggedIn && currentUser ? "pt-4" : "pt-6"
@@ -118,57 +129,20 @@ function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
         <p className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
           Navigation
         </p>
-        {isLoggedIn && (
-          <ul>
-            {visibleMenuItems.map(({ path, label, Icon }) => {
-              // --- Determine active state more reliably ---
-              const currentPathname = location.pathname;
-              let isActive = currentPathname === path;
-
-              // Special case: Make 'Explore Logs' active when on '/logs/new'
-              if (path === "/explore" && currentPathname === "/logs/new") {
-                isActive = true;
-              }
-              // Special case: Ensure 'Post Idea' is only active on its exact path
-              if (path === "/logs/new" && currentPathname !== "/logs/new") {
-                isActive = false; // Should already be false from initial check, but ensures it
-              }
-              // Add similar logic if '/publications' should be active on '/publications/new' etc.
-              if (
-                path === "/publications" &&
-                (currentPathname === "/publications/new" ||
-                  currentPathname.startsWith("/publications/edit/"))
-              ) {
-                isActive = true;
-              }
-              if (
-                path === "/projects" &&
-                (currentPathname === "/projects/new" ||
-                  currentPathname.startsWith("/projects/edit/"))
-              ) {
-                isActive = true;
-              }
-              // --- End Active State Logic ---
-
-              return (
-                <li key={path} className="mb-1">
-                  <NavLink
-                    to={path}
-                    // Use the calculated isActive state for classes
-                    className={`${commonLinkClasses} ${
-                      isActive ? activeLinkClasses : inactiveLinkClasses
-                    }`}
-                    // Use `end` prop carefully based on whether child routes should activate the parent
-                    // Explore should NOT end, Publications should NOT end, Projects should NOT end
-                    end={
-                      !(
-                        path === "/explore" ||
-                        path === "/publications" ||
-                        path === "/projects"
-                      )
-                    }
-                  >
-                    {/* Render icon and label - use calculated `isActive` for icon class */}
+        <ul>
+          {menuItems.map(({ path, label, Icon }) => (
+            <li key={path} className="mb-1">
+              <NavLink
+                to={path}
+                className={({ isActive }) =>
+                  `${commonLinkClasses} ${
+                    isActive ? activeLinkClasses : inactiveLinkClasses
+                  }`
+                }
+                end // Use `end` for exact matching
+              >
+                {({ isActive }) => (
+                  <>
                     <Icon
                       className={`${iconClasses} ${
                         isActive ? activeIconClasses : ""
@@ -176,22 +150,20 @@ function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
                       aria-hidden="true"
                     />
                     <span className="ml-1">{label}</span>
-                  </NavLink>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        {!isLoggedIn && (
-          <p className="px-3 text-sm text-gray-500">
-            Please log in to navigate.
-          </p>
-        )}
+                  </>
+                )}
+              </NavLink>
+            </li>
+          ))}
+        </ul>
       </nav>
 
       {/* Settings/Logout Section */}
+      {/* - `mt-auto`: Pushes this section to the bottom */}
+      {/* - `flex-shrink-0`: Prevents footer from shrinking */}
       {isLoggedIn && (
         <div className="mt-auto p-3 border-t border-gray-200 flex-shrink-0">
+          {/* Settings Link */}
           <Link
             to="/settings/account"
             className={`${commonLinkClasses} ${inactiveLinkClasses} w-full mb-1`}
@@ -199,6 +171,8 @@ function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
             <FaCog className={`${iconClasses}`} aria-hidden="true" />
             <span className="ml-1">Settings</span>
           </Link>
+
+          {/* Logout Button */}
           {handleLogout && (
             <button
               onClick={handleLogout}
@@ -216,8 +190,5 @@ function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
     </div>
   );
 }
-
-// Add PropTypes if desired
-// Sidebar.propTypes = { ... };
 
 export default Sidebar;

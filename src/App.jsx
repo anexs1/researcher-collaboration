@@ -51,7 +51,6 @@ import ChatPage from "./Page/ChatPage";
 import PostPublicationPage from "./Page/PostPublicationPage";
 import AccountSettingsPage from "./Page/Settings/AccountSettingsPage";
 import NotFoundPage from "./Page/NotFoundPage";
-import CreateLogPage from "./Page/CreateLogPage.jsx"; // <<<--- IMPORT THE NEW PAGE
 
 // --- Page Imports (Admin Facing) ---
 import AdminDashboardPage from "./Page/Admin/AdminDashboardPage";
@@ -132,39 +131,47 @@ const useAuth = () => {
 // --- Helper Components ---
 const LoadingScreen = ({ message = "Loading..." }) => (
   <div className="flex flex-col justify-center items-center h-screen text-lg font-medium text-gray-700 bg-gray-100">
-    {" "}
-    <LoadingSpinner size="lg" /> <p className="mt-4">{message}</p>{" "}
+    <LoadingSpinner size="lg" />
+    <p className="mt-4">{message}</p>
   </div>
 );
 
 // --- Protection Components using Outlet ---
+
+// Protects standard user routes: redirects unauthenticated users AND admin users.
 const ProtectedUserRoutes = ({ isLoggedIn, isAdmin }) => {
   const location = useLocation();
   if (isLoggedIn === null || isAdmin === null)
     return <LoadingScreen message="Verifying session..." />;
   if (!isLoggedIn)
     return <Navigate to="/login" state={{ from: location }} replace />;
+  // Redirect Admins away from standard user routes
   if (isAdmin) {
     console.log(
       `ProtectedUserRoutes: Admin detected accessing user route ${location.pathname}. Redirecting to /admin.`
     );
     return <Navigate to="/admin" replace />;
   }
-  return <Outlet />; // Render nested routes
+  // Allow access for logged-in, non-admin users to the nested Outlet routes
+  return <Outlet />;
 };
+
+// Protects admin routes: redirects unauthenticated users AND non-admin users.
 const ProtectedAdminRoutes = ({ isLoggedIn, isAdmin }) => {
   const location = useLocation();
   if (isLoggedIn === null || isAdmin === null)
     return <LoadingScreen message="Verifying access level..." />;
   if (!isLoggedIn)
     return <Navigate to="/login" state={{ from: location }} replace />;
+  // Redirect Non-Admins away from admin routes
   if (!isAdmin) {
     console.log(
       `ProtectedAdminRoutes: Non-admin detected accessing admin route ${location.pathname}. Redirecting to /.`
     );
-    return <Navigate to="/" replace />;
+    return <Navigate to="/" replace />; // Redirect to home page
   }
-  return <Outlet />; // Render nested routes
+  // Allow access for logged-in admin users to the nested Outlet routes
+  return <Outlet />;
 };
 
 // SocketManager (Keep as is)
@@ -287,7 +294,6 @@ function App() {
                 transition={{ type: "spring", stiffness: 300, damping: 20 }}
                 className="fixed top-20 md:top-24 right-4 md:right-6 z-[200] w-full max-w-sm pointer-events-none"
               >
-                {" "}
                 <Notification
                   message={popupNotification.message}
                   type={popupNotification.type}
@@ -295,7 +301,7 @@ function App() {
                     setPopupNotification((prev) => ({ ...prev, show: false }))
                   }
                   className="pointer-events-auto shadow-lg rounded-md"
-                />{" "}
+                />
               </motion.div>
             )}
           </AnimatePresence>
@@ -304,17 +310,7 @@ function App() {
           <Routes>
             {/* --- Public Routes --- */}
             <Route path="/" element={<Home />} />
-            <Route
-              path="/explore"
-              // Pass props needed by ExplorePage itself (even if form is gone)
-              element={
-                <ExplorePage
-                  isLoggedIn={isLoggedIn}
-                  currentUser={currentUser}
-                />
-              }
-            />
-            {/* NOTE: Removed the duplicate /explore/new route here, it's handled within ProtectedUserRoutes now */}
+            <Route path="/explore" element={<ExplorePage />} />
             <Route
               path="/publications"
               element={<PublicationPage currentUser={currentUser} />}
@@ -323,6 +319,7 @@ function App() {
               path="/publications/:id"
               element={<PublicationDetailPage currentUser={currentUser} />}
             />
+
             {/* --- Auth Routes --- */}
             <Route
               path="/login"
@@ -351,8 +348,8 @@ function App() {
               path="/signup/not-researcher"
               element={<NotResearcherSignupForm />}
             />
+
             {/* --- Protected USER Routes --- */}
-            {/* This <Route> sets up the protection check */}
             <Route
               element={
                 <ProtectedUserRoutes
@@ -361,7 +358,7 @@ function App() {
                 />
               }
             >
-              {/* This nested <Route> applies the UserLayout to all routes within it */}
+              {/* UserLayout Wraps all nested user routes */}
               <Route
                 element={
                   <UserLayout
@@ -371,7 +368,6 @@ function App() {
                   />
                 }
               >
-                {/* --- USER ROUTES RENDERED INSIDE UserLayout --- */}
                 <Route
                   path="/profile"
                   element={<Profile currentUser={currentUser} />}
@@ -413,24 +409,10 @@ function App() {
                   path="/chat/project/:projectId"
                   element={<ChatPage currentUser={currentUser} />}
                 />
+                {/* Add other user routes here */}
+              </Route>
+            </Route>
 
-                {/* <<< --- ADDED ROUTE FOR CREATE LOG PAGE --- >>> */}
-                <Route
-                  path="/logs/new" // Or your preferred path (e.g., /explore/post)
-                  element={
-                    <CreateLogPage
-                      isLoggedIn={isLoggedIn} // Pass props down
-                      currentUser={currentUser}
-                    />
-                  }
-                />
-                {/* <<< --- END ADDED ROUTE --- >>> */}
-
-                {/* Add other standard user routes here */}
-              </Route>{" "}
-              {/* End of UserLayout Route */}
-            </Route>{" "}
-            {/* End of ProtectedUserRoutes Route */}
             {/* --- Protected ADMIN Routes --- */}
             <Route
               element={
@@ -442,7 +424,10 @@ function App() {
             >
               {/* AdminLayout Wraps all nested admin routes */}
               <Route element={<AdminLayout currentUser={currentUser} />}>
+                {" "}
+                {/* Pass props if AdminLayout needs them */}
                 <Route path="/admin" element={<AdminDashboardPage />} />
+                {/* Use index route for dashboard if preferred: <Route index element={<AdminDashboardPage />} /> */}
                 <Route path="/admin/users" element={<AdminUsersPage />} />
                 <Route
                   path="/admin/pending-users"
@@ -456,11 +441,10 @@ function App() {
                 />
                 <Route path="/admin/settings" element={<AdminSettingsPage />} />
                 {/* Add other admin routes here */}
-              </Route>{" "}
-              {/* End of AdminLayout Route */}
-            </Route>{" "}
-            {/* End of ProtectedAdminRoutes Route */}
-            {/* --- Catch-all Not Found Route --- */}
+              </Route>
+            </Route>
+
+            {/* --- Catch-all --- */}
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </div>
