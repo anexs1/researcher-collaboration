@@ -77,7 +77,7 @@ const TYPING_TIMEOUT_DURATION = 3000; // ms
 
 /**
  * @typedef {object} Member
- * @property {string|number} id
+ * @property {string|number} id // <<< THIS ID IS SOMETIMES MISSING/NULL IN YOUR API RESPONSE
  * @property {string} username
  * @property {string} email
  * @property {string} [profilePictureUrl]
@@ -769,9 +769,15 @@ function useProjectMembers(projectId) {
 
     try {
       const apiClient = createAxiosInstance(token);
+      // --- IMPORTANT ---
+      // This API call is the source of the member data.
+      // Ensure the backend endpoint '/api/projects/${projectId}/members'
+      // ALWAYS returns an array where EACH member object has a valid, unique 'id'.
       const res = await apiClient.get(`/api/projects/${projectId}/members`);
 
       if (res.data?.success && Array.isArray(res.data.data)) {
+        // The data from the API is used directly here.
+        // Any objects in res.data.data missing an 'id' will cause issues later.
         setMemberList(res.data.data);
         console.log(
           `HOOK useProjectMembers: Successfully fetched ${res.data.data.length} members.`
@@ -890,6 +896,7 @@ function ChatPage({ currentUser }) {
   );
 
   // 4. Fetch Project Members (triggered manually)
+  // The memberList received here might contain items missing 'id' from the API
   const { memberList, loadingMembers, membersError, fetchMembers } =
     useProjectMembers(projectId);
 
@@ -919,7 +926,7 @@ function ChatPage({ currentUser }) {
     setShowMembersModal(true);
     // Fetch members only if the list is empty and not already loading/error
     if (memberList.length === 0 && !loadingMembers && !membersError) {
-      fetchMembers();
+      fetchMembers(); // This triggers the API call in useProjectMembers
     }
   }, [memberList.length, loadingMembers, membersError, fetchMembers]);
 
@@ -1495,6 +1502,8 @@ function ChatPage({ currentUser }) {
       </div>
 
       {/* Member List Modal */}
+      {/* The 'members' prop below receives the potentially incomplete list */}
+      {/* The fix inside MemberListModal handles filtering items without IDs */}
       <MemberListModal
         isOpen={showMembersModal}
         onClose={() => setShowMembersModal(false)}
