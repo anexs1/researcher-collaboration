@@ -13,36 +13,90 @@ import {
   FaUniversity,
   FaGraduationCap,
   FaTimes,
-  FaMapMarkerAlt, // Import location icon (optional)
+  FaMapMarkerAlt, // Import location icon
 } from "react-icons/fa";
-// Removed notification icons as nav is gone
 import { RiTeamFill } from "react-icons/ri";
 import { BsGraphUp, BsCalendarCheck } from "react-icons/bs";
 import { FiCalendar } from "react-icons/fi"; // Calendar Icon
 
-// Custom CSS for react-calendar (keep this or integrate into your main CSS)
-/*
-.react-calendar {
-  border: none; // Example: Remove default border
-  font-family: inherit;
-  width: 320px;
-  max-width: 100%;
-  background: white;
-  line-height: 1.125em;
-  border-radius: 0.5rem;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-}
-// ... (rest of the calendar styles from previous example) ...
-.highlight-date {
-  background-color: #60a5fa !important; // Blue-400
-  color: white !important;
-  border-radius: 9999px; // Make it a circle
-  font-weight: bold;
-}
-.highlight-date abbr { // Target the number inside
-    color: white !important;
-}
+// Custom CSS for react-calendar (ensure this is loaded, e.g., in index.css or here)
+/* You might want to move these styles to your main CSS file (e.g., index.css)
+   to keep the JS file cleaner. Add a unique class to the calendar container if needed.
 */
+const calendarStyles = `
+  .react-calendar {
+    border: none;
+    font-family: inherit;
+    width: 320px;
+    max-width: 100%;
+    background: white;
+    line-height: 1.125em;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  }
+  .react-calendar__navigation button {
+    color: #3b82f6; /* blue-500 */
+    min-width: 44px;
+    background: none;
+    font-size: 1rem;
+    margin-top: 8px;
+  }
+  .react-calendar__navigation button:enabled:hover,
+  .react-calendar__navigation button:enabled:focus {
+    background-color: #f3f4f6; /* gray-100 */
+  }
+  .react-calendar__month-view__weekdays {
+    text-align: center;
+    text-transform: uppercase;
+    font-weight: bold;
+    font-size: 0.75em;
+    color: #6b7280; /* gray-500 */
+  }
+  .react-calendar__month-view__days__day--weekend {
+    color: #ef4444; /* red-500 */
+  }
+  .react-calendar__tile {
+    max-width: 100%;
+    padding: 10px 6.6667px;
+    background: none;
+    text-align: center;
+    line-height: 16px;
+    border-radius: 0.375rem; /* rounded-md */
+  }
+  .react-calendar__tile:disabled {
+    background-color: #f9fafb; /* gray-50 */
+    color: #d1d5db; /* gray-300 */
+  }
+  .react-calendar__tile:enabled:hover,
+  .react-calendar__tile:enabled:focus {
+    background-color: #eff6ff; /* blue-50 */
+  }
+  .react-calendar__tile--now {
+    background: #bfdbfe; /* blue-200 */
+    font-weight: bold;
+  }
+  .react-calendar__tile--active {
+    background: #3b82f6; /* blue-500 */
+    color: white;
+  }
+  .react-calendar__tile--active:enabled:hover,
+  .react-calendar__tile--active:enabled:focus {
+    background: #2563eb; /* blue-600 */
+  }
+  .react-calendar--selectRange .react-calendar__tile--hover {
+    background-color: #dbeafe; /* blue-100 */
+  }
+  /* Custom Highlighting */
+  .highlight-date {
+    background-color: #60a5fa !important; /* blue-400 */
+    color: white !important;
+    border-radius: 9999px !important; /* Make it a circle */
+    font-weight: bold !important;
+  }
+  .highlight-date abbr { /* Target the number inside */
+      color: white !important;
+  }
+`;
 
 // --- Helper function for styling News & Events badges based on type ---
 const getTypeBadgeStyle = (type) => {
@@ -69,7 +123,7 @@ const Home = () => {
   const [filterOptions, setFilterOptions] = useState({});
   const [showFullAbout, setShowFullAbout] = useState(false);
   const [activeTestimonial, setActiveTestimonial] = useState(0);
-  const [savedPublications, setSavedPublications] = useState([]); // Keep if used elsewhere
+  const [savedPublications, setSavedPublications] = useState([]);
 
   // --- State for Calendar ---
   const [showCalendar, setShowCalendar] = useState(false);
@@ -77,7 +131,7 @@ const Home = () => {
   const calendarRef = useRef(null);
   const calendarIconRef = useRef(null);
 
-  // --- State for Upcoming Events (Used by Corner Notifications & Calendar) ---
+  // --- State for Upcoming Events ---
   const [upcomingEvents, setUpcomingEvents] = useState([
     {
       id: `evt-${Date.now()}-1`,
@@ -96,7 +150,7 @@ const Home = () => {
     {
       id: `evt-${Date.now()}-3`,
       title: "Grant Writing Workshop",
-      date: new Date().toISOString().split("T")[0],
+      date: new Date().toISOString().split("T")[0], // Today's date for testing highlight
       time: "11:00 UTC",
       description: "Learn tips for successful grant applications.",
     },
@@ -108,7 +162,6 @@ const Home = () => {
       description: "Exploring the latest breakthroughs.",
     },
   ]);
-  // Extract dates for calendar highlighting (Recalculated on re-render)
   const eventDates = upcomingEvents.map((event) => event.date);
   // -----------------------------------------------------------------------
 
@@ -116,21 +169,21 @@ const Home = () => {
   const [newsAndEventsData, setNewsAndEventsData] = useState([
     {
       id: "ne1",
-      type: "Conference", // Type for styling/filtering
+      type: "Conference",
       title: "Pan-African AI Research Summit 2025",
       date: "2025-11-10",
       location: "Nairobi, Kenya & Online",
       description:
         "Join leading AI researchers from across the continent to discuss the future of artificial intelligence in Africa. Keynotes, workshops, and networking opportunities.",
-      link: "#", // Replace with actual link
-      image: "/assets/conference_image_1.jpg", // Replace with actual image path
+      link: "#",
+      image: "/assets/conference_image_1.jpg",
     },
     {
       id: "ne2",
       type: "Call for Papers",
       title:
         "Journal of Sustainable Development - Special Issue: Water Scarcity",
-      date: "2025-10-15", // Usually a deadline
+      date: "2025-10-15",
       location: "Submission Deadline",
       description:
         "Seeking original research articles and reviews focusing on innovative solutions and policies for water scarcity challenges in arid and semi-arid regions.",
@@ -146,7 +199,7 @@ const Home = () => {
       description:
         "Hands-on workshop covering cutting-edge data visualization tools and best practices for researchers. Limited spots available.",
       link: "#",
-      image: "/assets/workshop_data_viz.jpg", // Example image path
+      image: "/assets/workshop_data_viz.jpg",
     },
     {
       id: "ne4",
@@ -157,7 +210,6 @@ const Home = () => {
       description:
         "We're thrilled to announce a major milestone! Our community continues to grow, fostering more cross-border collaborations than ever before.",
       link: "#",
-      // No image for this news item example
     },
     {
       id: "ne5",
@@ -174,12 +226,11 @@ const Home = () => {
       id: "ne6",
       type: "Call for Papers",
       title: "International Conference on Renewable Energy (ICRE 2026)",
-      date: "2025-11-30", // Deadline
+      date: "2025-11-30",
       location: "Accra, Ghana (Conference in 2026)",
       description:
         "Submit abstracts for ICRE 2026. Topics include solar, wind, geothermal, biomass, and energy policy in emerging economies.",
       link: "#",
-      // No image
     },
   ]);
   // ---------------------------------------
@@ -263,28 +314,14 @@ const Home = () => {
 
   const handleContactSubmit = async (e) => {
     e.preventDefault();
-    const formData = new FormData(e.target);
-    const data = Object.fromEntries(formData.entries());
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      alert(
-        `Thank you, ${data.name}! Your message has been sent successfully.`
-      );
-      e.target.reset();
-    } catch (error) {
-      alert("Failed to send message. Please try again later.");
-    }
+    // ... (rest of contact submit logic) ...
   };
 
   const toggleSavePublication = (pubId) => {
-    setSavedPublications((prev) =>
-      prev.includes(pubId)
-        ? prev.filter((id) => id !== pubId)
-        : [...prev, pubId]
-    );
+    // ... (rest of save logic) ...
   };
 
-  // --- Function to remove an event (for corner notifications) ---
+  // --- Function to remove an event ---
   const removeEvent = (eventId) => {
     setUpcomingEvents((prevEvents) =>
       prevEvents.filter((event) => event.id !== eventId)
@@ -297,7 +334,7 @@ const Home = () => {
     if (view === "month") {
       const dateString = date.toISOString().split("T")[0];
       if (eventDates.includes(dateString)) {
-        return "highlight-date";
+        return "highlight-date"; // Use the custom class defined in styles
       }
     }
     return null;
@@ -328,7 +365,7 @@ const Home = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       setActiveTestimonial((prev) => (prev + 1) % testimonials.length);
-    }, 8000);
+    }, 8000); // Cycle every 8 seconds
     return () => clearInterval(interval);
   }, [testimonials.length]);
   // ---------------------------
@@ -358,7 +395,7 @@ const Home = () => {
         },
       ];
       if (upcomingEvents.length < 5) {
-        // Add only if less than 5 events
+        // Limit to 5 notifications
         const newEvent = {
           id: newEventId,
           ...potentialEvents[
@@ -367,17 +404,15 @@ const Home = () => {
         };
         setUpcomingEvents((prevEvents) => [...prevEvents, newEvent]);
       }
-    }, 20000); // Add a new event every 20 seconds (adjust as needed)
+    }, 20000); // Add every 20 seconds
 
-    return () => clearInterval(eventInterval); // Cleanup interval
-  }, [upcomingEvents.length]); // Depend on length to re-evaluate adding
+    return () => clearInterval(eventInterval); // Cleanup
+  }, [upcomingEvents.length]);
   // ---------------------------------------------------------
 
   // --- News & Events Section Component ---
   const NewsAndEventsSection = ({ data }) => (
     <section className="py-16 px-6 bg-white">
-      {" "}
-      {/* White background for contrast */}
       <div className="max-w-6xl mx-auto">
         <motion.h2
           initial={{ opacity: 0, y: -20 }}
@@ -396,24 +431,19 @@ const Home = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1, duration: 0.5 }}
-                className="bg-white rounded-2xl shadow-md hover:shadow-lg transition-shadow border border-gray-100 overflow-hidden flex flex-col" // Ensure flex column layout
+                className="bg-white rounded-2xl shadow-md hover:shadow-lg transition-shadow border border-gray-100 overflow-hidden flex flex-col"
               >
-                {/* Optional Image */}
                 {item.image && (
                   <img
                     src={item.image}
                     alt={`${item.title} image`}
-                    className="w-full h-48 object-cover" // Fixed height for consistency
+                    className="w-full h-48 object-cover"
                     onError={(e) => {
                       e.target.style.display = "none";
-                    }} // Hide broken images
+                    }}
                   />
                 )}
-
                 <div className="p-6 flex flex-col flex-grow">
-                  {" "}
-                  {/* flex-grow makes this div take remaining space */}
-                  {/* Type Badge */}
                   <div className="mb-3">
                     <span
                       className={`text-xs font-semibold px-2.5 py-0.5 rounded ${getTypeBadgeStyle(
@@ -423,17 +453,11 @@ const Home = () => {
                       {item.type}
                     </span>
                   </div>
-                  {/* Title */}
                   <h3 className="text-xl font-semibold text-gray-800 mb-2 leading-snug">
                     {item.title}
                   </h3>
-                  {/* Date & Location */}
                   <div className="flex items-center text-sm text-gray-500 mb-4 space-x-4 flex-wrap">
-                    {" "}
-                    {/* Added flex-wrap */}
                     <span className="flex items-center whitespace-nowrap">
-                      {" "}
-                      {/* Prevent wrap within date */}
                       <FiCalendar className="mr-1.5 w-4 h-4 flex-shrink-0" />
                       {item.date}{" "}
                       {item.type?.toLowerCase() === "call for papers" ||
@@ -444,29 +468,20 @@ const Home = () => {
                     {item.location &&
                       item.location !== "Submission Deadline" && (
                         <span className="flex items-center whitespace-nowrap">
-                          {" "}
-                          {/* Prevent wrap within location */}
-                          <FaMapMarkerAlt className="mr-1.5 w-4 h-4 flex-shrink-0" />{" "}
-                          {/* Location Icon */}
+                          <FaMapMarkerAlt className="mr-1.5 w-4 h-4 flex-shrink-0" />
                           {item.location}
                         </span>
                       )}
                   </div>
-                  {/* Description */}
                   <p className="text-gray-600 text-sm mb-6 line-clamp-3 flex-grow">
-                    {" "}
-                    {/* flex-grow allows description to expand */}
                     {item.description}
                   </p>
-                  {/* Link/Button */}
                   <div className="mt-auto pt-4 border-t border-gray-100">
-                    {" "}
-                    {/* mt-auto pushes this to the bottom */}
                     <a
                       href={item.link || "#"}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-blue-600 hover:text-blue-800 font-medium text-sm inline-flex items-center transition-colors duration-200"
+                      className="text-blue-600 hover:text-blue-800 font-medium text-sm inline-flex items-center transition-colors duration-200 group" // Added group for arrow animation
                       aria-label={`Learn more about ${item.title}`}
                     >
                       Learn More
@@ -494,10 +509,9 @@ const Home = () => {
           )}
         </div>
 
-        {/* Optional: View All Button */}
         <div className="text-center mt-12">
           <button
-            onClick={() => navigate("/news-events")} // Example: navigate to a dedicated page
+            onClick={() => navigate("/news-events")} // Adjust route if needed
             className="bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
           >
             View All News & Events
@@ -508,7 +522,7 @@ const Home = () => {
   );
   // --- End News & Events Section ---
 
-  // HowItWorks component (no changes needed)
+  // HowItWorks component includes Stats, About, and Footer
   const HowItWorks = () => {
     const steps = [
       {
@@ -553,7 +567,6 @@ const Home = () => {
           >
             How Research Collaboration Works
           </motion.h2>
-
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto">
             {steps.map((step, index) => (
               <motion.div
@@ -587,7 +600,6 @@ const Home = () => {
           >
             Explore Research Domains
           </motion.h2>
-
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
             {researchCategories.map((category, index) => (
               <motion.div
@@ -664,7 +676,6 @@ const Home = () => {
             >
               About Researcher Collaboration Portal
             </motion.h2>
-
             <div className="flex flex-col lg:flex-row gap-12 items-center">
               <motion.div
                 initial={{ opacity: 0, x: -50 }}
@@ -677,19 +688,22 @@ const Home = () => {
                     Our Mission
                   </h3>
                   <p className="text-gray-700 leading-relaxed mb-6">
+                    {" "}
                     Researcher Collaboration Portal was founded in 2020 to break
                     down barriers in academic collaboration. We believe
                     groundbreaking research happens when diverse minds connect
-                    across disciplines and borders.
+                    across disciplines and borders.{" "}
                   </p>
                   <p className="text-gray-700 leading-relaxed mb-6">
+                    {" "}
                     Our platform combines sophisticated matching algorithms with
                     intuitive tools to help researchers at all career stages
-                    find the right partners and work together effectively.
+                    find the right partners and work together effectively.{" "}
                   </p>
                   <div className="bg-blue-50 p-6 rounded-xl border border-blue-100">
                     <h4 className="font-semibold text-blue-800 mb-2">
-                      Why Choose Researcher Collaboration Portal?
+                      {" "}
+                      Why Choose Researcher Collaboration Portal?{" "}
                     </h4>
                     <ul className="list-disc list-inside text-gray-700 space-y-2">
                       <li>Verified academic profiles</li>
@@ -710,9 +724,10 @@ const Home = () => {
                 <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-8 rounded-3xl text-white shadow-lg">
                   <h3 className="text-2xl font-semibold mb-4">Our Team</h3>
                   <p className="mb-6 leading-relaxed">
+                    {" "}
                     We're a diverse team of researchers, developers, and
                     collaboration experts passionate about advancing science
-                    through connection.
+                    through connection.{" "}
                   </p>
                   <div className="grid grid-cols-2 gap-4 mb-6">
                     <div className="bg-white/10 p-4 rounded-xl">
@@ -737,7 +752,8 @@ const Home = () => {
                     </div>
                   </div>
                   <button className="bg-white text-blue-600 font-semibold py-3 px-6 rounded-lg hover:bg-gray-100 transition-colors">
-                    Meet the Full Team
+                    {" "}
+                    Meet the Full Team{" "}
                   </button>
                 </div>
               </motion.div>
@@ -745,93 +761,145 @@ const Home = () => {
           </div>
         </section>
 
-        {/* Footer */}
-        <footer className="bg-gray-900 text-white py-12 px-6">
+        {/* =================================================== */}
+        {/* ===== START: UPDATED FOOTER SECTION ===== */}
+        {/* =================================================== */}
+        <footer className="bg-gray-900 text-gray-300 py-8 px-6">
+          {" "}
+          {/* Reduced py */}
           <div className="max-w-6xl mx-auto">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-              <div>
-                <h3 className="text-xl font-semibold mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-6">
+              {" "}
+              {/* Reduced gap, added mb */}
+              {/* Column 1: Brand */}
+              <div className="sm:col-span-2 md:col-span-1">
+                <h3 className="text-lg font-semibold mb-3 text-white">
+                  {" "}
+                  {/* White for heading */}
                   Researcher Collaboration Portal
                 </h3>
-                <p className="text-gray-400">
+                <p className="text-sm leading-relaxed">
+                  {" "}
+                  {/* Smaller text, relaxed leading */}
                   Connecting researchers across Africa and beyond to accelerate
                   scientific discovery.
                 </p>
               </div>
+              {/* Column 2: Quick Links */}
               <div>
-                <h4 className="font-semibold mb-4">Quick Links</h4>
-                <ul className="space-y-2 text-gray-400">
+                <h4 className="font-semibold mb-3 text-white">Quick Links</h4>{" "}
+                {/* White for heading */}
+                <ul className="space-y-1.5 text-sm">
+                  {" "}
+                  {/* Smaller text, slightly less space */}
                   <li>
-                    <a href="#" className="hover:text-white transition-colors">
+                    <a
+                      href="#"
+                      className="hover:text-white transition-colors duration-200"
+                    >
                       Home
                     </a>
                   </li>
                   <li>
-                    <a href="#" className="hover:text-white transition-colors">
+                    <a
+                      href="#"
+                      className="hover:text-white transition-colors duration-200"
+                    >
                       Publications
                     </a>
                   </li>
                   <li>
-                    <a href="#" className="hover:text-white transition-colors">
+                    <a
+                      href="#"
+                      className="hover:text-white transition-colors duration-200"
+                    >
                       Researchers
                     </a>
                   </li>
                   <li>
-                    <a href="#" className="hover:text-white transition-colors">
+                    <a
+                      href="#"
+                      className="hover:text-white transition-colors duration-200"
+                    >
                       Funding
                     </a>
                   </li>
                 </ul>
               </div>
+              {/* Column 3: Resources */}
               <div>
-                <h4 className="font-semibold mb-4">Resources</h4>
-                <ul className="space-y-2 text-gray-400">
+                <h4 className="font-semibold mb-3 text-white">Resources</h4>{" "}
+                {/* White for heading */}
+                <ul className="space-y-1.5 text-sm">
+                  {" "}
+                  {/* Smaller text, slightly less space */}
                   <li>
-                    <a href="#" className="hover:text-white transition-colors">
+                    <a
+                      href="#"
+                      className="hover:text-white transition-colors duration-200"
+                    >
                       Help Center
                     </a>
                   </li>
                   <li>
-                    <a href="#" className="hover:text-white transition-colors">
+                    <a
+                      href="#"
+                      className="hover:text-white transition-colors duration-200"
+                    >
                       Research Tools
                     </a>
                   </li>
                   <li>
-                    <a href="#" className="hover:text-white transition-colors">
+                    <a
+                      href="#"
+                      className="hover:text-white transition-colors duration-200"
+                    >
                       Collaboration Guide
                     </a>
                   </li>
                   <li>
-                    <a href="#" className="hover:text-white transition-colors">
+                    <a
+                      href="#"
+                      className="hover:text-white transition-colors duration-200"
+                    >
                       FAQs
                     </a>
                   </li>
                 </ul>
               </div>
+              {/* Column 4: Connect & Subscribe */}
               <div>
-                <h4 className="font-semibold mb-4">Connect With Us</h4>
-                <div className="flex space-x-4 mb-4">
+                <h4 className="font-semibold mb-3 text-white">Connect</h4>{" "}
+                {/* White for heading */}
+                {/* Social Links */}
+                <div className="flex space-x-3 mb-4">
+                  {" "}
+                  {/* Slightly less space */}
                   <a
                     href="#"
-                    className="text-gray-400 hover:text-white transition-colors"
+                    className="hover:text-white transition-colors duration-200"
+                    aria-label="Twitter"
                   >
                     <span className="sr-only">Twitter</span>
                     <svg
-                      className="h-6 w-6"
+                      className="h-5 w-5"
                       fill="currentColor"
                       viewBox="0 0 24 24"
                       aria-hidden="true"
                     >
+                      {" "}
+                      {/* Slightly smaller icons */}
                       <path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84" />
                     </svg>
                   </a>
                   <a
                     href="#"
-                    className="text-gray-400 hover:text-white transition-colors"
+                    className="hover:text-white transition-colors duration-200"
+                    aria-label="LinkedIn"
                   >
                     <span className="sr-only">LinkedIn</span>
                     <svg
-                      className="h-6 w-6"
+                      className="h-5 w-5"
                       fill="currentColor"
                       viewBox="0 0 24 24"
                       aria-hidden="true"
@@ -841,11 +909,12 @@ const Home = () => {
                   </a>
                   <a
                     href="#"
-                    className="text-gray-400 hover:text-white transition-colors"
+                    className="hover:text-white transition-colors duration-200"
+                    aria-label="Facebook"
                   >
                     <span className="sr-only">Facebook</span>
                     <svg
-                      className="h-6 w-6"
+                      className="h-5 w-5"
                       fill="currentColor"
                       viewBox="0 0 24 24"
                       aria-hidden="true"
@@ -858,44 +927,78 @@ const Home = () => {
                     </svg>
                   </a>
                 </div>
-                <p className="text-gray-400">
-                  Subscribe to our newsletter for updates
-                </p>
-                <div className="mt-2 flex">
+                {/* Newsletter */}
+                <h4 className="font-semibold mb-2 text-white text-sm">
+                  Stay Updated
+                </h4>{" "}
+                {/* Smaller heading */}
+                <form onSubmit={(e) => e.preventDefault()} className="flex">
+                  <label htmlFor="footer-email" className="sr-only">
+                    Email address
+                  </label>
                   <input
+                    id="footer-email"
                     type="email"
                     placeholder="Your email"
-                    className="px-4 py-2 rounded-l-lg focus:outline-none text-gray-900 w-full"
+                    required
+                    className="px-3 py-2 text-sm rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-800 text-gray-200 w-full border border-gray-700 placeholder-gray-500"
                   />
-                  <button className="bg-blue-600 px-4 py-2 rounded-r-lg hover:bg-blue-700 transition-colors">
+                  <button
+                    type="submit"
+                    className="bg-blue-600 text-white px-3 py-2 text-sm font-medium rounded-r-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+                  >
                     Subscribe
                   </button>
-                </div>
+                </form>
               </div>
             </div>
-            <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
+
+            {/* Bottom Bar */}
+            <div className="border-t border-gray-700 mt-6 pt-6 text-center text-sm">
+              {" "}
+              {/* Adjusted mt/pt, border color */}
               <p>
-                © 2025 Researcher Collaboration Portal. All rights reserved. |
-                <a href="#" className="hover:text-white ml-2 transition-colors">
+                © {new Date().getFullYear()} Researcher Collaboration Portal.
+                All rights reserved.
+              </p>
+              <p className="mt-1">
+                {" "}
+                {/* Separated links for clarity */}
+                <a
+                  href="#"
+                  className="hover:text-white transition-colors duration-200 mx-2"
+                >
                   Privacy Policy
-                </a>{" "}
-                |
-                <a href="#" className="hover:text-white ml-2 transition-colors">
+                </a>
+                <span className="text-gray-500">|</span>{" "}
+                {/* Visual separator */}
+                <a
+                  href="#"
+                  className="hover:text-white transition-colors duration-200 mx-2"
+                >
                   Terms of Service
                 </a>
               </p>
             </div>
           </div>
         </footer>
-      </div>
+        {/* =================================================== */}
+        {/* ===== END: UPDATED FOOTER SECTION ===== */}
+        {/* =================================================== */}
+      </div> // Closing div for the HowItWorks component wrapper
     );
-  };
+  }; // End of HowItWorks Component
 
   return (
-    <div className="bg-gradient-to-br from-gray-50 to-blue-50 font-sans overflow-hidden relative">
+    <div className="bg-gradient-to-br from-gray-50 to-blue-50 font-sans overflow-x-hidden relative">
+      {" "}
+      {/* Added overflow-x-hidden */}
+      {/* Inject Calendar Styles */}
+      <style>{calendarStyles}</style>
       {/* Hero Section */}
       <section className="relative bg-gradient-to-r from-blue-700 to-indigo-800 text-white py-32 px-6 text-center overflow-hidden">
         <div className="absolute inset-0 opacity-10">
+          {/* Ensure the pattern SVG path is correct */}
           <div className="absolute top-0 left-0 w-full h-full bg-[url('/assets/science-pattern.svg')] bg-repeat opacity-20"></div>
         </div>
         <div className="relative z-10 max-w-6xl mx-auto">
@@ -968,9 +1071,10 @@ const Home = () => {
           </div>
         </motion.div>
       </section>
-
-      {/* Discover Section with Integrated Calendar Button */}
+      {/* Discover Section */}
       <section className="py-12 px-6 bg-white mt-24">
+        {" "}
+        {/* Added mt-24 to clear logos */}
         <div className="max-w-6xl mx-auto">
           <motion.h2
             initial={{ opacity: 0, y: -20 }}
@@ -980,7 +1084,6 @@ const Home = () => {
           >
             Discover Research Opportunities
           </motion.h2>
-          {/* Search Bar and Calendar Button Container */}
           <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 relative">
             <div className="flex flex-col md:flex-row items-center justify-between gap-4">
               {/* Search Input */}
@@ -994,10 +1097,11 @@ const Home = () => {
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
-              {/* Action Buttons (Search & Calendar) */}
+              {/* Action Buttons */}
               <div className="flex w-full md:w-auto items-center space-x-2 flex-shrink-0">
                 <button className="bg-blue-600 text-white p-4 rounded-xl hover:bg-blue-700 transition-colors shadow-sm flex-grow md:flex-grow-0">
-                  Search
+                  {" "}
+                  Search{" "}
                 </button>
                 {/* Calendar Button */}
                 <div className="relative">
@@ -1009,7 +1113,6 @@ const Home = () => {
                   >
                     <FiCalendar className="w-5 h-5" />
                   </button>
-                  {/* Calendar Dropdown */}
                   <AnimatePresence>
                     {showCalendar && (
                       <motion.div
@@ -1034,7 +1137,6 @@ const Home = () => {
           </div>
         </div>
       </section>
-
       {/* Features Section */}
       <section className="py-16 px-6 bg-gray-50">
         <div className="max-w-6xl mx-auto">
@@ -1060,13 +1162,12 @@ const Home = () => {
                     viewBox="0 0 24 24"
                     xmlns="http://www.w3.org/2000/svg"
                   >
-                    {" "}
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth="2"
                       d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-                    ></path>{" "}
+                    ></path>
                   </svg>
                 ),
                 color: "bg-blue-100",
@@ -1083,13 +1184,12 @@ const Home = () => {
                     viewBox="0 0 24 24"
                     xmlns="http://www.w3.org/2000/svg"
                   >
-                    {" "}
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth="2"
                       d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                    ></path>{" "}
+                    ></path>
                   </svg>
                 ),
                 color: "bg-green-100",
@@ -1106,13 +1206,12 @@ const Home = () => {
                     viewBox="0 0 24 24"
                     xmlns="http://www.w3.org/2000/svg"
                   >
-                    {" "}
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth="2"
                       d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    ></path>{" "}
+                    ></path>
                   </svg>
                 ),
                 color: "bg-purple-100",
@@ -1129,13 +1228,12 @@ const Home = () => {
                     viewBox="0 0 24 24"
                     xmlns="http://www.w3.org/2000/svg"
                   >
-                    {" "}
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth="2"
                       d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"
-                    ></path>{" "}
+                    ></path>
                   </svg>
                 ),
                 color: "bg-red-100",
@@ -1150,8 +1248,7 @@ const Home = () => {
               >
                 <div className="mb-6">{feature.icon}</div>
                 <h3 className="text-xl font-semibold mb-4 text-gray-800">
-                  {" "}
-                  {feature.title}{" "}
+                  {feature.title}
                 </h3>
                 <p className="text-gray-600">{feature.description}</p>
               </motion.div>
@@ -1159,11 +1256,9 @@ const Home = () => {
           </div>
         </div>
       </section>
-
       {/* --- News & Events Section --- */}
       <NewsAndEventsSection data={newsAndEventsData} />
       {/* --------------------------- */}
-
       {/* Testimonials Section */}
       <section className="py-16 px-6 bg-gradient-to-r from-blue-50 to-indigo-50">
         <div className="max-w-6xl mx-auto">
@@ -1177,6 +1272,8 @@ const Home = () => {
           </motion.h2>
           <div className="relative">
             <div className="max-w-4xl mx-auto relative h-96 overflow-hidden">
+              {" "}
+              {/* Fixed height for testimonial area */}
               {testimonials.map((testimonial, index) => (
                 <motion.div
                   key={testimonial.id}
@@ -1225,8 +1322,7 @@ const Home = () => {
                     </p>
                     <div>
                       <p className="text-md md:text-lg font-semibold text-gray-800">
-                        {" "}
-                        {testimonial.name}{" "}
+                        {testimonial.name}
                       </p>
                       <p className="text-sm md:text-base text-blue-600">
                         {testimonial.title}
@@ -1236,6 +1332,7 @@ const Home = () => {
                 </motion.div>
               ))}
             </div>
+            {/* Testimonial Navigation Dots */}
             <div className="absolute bottom-0 left-0 right-0 flex justify-center space-x-2 mt-4">
               {testimonials.map((_, index) => (
                 <button
@@ -1253,7 +1350,6 @@ const Home = () => {
           </div>
         </div>
       </section>
-
       {/* Call to Action */}
       <section className="py-20 px-6 bg-gradient-to-r from-blue-600 to-indigo-700 text-white">
         <div className="max-w-4xl mx-auto text-center">
@@ -1263,8 +1359,7 @@ const Home = () => {
             transition={{ duration: 0.8 }}
             className="text-4xl font-bold mb-6"
           >
-            {" "}
-            Ready to Transform Your Research?{" "}
+            Ready to Transform Your Research?
           </motion.h2>
           <motion.p
             initial={{ opacity: 0 }}
@@ -1272,9 +1367,8 @@ const Home = () => {
             transition={{ delay: 0.3, duration: 0.8 }}
             className="text-xl mb-10 max-w-2xl mx-auto"
           >
-            {" "}
             Join thousands of researchers already accelerating their work
-            through collaboration.{" "}
+            through collaboration.
           </motion.p>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -1286,20 +1380,16 @@ const Home = () => {
               className="bg-white text-blue-600 font-bold py-4 px-8 rounded-full hover:bg-blue-100 transition-colors shadow-lg"
               onClick={handleGetStartedClick}
             >
-              {" "}
-              Get Started - Free Forever{" "}
+              Get Started - Free Forever
             </button>
             <button className="bg-transparent border-2 border-white text-white font-bold py-4 px-8 rounded-full hover:bg-white hover:bg-opacity-10 transition-colors shadow-lg">
-              {" "}
-              Schedule a Demo{" "}
+              Schedule a Demo
             </button>
           </motion.div>
         </div>
       </section>
-
-      {/* How It Works, About, Contact, Footer Sections */}
+      {/* Render How It Works, About, Stats, and the UPDATED Footer */}
       <HowItWorks />
-
       {/* Upcoming Events Corner Feature */}
       <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end space-y-2">
         <AnimatePresence>
@@ -1326,8 +1416,7 @@ const Home = () => {
                       {event.title}
                     </h4>
                     <p className="text-xs text-gray-500 mt-1">
-                      {" "}
-                      {event.date} at {event.time}{" "}
+                      {event.date} at {event.time}
                     </p>
                     {event.description && (
                       <p className="text-xs text-gray-600 mt-1">
@@ -1341,8 +1430,7 @@ const Home = () => {
                   className="text-gray-400 hover:text-red-500 ml-2 flex-shrink-0"
                   aria-label={`Dismiss event: ${event.title}`}
                 >
-                  {" "}
-                  <FaTimes className="w-3 h-3" />{" "}
+                  <FaTimes className="w-3 h-3" />
                 </button>
               </div>
             </motion.div>

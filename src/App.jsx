@@ -7,17 +7,17 @@ import {
   Route,
   Navigate,
   useLocation,
-  Outlet, // Import Outlet for protection components
+  Outlet,
 } from "react-router-dom";
 import { io } from "socket.io-client";
 import { motion, AnimatePresence } from "framer-motion";
-import "./index.css"; // Main CSS import
+import "./index.css";
 
 // --- CONTEXT PROVIDER IMPORT ---
 import {
   NotificationProvider,
   useNotifications,
-} from "./context/NotificationContext"; // Adjust path if needed
+} from "./context/NotificationContext";
 
 // --- Layout Imports ---
 import AdminLayout from "./Layout/AdminLayout";
@@ -31,8 +31,8 @@ import CorporateSignupForm from "./Component/CorporateSignupForm";
 import MedicalSignupForm from "./Component/MedicalSignupForm";
 import NotResearcherSignupForm from "./Component/NotResearcherSignupForm";
 import UserActivityPage from "./Component/Profile/UserActivityPage";
-import Notification from "./Component/Common/Notification"; // Adjust path if needed
-import LoadingSpinner from "./Component/Common/LoadingSpinner"; // Adjust path if needed
+import Notification from "./Component/Common/Notification";
+import LoadingSpinner from "./Component/Common/LoadingSpinner";
 
 // --- Page Imports (User Facing) ---
 import Home from "./Page/Home";
@@ -40,15 +40,15 @@ import ExplorePage from "./Page/ExplorePage";
 import SignupPage from "./Page/SignupPage";
 import LoginPage from "./Page/LoginPage";
 import Profile from "./Page/Profile";
-import PublicationPage from "./Page/Publication"; // Needed for /publications
-import PublicationDetailPage from "./Page/PublicationDetailPage"; // Needed for /publications/:id
-import EditPublicationPage from "./Page/EditPublicationPage"; // Needed for /publications/edit/:id
+import PublicationPage from "./Page/Publication";
+import PublicationDetailPage from "./Page/PublicationDetailPage";
+import EditPublicationPage from "./Page/EditPublicationPage";
 import Projects from "./Page/Projects";
 import CreateProjectPage from "./Page/CreateProjectPage";
 import EditProjectPage from "./Page/EditProjectPage";
 import Messages from "./Page/Messages";
 import ChatPage from "./Page/ChatPage";
-import PostPublicationPage from "./Page/PostPublicationPage"; // Needed for /publications/new
+import PostPublicationPage from "./Page/PostPublicationPage";
 import AccountSettingsPage from "./Page/Settings/AccountSettingsPage";
 import NotFoundPage from "./Page/NotFoundPage";
 
@@ -115,7 +115,6 @@ const useAuth = () => {
         prevToken !== currentToken ? currentToken : prevToken
       );
       setUser((prevUser) =>
-        // Basic check; for deep objects, consider a deep comparison library
         JSON.stringify(prevUser) !== JSON.stringify(currentUser)
           ? currentUser
           : prevUser
@@ -194,20 +193,17 @@ const SocketManager = ({ token, API_BASE }) => {
       );
       newSocket.on("disconnect", (reason) => {
         console.log("Socket disconnected:", newSocket.id, "Reason:", reason);
-        // Clean up ref if this instance disconnected
         if (socketRef.current && socketRef.current.id === newSocket.id) {
           socketRef.current = null;
         }
       });
       newSocket.on("connect_error", (err) => {
         console.error("Socket connection error:", err.message);
-        // Clean up ref if this instance failed
         if (socketRef.current && socketRef.current.id === newSocket.id) {
           socketRef.current = null;
         }
       });
 
-      // Centralized notification handler
       const handleNotification = (data) => {
         if (data && addNewNotification) {
           console.log("Received notification via socket:", data);
@@ -215,13 +211,10 @@ const SocketManager = ({ token, API_BASE }) => {
         }
       };
 
-      // Listen to various notification events
       newSocket.on("notification", handleNotification);
       newSocket.on("new_collaboration_request", handleNotification);
       newSocket.on("request_response", handleNotification);
-      // Add other events like 'new_message' if needed
 
-      // Cleanup function
       return () => {
         console.log("SocketManager: Cleaning up socket instance", newSocket.id);
         newSocket.off("connect");
@@ -236,9 +229,9 @@ const SocketManager = ({ token, API_BASE }) => {
         }
       };
     }
-  }, [token, API_BASE, addNewNotification]); // Dependencies
+  }, [token, API_BASE, addNewNotification]);
 
-  return null; // This component doesn't render anything itself
+  return null;
 };
 
 // --- Main App Component ---
@@ -254,7 +247,6 @@ function App() {
   });
   const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
-  // Notification handler
   const showPopupNotification = useCallback((message, type = "info") => {
     setPopupNotification({ message, type, show: true });
     setTimeout(
@@ -263,19 +255,17 @@ function App() {
     );
   }, []);
 
-  // Effect to derive login/admin status
   useEffect(() => {
-    setLoadingAuth(true); // Start loading when dependencies change
+    setLoadingAuth(true);
     const userIsLoggedIn = !!token && !!currentUser?.id;
     const userIsAdmin = userIsLoggedIn && currentUser?.role === "admin";
     setIsLoggedIn(userIsLoggedIn);
     setIsAdmin(userIsAdmin);
-    setLoadingAuth(false); // Finish loading after derivation
+    setLoadingAuth(false);
   }, [token, currentUser]);
 
   const handleLogout = logout;
 
-  // Show loading screen until authentication status is determined
   if (loadingAuth) {
     return <LoadingScreen message="Initializing Application..." />;
   }
@@ -284,18 +274,14 @@ function App() {
     <NotificationProvider>
       <Router>
         <NormalizeURL />
-        {/* Render SocketManager only when logged in */}
         {isLoggedIn && <SocketManager token={token} API_BASE={API_BASE} />}
-        {/* Render Navbar conditionally based on route */}
         <ConditionalNavbar
           isLoggedIn={isLoggedIn}
           currentUser={currentUser}
           onLogout={handleLogout}
         />
 
-        {/* Adjust top padding to account for Navbar height */}
         <div className="pt-16 md:pt-20 bg-gray-100 min-h-screen">
-          {/* Global Notification Popup */}
           <AnimatePresence>
             {popupNotification.show && (
               <motion.div
@@ -317,21 +303,32 @@ function App() {
             )}
           </AnimatePresence>
 
-          {/* --- Application Routes --- */}
           <Routes>
+            {/* ================================================== */}
             {/* --- Public Routes (Accessible to Everyone) --- */}
+            {/* ================================================== */}
             <Route path="/" element={<Home />} />
             <Route path="/explore" element={<ExplorePage />} />
-            {/* Publication routes removed from public */}
+            {/* --- Publicly Accessible Publication Routes --- */}
+            {/* NOTE: Components must handle currentUser being null */}
+            <Route path="/publications" element={<PublicationPage />} />
+            <Route
+              path="/publications/:id"
+              element={<PublicationDetailPage />}
+            />
+            {/* --- Publicly Accessible Projects Route --- */}
+            {/* NOTE: Component must handle currentUser being null */}
+            <Route path="/projects" element={<Projects />} />
+            {/* ================================================== */}
             {/* --- Auth Routes (Login/Signup) --- */}
+            {/* ================================================== */}
             <Route
               path="/login"
               element={
                 isLoggedIn ? (
-                  // Redirect if already logged in
                   <Navigate to={isAdmin ? "/admin" : "/profile"} replace />
                 ) : (
-                  <LoginPage login={login} /> // Pass login function
+                  <LoginPage login={login} />
                 )
               }
             />
@@ -339,14 +336,12 @@ function App() {
               path="/signup"
               element={
                 isLoggedIn ? (
-                  // Redirect if already logged in
                   <Navigate to={isAdmin ? "/admin" : "/profile"} replace />
                 ) : (
                   <SignupPage />
                 )
               }
             />
-            {/* Specific Signup Forms */}
             <Route path="/signup/academic" element={<AcademicSignupForm />} />
             <Route path="/signup/corporate" element={<CorporateSignupForm />} />
             <Route path="/signup/medical" element={<MedicalSignupForm />} />
@@ -354,38 +349,44 @@ function App() {
               path="/signup/not-researcher"
               element={<NotResearcherSignupForm />}
             />
+            {/* ========================================================== */}
             {/* --- Protected USER Routes (Requires login, user role) --- */}
+            {/* ========================================================== */}
             <Route
               element={
-                // This route protects its children
                 <ProtectedUserRoutes
                   isLoggedIn={isLoggedIn}
                   isAdmin={isAdmin}
                 />
               }
             >
-              {/* This route provides the UserLayout to its children */}
+              {/* Provides the UserLayout for nested protected routes */}
               <Route
                 element={
                   <UserLayout
-                    isLoggedIn={isLoggedIn} // Pass necessary props
+                    isLoggedIn={isLoggedIn}
                     handleLogout={handleLogout}
                     currentUser={currentUser}
                   />
                 }
               >
-                {/* --- User Pages Rendered inside UserLayout's <Outlet /> --- */}
+                {/* --- User Pages Rendered inside UserLayout --- */}
 
-                {/* Default route for logged-in users */}
-                <Route index element={<Navigate to="/profile" replace />} />
+                {/* --- VITAL CHANGE: Removed the index route redirecting to /profile --- */}
+                {/* Now, if a logged-in user happens to land on the 'base' of this
+                    protected section (which shouldn't really happen with the current setup),
+                    it won't automatically redirect them. Accessing '/' will render the public Home component.
+                    Accessing specific paths below will render those components. */}
+                {/* <Route index element={<Navigate to="/profile" replace />} />  <--- REMOVED */}
 
+                {/* --- Profile & Settings (Require Login & UserLayout) --- */}
                 <Route
                   path="/profile"
                   element={<Profile currentUser={currentUser} />}
                 />
                 <Route
-                  path="/profile/:userId" // Viewing other profiles (if implemented)
-                  element={<Profile currentUser={currentUser} />} // May need adjustments
+                  path="/profile/:userId"
+                  element={<Profile currentUser={currentUser} />}
                 />
                 <Route
                   path="/profile/activity"
@@ -395,35 +396,25 @@ function App() {
                   path="/settings/account"
                   element={<AccountSettingsPage currentUser={currentUser} />}
                 />
-                <Route
-                  path="/projects"
-                  element={<Projects currentUser={currentUser} />}
-                />
+
+                {/* --- Project ACTIONS (Require Login & UserLayout) --- */}
                 <Route path="/projects/new" element={<CreateProjectPage />} />
                 <Route
                   path="/projects/edit/:projectId"
                   element={<EditProjectPage currentUser={currentUser} />}
                 />
 
-                {/* === PUBLICATION ROUTES (Correctly placed inside UserLayout) === */}
-                <Route
-                  path="/publications"
-                  element={<PublicationPage currentUser={currentUser} />}
-                />
+                {/* --- Publication ACTIONS (Require Login & UserLayout) --- */}
                 <Route
                   path="/publications/new"
                   element={<PostPublicationPage currentUser={currentUser} />}
                 />
                 <Route
-                  path="/publications/:id"
-                  element={<PublicationDetailPage currentUser={currentUser} />}
-                />
-                <Route
                   path="/publications/edit/:id"
-                  element={<EditPublicationPage />} // Pass currentUser if needed
+                  element={<EditPublicationPage currentUser={currentUser} />} // Pass currentUser if needed
                 />
-                {/* === END PUBLICATION ROUTES === */}
 
+                {/* --- Messaging (Requires Login & UserLayout) --- */}
                 <Route
                   path="/messages"
                   element={<Messages currentUser={currentUser} />}
@@ -432,22 +423,22 @@ function App() {
                   path="/chat/project/:projectId"
                   element={<ChatPage currentUser={currentUser} />}
                 />
-                {/* Add other user-specific routes that need the layout */}
+                {/* Add other user routes requiring login and UserLayout here */}
               </Route>{" "}
               {/* End UserLayout Element Route */}
             </Route>{" "}
             {/* End ProtectedUserRoutes Element Route */}
+            {/* =========================================================== */}
             {/* --- Protected ADMIN Routes (Requires login, admin role) --- */}
+            {/* =========================================================== */}
             <Route
               element={
-                // Protects admin section
                 <ProtectedAdminRoutes
                   isLoggedIn={isLoggedIn}
                   isAdmin={isAdmin}
                 />
               }
             >
-              {/* Provides AdminLayout */}
               <Route element={<AdminLayout currentUser={currentUser} />}>
                 <Route path="/admin" element={<AdminDashboardPage />} />
                 <Route path="/admin/users" element={<AdminUsersPage />} />
@@ -477,16 +468,15 @@ function App() {
 }
 
 // --- Conditional Navbar Component ---
+// Renders Navbar on all non-admin routes
 const ConditionalNavbar = ({ isLoggedIn, currentUser, onLogout }) => {
   const location = useLocation();
-  // Hide Navbar on admin routes
   const isAdminRoute = location.pathname.startsWith("/admin");
 
   if (isAdminRoute) {
-    return null; // Don't render Navbar for admin routes
+    return null;
   }
 
-  // Render Navbar for all other routes
   return (
     <Navbar
       isLoggedIn={isLoggedIn}

@@ -1,8 +1,13 @@
-// src/Page/ChatPage.jsx
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import axios from "axios";
-import { io } from "socket.io-client";
+import axios, { AxiosError } from "axios";
+import { io, Socket } from "socket.io-client";
 import {
   FaPaperPlane,
   FaSpinner,
@@ -26,25 +31,72 @@ import LoadingSpinner from "../Component/Common/LoadingSpinner";
 import ErrorMessage from "../Component/Common/ErrorMessage";
 import MemberListModal from "../Component/chat/MemberListModal";
 
+// --- Constants ---
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
-const SOCKET_TIMEOUT = 15000; // Timeout for socket operations
+const SOCKET_TIMEOUT = 15000; // Timeout for socket operations (ms)
+const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+const TYPING_TIMEOUT_DURATION = 3000; // ms
 
-// Helper: Generate socket room name
+// --- Type Definitions (for clarity, even in JS) ---
+/**
+ * @typedef {object} User
+ * @property {string|number} id
+ * @property {string} username
+ * @property {string} [profilePictureUrl]
+ */
+
+/**
+ * @typedef {object} MessageSender
+ * @property {string|number} id
+ * @property {string} username
+ * @property {string} [profilePictureUrl]
+ */
+
+/**
+ * @typedef {object} Message
+ * @property {string|number} id
+ * @property {string|number} senderId
+ * @property {MessageSender} sender
+ * @property {string|number} projectId
+ * @property {string} content
+ * @property {string} createdAt
+ * @property {'text' | 'file'} messageType
+ * @property {string} [fileUrl]
+ * @property {string} [fileName]
+ * @property {string} [mimeType]
+ * @property {number} [fileSize]
+ */
+
+/**
+ * @typedef {object} ProjectDetails
+ * @property {string|number} id
+ * @property {string} name
+ */
+
+/**
+ * @typedef {object} Member
+ * @property {string|number} id
+ * @property {string} username
+ * @property {string} email
+ * @property {string} [profilePictureUrl]
+ * @property {string} role
+ */
+
+// --- Helper Functions ---
 const getRoomName = (projectId) => (projectId ? `project-${projectId}` : null);
 
-// Helper: Format message timestamp (e.g., '1:30 PM')
 const formatMessageTime = (isoString) => {
   if (!isoString) return "";
   try {
     return format(parseISO(isoString), "p"); // 'p' is short time format like 1:30 PM
   } catch (e) {
-    console.error("Date format error:", e);
-    return "";
+    console.error("Date format error (formatMessageTime):", e);
+    return "Invalid Date";
   }
 };
 
-// Helper: Format date separator (e.g., 'Today', 'Yesterday', 'March 15, 2024')
 const formatDateSeparator = (isoString) => {
   if (!isoString) return null;
   try {
@@ -53,76 +105,53 @@ const formatDateSeparator = (isoString) => {
     if (isYesterday(date)) return "Yesterday";
     return format(date, "MMMM d, yyyy"); // Example: March 15, 2024
   } catch (e) {
-    console.error("Date format error:", e);
+    console.error("Date format error (formatDateSeparator):", e);
     return null;
   }
 };
 
-// --- ChatPage Component ---
-function ChatPage({ currentUser }) {
-  const { projectId: projectIdParam } = useParams();
-  const navigate = useNavigate();
+const getAuthToken = () => localStorage.getItem("authToken");
 
-  // --- State Definitions ---
-  const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState("");
+const createAxiosInstance = (token) => {
+  return axios.create({
+    baseURL: API_BASE_URL,
+    headers: { Authorization: `Bearer ${token}` },
+  });
+};
+
+// --- Custom Hooks ---
+
+/**
+ * Custom Hook for fetching initial chat data (project details and message history).
+ * @param {string|number|null} projectId
+ * @param {User|null} currentUser
+ * @param {function} scrollToBottom
+ * @returns {{
+ *  projectDetails: ProjectDetails | null,
+ *  initialMessages: Message[],
+ *  isLoading: boolean,
+ *  fetchError: string | null,
+ *  canAttemptConnect: boolean,
+ *  fetchInitialData: () => Promise<void>
+ * }}
+ */
+function useChatData(projectId, currentUser, scrollToBottom) {
   const [projectDetails, setProjectDetails] = useState(null);
+  const [initialMessages, setInitialMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSending, setIsSending] = useState(false); // For text messages
   const [fetchError, setFetchError] = useState(null);
-  const [socketError, setSocketError] = useState(null);
-  const [isConnected, setIsConnected] = useState(false); // React state for connection
-  const [typingUsers, setTypingUsers] = useState(new Map());
-  const [showMembersModal, setShowMembersModal] = useState(false);
-  const [memberList, setMemberList] = useState([]);
-  const [loadingMembers, setLoadingMembers] = useState(false);
-  const [membersError, setMembersError] = useState(null);
   const [canAttemptConnect, setCanAttemptConnect] = useState(false);
-
-  // --- File Upload State ---
-  const [selectedFile, setSelectedFile] = useState(null); // Stores the selected File object
-  const [isUploading, setIsUploading] = useState(false); // Tracks file upload progress
-  const [uploadError, setUploadError] = useState(null); // Stores file upload errors
-
-  // --- Refs ---
-  const socketRef = useRef(null); // Holds the actual socket instance
-  const messagesEndRef = useRef(null);
-  const typingTimeoutRef = useRef(null);
-  const fileInputRef = useRef(null); // Ref for the hidden file input
-
-  // --- Derived Values ---
   const currentUserId = currentUser?.id;
-  const projectId = projectIdParam ? parseInt(projectIdParam, 10) : null;
-  const roomName = getRoomName(projectId);
 
-  // --- Callbacks ---
-  const scrollToBottom = useCallback((behavior = "smooth") => {
-    // Scrolls the message container to the bottom
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
-    }, 150); // Slight delay allows layout to settle
-  }, []);
-
-  // Effect to scroll down when new messages arrive
-  useEffect(() => {
-    if (messages.length > 0) {
-      scrollToBottom("smooth");
-    }
-  }, [messages, scrollToBottom]);
-
-  // --- Fetch Initial Data ---
   const fetchInitialData = useCallback(async () => {
-    setCanAttemptConnect(false);
-    if (socketRef.current) {
-      console.log(
-        "fetchInitialData: Disconnecting existing socket before fetch."
-      );
-      socketRef.current.disconnect();
-      socketRef.current = null;
-      setIsConnected(false);
-    }
+    console.log(
+      `HOOK useChatData: fetchInitialData called for project ${projectId}`
+    );
+    setIsLoading(true);
+    setFetchError(null);
     setProjectDetails(null);
-    setMessages([]);
+    setInitialMessages([]);
+    setCanAttemptConnect(false); // Reset connection flag
 
     if (!currentUserId || !projectId) {
       setFetchError(
@@ -131,189 +160,188 @@ function ChatPage({ currentUser }) {
       setIsLoading(false);
       return;
     }
-    console.log(`FETCH: Starting initial data fetch for project ${projectId}`);
-    setIsLoading(true);
-    setFetchError(null);
-    setSocketError(null);
-    const token = localStorage.getItem("authToken");
+
+    const token = getAuthToken();
     if (!token) {
       setFetchError("Authentication token not found. Please log in.");
       setIsLoading(false);
       return;
     }
 
+    const apiClient = createAxiosInstance(token);
     let fetchedDetails = null;
     let fetchedMsgs = [];
     let errorMsg = null;
     let allowConnection = false;
 
     try {
-      const [historyResponse, projectInfoResponse] = await Promise.all([
-        axios.get(
-          `${API_BASE_URL}/api/messaging/history/project/${projectId}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        ),
-        axios
-          .get(`${API_BASE_URL}/api/projects/${projectId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          })
-          .catch((err) => {
-            console.warn(
-              "Failed to fetch project details separately:",
-              err.message
-            );
-            return null;
-          }),
+      console.log(
+        `HOOK useChatData: Fetching history and details for project ${projectId}`
+      );
+      // Fetch history and details concurrently
+      const [historyResponse, projectInfoResponse] = await Promise.allSettled([
+        apiClient.get(`/api/messaging/history/project/${projectId}`),
+        apiClient.get(`/api/projects/${projectId}`),
       ]);
 
-      const projectData =
-        projectInfoResponse?.data?.data || projectInfoResponse?.data?.project;
-      if (projectData?.id && projectData?.title) {
-        fetchedDetails = { id: projectData.id, name: projectData.title };
-        allowConnection = true;
+      // Process Project Details
+      if (projectInfoResponse.status === "fulfilled") {
+        const projectData =
+          projectInfoResponse.value.data?.data ||
+          projectInfoResponse.value.data?.project;
+        if (projectData?.id && projectData?.title) {
+          fetchedDetails = { id: projectData.id, name: projectData.title };
+          allowConnection = true; // Got details, allow connection attempt
+        } else {
+          console.warn(
+            "HOOK useChatData: Project details structure unexpected:",
+            projectInfoResponse.value.data
+          );
+          fetchedDetails = { id: projectId, name: `Project ${projectId}` }; // Fallback name
+          // Do not necessarily set allowConnection to true here, depend on history
+        }
       } else {
+        console.warn(
+          "HOOK useChatData: Failed to fetch project details:",
+          projectInfoResponse.reason?.message
+        );
+        // Set a fallback name, but don't assume connection is allowed yet
         fetchedDetails = { id: projectId, name: `Project ${projectId}` };
       }
 
-      if (
-        historyResponse.data?.success &&
-        Array.isArray(historyResponse.data.data)
-      ) {
-        fetchedMsgs = historyResponse.data.data;
-        allowConnection = true;
-        console.log(
-          `FETCH: Message history success. ${fetchedMsgs.length} messages.`
-        );
-      } else {
-        if (!allowConnection) {
-          throw new Error(
-            historyResponse.data?.message || "Failed to load message history."
+      // Process Message History
+      if (historyResponse.status === "fulfilled") {
+        if (
+          historyResponse.value.data?.success &&
+          Array.isArray(historyResponse.value.data.data)
+        ) {
+          fetchedMsgs = historyResponse.value.data.data;
+          allowConnection = true; // Successfully got history, allow connection attempt
+          console.log(
+            `HOOK useChatData: Message history success. ${fetchedMsgs.length} messages.`
           );
+        } else {
+          console.warn(
+            "HOOK useChatData: Message history fetch non-success:",
+            historyResponse.value.data?.message
+          );
+          fetchedMsgs = [];
+          // If project details failed AND history failed, we have a problem
+          if (!allowConnection) {
+            errorMsg =
+              historyResponse.value.data?.message ||
+              "Failed to load message history.";
+          }
         }
-        console.warn(
-          "FETCH: Message history fetch returned non-success or no data."
+      } else {
+        console.error(
+          `HOOK useChatData: Error fetching message history:`,
+          historyResponse.reason
         );
+        const err = historyResponse.reason;
+        allowConnection = false; // History fetch failed, disallow connection
+        if (err.response) {
+          errorMsg =
+            err.response.data?.message || `Error ${err.response.status}`;
+          if (err.response.status === 403)
+            errorMsg = "Access Denied to this project chat.";
+          else if (err.response.status === 404)
+            errorMsg = "Project chat not found.";
+          else if (err.response.status === 401)
+            errorMsg = "Authentication expired. Please log in.";
+        } else if (err.request) {
+          errorMsg = "Network Error: Could not reach server for history.";
+        } else {
+          errorMsg =
+            err.message || "An unknown error occurred fetching history.";
+        }
         fetchedMsgs = [];
       }
     } catch (err) {
-      console.error(`FETCH: Error during initial data fetch:`, err);
+      // Catch errors not related to specific promises (e.g., network issues before requests)
+      console.error(
+        `HOOK useChatData: Unexpected error during initial data fetch:`,
+        err
+      );
       allowConnection = false;
-      if (err.response) {
-        errorMsg = err.response.data?.message || `Error ${err.response.status}`;
-        if (err.response.status === 403)
-          errorMsg = "Access Denied to this project chat.";
-        else if (err.response.status === 404)
-          errorMsg = "Project chat not found.";
-        else if (err.response.status === 401)
-          errorMsg = "Authentication expired. Please log in.";
-      } else if (err.request) {
-        errorMsg = "Network Error. Could not reach server.";
-      } else {
-        errorMsg = err.message || "An unknown error occurred during fetch.";
-      }
-      fetchedDetails = fetchedDetails ||
-        projectDetails || { id: projectId, name: `Project ${projectId}` };
+      errorMsg = err.message || "An unexpected error occurred during setup.";
+      fetchedDetails = fetchedDetails || {
+        id: projectId,
+        name: `Project ${projectId}`,
+      };
       fetchedMsgs = [];
     } finally {
-      console.log("FETCH: Applying state updates.");
-      setProjectDetails(fetchedDetails);
-      setMessages(fetchedMsgs);
-      setFetchError(errorMsg);
-      setIsLoading(false);
-      setCanAttemptConnect(allowConnection);
       console.log(
-        `FETCH: Final state - errorMsg=${errorMsg}, allowConnection=${allowConnection}`
+        `HOOK useChatData: Applying state - Error: ${errorMsg}, Allow Connection: ${allowConnection}`
       );
+      setProjectDetails(fetchedDetails);
+      setInitialMessages(fetchedMsgs);
+      setFetchError(errorMsg);
+      setCanAttemptConnect(allowConnection);
+      setIsLoading(false);
       if (fetchedMsgs.length > 0 && allowConnection && !errorMsg) {
         scrollToBottom("auto");
       }
     }
   }, [currentUserId, projectId, scrollToBottom]);
 
-  // Effect to run initial data fetch
+  // Effect to run initial data fetch on mount or when projectId/currentUser changes
   useEffect(() => {
     fetchInitialData();
-    return () => {
-      if (socketRef.current) {
-        console.log(
-          "ChatPage Unmount: Disconnecting socket",
-          socketRef.current.id
-        );
-        socketRef.current.disconnect();
-        socketRef.current = null;
-        setIsConnected(false);
-      }
-    };
-  }, [fetchInitialData]);
+  }, [fetchInitialData]); // fetchInitialData is memoized by useCallback
 
-  // --- Fetch Members ---
-  const fetchMembers = useCallback(async () => {
-    if (!projectId) return;
-    setLoadingMembers(true);
-    setMembersError(null);
-    const token = localStorage.getItem("authToken");
-    if (!token) {
-      setMembersError("Authentication token not found.");
-      setLoadingMembers(false);
-      return;
-    }
-    try {
-      const res = await axios.get(
-        `${API_BASE_URL}/api/projects/${projectId}/members`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      // *** CORRECTED to use res.data.data ***
-      if (res.data?.success && Array.isArray(res.data.data)) {
-        // The backend controller now sends the fully formatted list in 'data'
-        const formattedMemberList = res.data.data;
-        setMemberList(formattedMemberList);
-      } else {
-        // Backend reported failure or unexpected structure
-        throw new Error(
-          res.data?.message || "Failed to process member list from server."
-        );
-      }
-    } catch (err) {
-      console.error("Fetch members error:", err); // Log the full error
-      let msg = "Could not load members.";
-      if (err.response) {
-        msg = err.response.data?.message || `Error ${err.response.status}`;
-      } else if (err.request) {
-        msg = "Network Error. Could not reach server.";
-      } else {
-        msg = err.message;
-      }
-      setMembersError(msg);
-      setMemberList([]);
-    } finally {
-      setLoadingMembers(false);
-    }
-  }, [projectId]);
-
-  const handleOpenMembersModal = () => {
-    setShowMembersModal(true);
-    // Fetch only if list is empty and not already loading/error
-    if (memberList.length === 0 && !loadingMembers && !membersError) {
-      fetchMembers();
-    }
+  return {
+    projectDetails,
+    initialMessages,
+    isLoading,
+    fetchError,
+    canAttemptConnect,
+    fetchInitialData,
   };
+}
 
-  // --- WebSocket Connection useEffect ---
+/**
+ * Custom Hook for managing WebSocket connection and events.
+ * @param {boolean} canAttemptConnect - Flag indicating if connection should be tried.
+ * @param {string|number|null} currentUserId
+ * @param {string|number|null} projectId
+ * @param {string|null} roomName
+ * @param {function} onNewMessageCallback - Called when a new message arrives.
+ * @returns {{
+ *  socket: Socket | null,
+ *  isConnected: boolean,
+ *  socketError: string | null,
+ *  typingUsers: Map<string|number, {username: string, timerId: number}>,
+ *  sendMessage: (messageData: Omit<Message, 'id' | 'createdAt' | 'sender'>) => Promise<boolean>,
+ *  sendTyping: () => void,
+ *  sendStopTyping: () => void
+ * }}
+ */
+function useChatSocket(
+  canAttemptConnect,
+  currentUserId,
+  projectId,
+  roomName,
+  onNewMessageCallback
+) {
+  const socketRef = useRef(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [socketError, setSocketError] = useState(null);
+  const [typingUsers, setTypingUsers] = useState(new Map());
+  const typingTimeoutRef = useRef(null);
+
   useEffect(() => {
     console.log(
-      `Socket Effect Triggered: canAttemptConnect=${canAttemptConnect}, currentUserId=${currentUserId}, projectId=${projectId}, roomName=${roomName}, tokenExists=${!!localStorage.getItem(
-        "authToken"
-      )}, socketConnected=${socketRef.current?.connected}`
+      `HOOK useChatSocket: Effect Triggered. canAttemptConnect=${canAttemptConnect}, roomName=${roomName}, currentUserId=${currentUserId}, socketConnected=${socketRef.current?.connected}`
     );
 
     if (!canAttemptConnect || !currentUserId || !projectId || !roomName) {
       console.log(
-        "Socket Effect: Skipping connection (pre-conditions not met)."
+        "HOOK useChatSocket: Skipping connection (pre-conditions not met)."
       );
       if (socketRef.current) {
         console.log(
-          "Socket Effect: Disconnecting existing socket due to unmet pre-conditions."
+          "HOOK useChatSocket: Disconnecting existing socket due to unmet pre-conditions."
         );
         socketRef.current.disconnect();
         socketRef.current = null;
@@ -321,43 +349,49 @@ function ChatPage({ currentUser }) {
       }
       return;
     }
-    const token = localStorage.getItem("authToken");
+
+    const token = getAuthToken();
     if (!token) {
-      console.log("Socket Effect: Skipping connection (no token).");
+      console.log("HOOK useChatSocket: Skipping connection (no token).");
+      setSocketError("Authentication token missing for socket connection.");
       return;
     }
+
+    // Avoid redundant connection attempts if already connected
     if (socketRef.current?.connected) {
       console.log(
-        `Socket Effect: Skipping connection (already connected, ID: ${socketRef.current.id}).`
+        `HOOK useChatSocket: Already connected (ID: ${socketRef.current.id}).`
       );
-      if (!isConnected) setIsConnected(true);
+      if (!isConnected) setIsConnected(true); // Sync state if needed
       return;
     }
+
+    // Clean up any previous non-connected socket instance before creating a new one
     if (socketRef.current) {
       console.log(
-        "Socket Effect: Cleaning up existing non-connected socket before retry."
+        "HOOK useChatSocket: Cleaning up stale socket instance before reconnecting."
       );
       socketRef.current.disconnect();
       socketRef.current = null;
     }
 
     console.log(
-      `Socket Effect: *** ATTEMPTING CONNECTION *** to ${API_BASE_URL} for room: ${roomName}`
+      `HOOK useChatSocket: *** ATTEMPTING CONNECTION *** to ${API_BASE_URL} for room: ${roomName}`
     );
-    setSocketError(null);
+    setSocketError(null); // Clear previous errors on new attempt
+
     const newSocket = io(API_BASE_URL, {
       auth: { token },
-      transports: ["websocket"],
+      transports: ["websocket"], // Prioritize WebSocket
       query: { userId: currentUserId },
       reconnectionAttempts: 3,
       timeout: SOCKET_TIMEOUT,
     });
     socketRef.current = newSocket;
 
+    // --- Socket Event Handlers ---
     newSocket.on("connect", () => {
-      console.log(
-        `>>> Socket CONNECTED: ${newSocket.id}. Setting isConnected=true.`
-      );
+      console.log(`>>> Socket CONNECTED: ${newSocket.id}`);
       setIsConnected(true);
       setSocketError(null);
       newSocket.emit("joinChatRoom", { roomName }, (ack) => {
@@ -366,119 +400,155 @@ function ChatPage({ currentUser }) {
         } else {
           console.error(`Socket failed to join room ${roomName}:`, ack?.error);
           setSocketError(`Join Error: ${ack?.error || "Server rejected join"}`);
+          // Consider disconnecting if join fails critically? Maybe not, allow retries?
         }
       });
     });
+
     newSocket.on("disconnect", (reason) => {
       console.log(
-        `>>> Socket DISCONNECTED: ${newSocket.id}, Reason: ${reason}. Setting isConnected=false.`
+        `>>> Socket DISCONNECTED: ${newSocket.id}, Reason: ${reason}`
       );
       setIsConnected(false);
+      // Only show persistent error if disconnect wasn't manual client-side
       if (reason !== "io client disconnect") {
         setSocketError("Connection lost. Attempting to reconnect...");
       }
+      setTypingUsers(new Map()); // Clear typing users on disconnect
+      // Nullify ref ONLY if it's the same socket instance that disconnected
       if (socketRef.current?.id === newSocket.id) {
         socketRef.current = null;
       }
     });
+
     newSocket.on("connect_error", (err) => {
-      console.error(
-        `>>> Socket CONNECT_ERROR: ${err.message}. Setting isConnected=false. Data:`,
-        err.data
-      );
+      console.error(`>>> Socket CONNECT_ERROR: ${err.message}`, err.data);
       setIsConnected(false);
       setSocketError(
-        `Connection Failed: ${err.message}. Please check network or try again later.`
+        `Connection Failed: ${err.message}. Check network or server status.`
       );
+      // Nullify ref ONLY if it's the same socket instance that failed
       if (socketRef.current?.id === newSocket.id) {
         socketRef.current = null;
       }
     });
+
     newSocket.on("newMessage", (message) => {
       console.log("<<< Received newMessage event:", message);
-      if (!message || !message.projectId || !message.id) {
+      if (
+        !message ||
+        typeof message !== "object" ||
+        !message.projectId ||
+        !message.id
+      ) {
         console.warn("Received invalid message structure:", message);
         return;
       }
-      if (message.projectId.toString() === projectId?.toString()) {
-        const msg = {
+      // Ensure message is for the current project
+      if (message.projectId?.toString() === projectId?.toString()) {
+        // Ensure sender object is present, create fallback if needed
+        const msgWithSender = {
           ...message,
           sender: message.sender || {
             id: message.senderId,
-            username: "Unknown",
+            username: "Unknown User",
           },
         };
-        setMessages((prev) =>
-          prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]
-        );
-        scrollToBottom("smooth");
+        onNewMessageCallback(msgWithSender);
       } else {
         console.log(
           `Ignoring message for different project: ${message.projectId}`
         );
       }
     });
+
     newSocket.on("userTyping", ({ userId, username }) => {
-      if (userId?.toString() === currentUserId?.toString()) return;
-      setTypingUsers((prev) => {
-        const map = new Map(prev);
-        if (map.has(userId)) clearTimeout(map.get(userId).timerId);
-        const timerId = setTimeout(
-          () =>
-            setTypingUsers((curr) => {
-              const mA = new Map(curr);
-              mA.delete(userId);
-              return mA;
-            }),
-          3000
-        );
-        map.set(userId, { username, timerId });
-        return map;
-      });
-    });
-    newSocket.on("userStopTyping", ({ userId }) => {
-      if (userId?.toString() === currentUserId?.toString()) return;
-      setTypingUsers((prev) => {
-        const map = new Map(prev);
-        if (map.has(userId)) {
-          clearTimeout(map.get(userId).timerId);
-          map.delete(userId);
+      if (!userId || userId.toString() === currentUserId?.toString()) return; // Ignore self
+      setTypingUsers((prevMap) => {
+        const newMap = new Map(prevMap);
+        // Clear existing timer for this user if they type again
+        if (newMap.has(userId)) {
+          clearTimeout(newMap.get(userId).timerId);
         }
-        return map;
+        // Set a new timer to remove the user after a delay
+        const timerId = setTimeout(() => {
+          setTypingUsers((currentMap) => {
+            const updatedMap = new Map(currentMap);
+            if (updatedMap.has(userId)) {
+              console.log(`Typing timeout for ${username} (${userId})`);
+              updatedMap.delete(userId);
+            }
+            return updatedMap;
+          });
+        }, TYPING_TIMEOUT_DURATION);
+
+        newMap.set(userId, { username: username || `User ${userId}`, timerId });
+        console.log(
+          `User typing: ${username} (${userId}). Current typers: ${Array.from(
+            newMap.keys()
+          )}`
+        );
+        return newMap;
       });
     });
 
-    return () => {
-      const socketInstanceToClean = newSocket;
-      console.log(
-        `Socket Cleanup Effect running for socket: ${socketInstanceToClean.id}`
-      );
-      try {
-        socketInstanceToClean.off("connect");
-        socketInstanceToClean.off("disconnect");
-        socketInstanceToClean.off("connect_error");
-        socketInstanceToClean.off("newMessage");
-        socketInstanceToClean.off("userTyping");
-        socketInstanceToClean.off("userStopTyping");
-        if (socketInstanceToClean.connected) {
-          console.log(`Emitting leaveChatRoom for ${roomName} on cleanup`);
-          socketInstanceToClean.emit("leaveChatRoom", { roomName });
-        }
-        console.log(
-          `Disconnecting socket instance ${socketInstanceToClean.id}`
-        );
-        socketInstanceToClean.disconnect();
-      } catch (e) {
-        console.error("Socket cleanup error during disconnect:", e);
-      } finally {
-        if (socketRef.current?.id === socketInstanceToClean.id) {
-          socketRef.current = null;
-          console.log("Socket Cleanup: socketRef nullified.");
-        } else {
+    newSocket.on("userStopTyping", ({ userId }) => {
+      if (!userId || userId.toString() === currentUserId?.toString()) return; // Ignore self
+      setTypingUsers((prevMap) => {
+        if (prevMap.has(userId)) {
           console.log(
-            "Socket Cleanup: socketRef already holds a different instance or is null."
+            `User stopped typing: ${prevMap.get(userId)?.username} (${userId})`
           );
+          clearTimeout(prevMap.get(userId).timerId); // Clear the timeout
+          const newMap = new Map(prevMap);
+          newMap.delete(userId);
+          console.log(`Remaining typers: ${Array.from(newMap.keys())}`);
+          return newMap;
         }
+        return prevMap; // No change if user wasn't in the map
+      });
+    });
+
+    // --- Cleanup Function ---
+    return () => {
+      const socketInstanceToClean = newSocket; // Capture the instance
+      console.log(
+        `HOOK useChatSocket: Cleanup Effect running for socket: ${socketInstanceToClean.id}`
+      );
+      // Remove all listeners specific to this instance
+      socketInstanceToClean.off("connect");
+      socketInstanceToClean.off("disconnect");
+      socketInstanceToClean.off("connect_error");
+      socketInstanceToClean.off("newMessage");
+      socketInstanceToClean.off("userTyping");
+      socketInstanceToClean.off("userStopTyping");
+
+      // Clear any pending typing timeout on unmount
+      clearTimeout(typingTimeoutRef.current);
+
+      // If connected, attempt to leave the room cleanly
+      if (socketInstanceToClean.connected) {
+        console.log(
+          `HOOK useChatSocket: Emitting leaveChatRoom for ${roomName} on cleanup`
+        );
+        socketInstanceToClean.emit("leaveChatRoom", { roomName });
+      }
+
+      // Disconnect the socket
+      console.log(
+        `HOOK useChatSocket: Disconnecting socket instance ${socketInstanceToClean.id}`
+      );
+      socketInstanceToClean.disconnect();
+
+      // Crucially, check if the *current* socketRef points to the instance we just cleaned up
+      if (socketRef.current?.id === socketInstanceToClean.id) {
+        console.log("HOOK useChatSocket: Cleanup nullifying socketRef.");
+        socketRef.current = null;
+        setIsConnected(false); // Ensure connection state is false after cleanup
+      } else {
+        console.log(
+          "HOOK useChatSocket: Cleanup skipped nullifying socketRef (already different or null)."
+        );
       }
     };
   }, [
@@ -486,242 +556,517 @@ function ChatPage({ currentUser }) {
     currentUserId,
     projectId,
     roomName,
-    API_BASE_URL,
-    scrollToBottom,
-  ]);
+    onNewMessageCallback,
+  ]); // Dependencies for the effect
 
-  // --- File Handlers ---
-  const handleFileSelect = (event) => {
-    const file = event.target.files ? event.target.files[0] : null;
-    if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        setUploadError("File size exceeds the 10MB limit.");
-        setSelectedFile(null);
-        if (fileInputRef.current) fileInputRef.current.value = "";
-        return;
+  // --- Exposed Emitter Functions ---
+  const sendMessage = useCallback((messageData) => {
+    return new Promise((resolve, reject) => {
+      const currentSocket = socketRef.current;
+      if (!currentSocket?.connected) {
+        console.error("sendMessage: Socket not connected.");
+        setSocketError("Cannot send message: Not connected.");
+        return reject(new Error("Socket not connected"));
       }
-      console.log("File selected:", file.name);
-      setSelectedFile(file);
-      setUploadError(null);
-      setNewMessage("");
-    }
-  };
+      console.log("Emitting message:", messageData);
+      currentSocket
+        .timeout(SOCKET_TIMEOUT)
+        .emit("sendMessage", messageData, (err, ack) => {
+          if (err) {
+            console.error("Socket emit sendMessage error (timeout):", err);
+            setSocketError("Error: Message send timed out.");
+            reject(err);
+          } else if (ack?.success) {
+            console.log("Message emitted successfully via socket.");
+            setSocketError(null); // Clear error on success
+            resolve(true);
+          } else {
+            console.error("Socket emit sendMessage NACK:", ack?.error);
+            setSocketError(`Send failed: ${ack?.error || "Server error"}`);
+            reject(new Error(ack?.error || "Server rejected message"));
+          }
+        });
+    });
+  }, []); // No dependencies needed as it uses the ref
 
-  const clearSelectedFile = () => {
+  const sendTyping = useCallback(() => {
+    const currentSocket = socketRef.current;
+    if (!currentSocket?.connected || !roomName) return;
+    // Debounce or throttle might be overkill here, simple emit is fine
+    currentSocket.emit("typing", { roomName });
+    // We don't manage the timeout here, rely on the receiving end's logic
+  }, [roomName]); // Depends on roomName
+
+  const sendStopTyping = useCallback(() => {
+    const currentSocket = socketRef.current;
+    if (!currentSocket?.connected || !roomName) return;
+    currentSocket.emit("stopTyping", { roomName });
+  }, [roomName]); // Depends on roomName
+
+  return {
+    socket: socketRef.current,
+    isConnected,
+    socketError,
+    typingUsers,
+    sendMessage,
+    sendTyping,
+    sendStopTyping,
+  };
+}
+
+/**
+ * Custom Hook for handling file selection and upload.
+ * @param {string|number|null} projectId
+ * @returns {{
+ *  selectedFile: File | null,
+ *  isUploading: boolean,
+ *  uploadError: string | null,
+ *  handleFileSelect: (event: React.ChangeEvent<HTMLInputElement>) => void,
+ *  triggerFileInput: () => void,
+ *  clearSelectedFile: () => void,
+ *  uploadFile: () => Promise<object | null> // Returns file data on success, null on failure
+ * }}
+ */
+function useFileUpload(projectId) {
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const handleFileSelect = useCallback((event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      setSelectedFile(null);
+      return;
+    }
+
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setUploadError(`File size exceeds the ${MAX_FILE_SIZE_MB}MB limit.`);
+      setSelectedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = ""; // Reset input
+      return;
+    }
+
+    console.log(
+      "File selected:",
+      file.name,
+      `(${(file.size / 1024 / 1024).toFixed(2)} MB)`
+    );
+    setSelectedFile(file);
+    setUploadError(null); // Clear previous errors
+  }, []);
+
+  const clearSelectedFile = useCallback(() => {
     setSelectedFile(null);
     setUploadError(null);
     if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+      fileInputRef.current.value = ""; // Reset the hidden input
     }
-  };
+    console.log("Cleared selected file.");
+  }, []);
 
-  // --- Send Message / Upload File Handler ---
-  const handleSendMessage = useCallback(
-    async (e) => {
-      if (e) e.preventDefault();
-      const currentSocket = socketRef.current;
+  const triggerFileInput = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
 
+  const uploadFile = useCallback(async () => {
+    if (!selectedFile || !projectId) {
+      console.error("uploadFile: No file selected or projectId missing.");
+      setUploadError("Cannot upload: File or Project ID missing.");
+      return null;
+    }
+
+    const token = getAuthToken();
+    if (!token) {
+      setUploadError("Authentication required for upload.");
+      return null;
+    }
+
+    setIsUploading(true);
+    setUploadError(null);
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+
+    try {
       console.log(
-        `handleSendMessage: Triggered. isConnected(React State)=${isConnected}, currentSocket?.connected=${currentSocket?.connected}, isSending=${isSending}, isUploading=${isUploading}, selectedFile=${selectedFile?.name}, newMessage=${newMessage}`
+        `HOOK useFileUpload: Uploading ${selectedFile.name} for project ${projectId}`
+      );
+      const apiClient = createAxiosInstance(token); // Use instance with token
+      const response = await apiClient.post(
+        `/api/messaging/upload/project/${projectId}`,
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } }
       );
 
-      if (!currentSocket?.connected) {
-        console.error(
-          "handleSendMessage: Send aborted, socket is not connected."
+      if (response.data?.success && response.data.data) {
+        console.log("HOOK useFileUpload: Upload Success:", response.data.data);
+        // Don't clear file here, let the caller do it after successful message emission
+        return response.data.data; // Return { fileUrl, fileName, mimeType, fileSize }
+      } else {
+        throw new Error(
+          response.data?.message || "File upload failed on server."
         );
-        setSocketError(
-          "Not connected to send message. Please wait or check connection."
-        );
-        return;
       }
-      if (!projectId || !currentUserId) {
-        console.error(
-          "handleSendMessage: Send aborted, missing projectId or currentUserId."
-        );
-        setSocketError("Cannot send message - missing critical IDs.");
-        return;
+    } catch (err) {
+      console.error("HOOK useFileUpload: Upload Axios Error:", err);
+      let errorMsg = "Failed to upload file.";
+      if (err instanceof AxiosError && err.response) {
+        errorMsg =
+          err.response.data?.message ||
+          `Upload failed (${err.response.status})`;
+      } else if (err instanceof AxiosError && err.request) {
+        errorMsg = "Network error during upload.";
+      } else if (err instanceof Error) {
+        errorMsg = err.message;
       }
-      if (isSending || isUploading) {
+      setUploadError(errorMsg);
+      return null; // Indicate failure
+    } finally {
+      setIsUploading(false);
+    }
+  }, [selectedFile, projectId]);
+
+  return {
+    selectedFile,
+    isUploading,
+    uploadError,
+    handleFileSelect,
+    triggerFileInput,
+    clearSelectedFile,
+    uploadFile,
+    fileInputRef, // Expose ref for direct binding
+  };
+}
+
+/**
+ * Custom Hook for fetching project members.
+ * @param {string|number|null} projectId
+ * @returns {{
+ *   memberList: Member[],
+ *   loadingMembers: boolean,
+ *   membersError: string | null,
+ *   fetchMembers: () => Promise<void>
+ * }}
+ */
+function useProjectMembers(projectId) {
+  const [memberList, setMemberList] = useState([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [membersError, setMembersError] = useState(null);
+
+  const fetchMembers = useCallback(async () => {
+    if (!projectId) return;
+    console.log(
+      `HOOK useProjectMembers: Fetching members for project ${projectId}`
+    );
+    setLoadingMembers(true);
+    setMembersError(null);
+    const token = getAuthToken();
+    if (!token) {
+      setMembersError("Authentication token not found.");
+      setLoadingMembers(false);
+      return;
+    }
+
+    try {
+      const apiClient = createAxiosInstance(token);
+      const res = await apiClient.get(`/api/projects/${projectId}/members`);
+
+      if (res.data?.success && Array.isArray(res.data.data)) {
+        setMemberList(res.data.data);
         console.log(
-          "handleSendMessage: Send aborted, already sending/uploading."
+          `HOOK useProjectMembers: Successfully fetched ${res.data.data.length} members.`
         );
+      } else {
+        throw new Error(
+          res.data?.message || "Failed to process member list from server."
+        );
+      }
+    } catch (err) {
+      console.error("HOOK useProjectMembers: Fetch members error:", err);
+      let msg = "Could not load members.";
+      if (err instanceof AxiosError && err.response) {
+        msg =
+          err.response.data?.message ||
+          `Error loading members (${err.response.status})`;
+      } else if (err instanceof AxiosError && err.request) {
+        msg = "Network Error fetching members.";
+      } else if (err instanceof Error) {
+        msg = err.message;
+      }
+      setMembersError(msg);
+      setMemberList([]); // Clear list on error
+    } finally {
+      setLoadingMembers(false);
+    }
+  }, [projectId]);
+
+  // Note: This hook doesn't fetch automatically on mount.
+  // It's designed to be triggered manually (e.g., when opening the modal).
+
+  return { memberList, loadingMembers, membersError, fetchMembers };
+}
+
+// --- ChatPage Component ---
+function ChatPage({ currentUser }) {
+  const { projectId: projectIdParam } = useParams();
+  const navigate = useNavigate();
+
+  // --- Derived Values ---
+  const projectId = useMemo(
+    () => (projectIdParam ? parseInt(projectIdParam, 10) : null),
+    [projectIdParam]
+  );
+  const currentUserId = currentUser?.id;
+  const roomName = useMemo(() => getRoomName(projectId), [projectId]);
+
+  // --- State ---
+  const [messages, setMessages] = useState([]);
+  const [newMessageInput, setNewMessageInput] = useState(""); // Input field state
+  const [isSendingText, setIsSendingText] = useState(false); // Specifically for text messages
+  const [showMembersModal, setShowMembersModal] = useState(false);
+
+  // --- Refs ---
+  const messagesEndRef = useRef(null);
+
+  // --- Callbacks ---
+  const scrollToBottom = useCallback((behavior = "smooth") => {
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
+    }, 150); // Delay allows layout adjustments
+  }, []);
+
+  // --- Custom Hook Integrations ---
+
+  // 1. Fetch Initial Chat Data
+  const {
+    projectDetails,
+    initialMessages,
+    isLoading: isLoadingData,
+    fetchError,
+    canAttemptConnect,
+    fetchInitialData, // Expose refetch if needed later
+  } = useChatData(projectId, currentUser, scrollToBottom);
+
+  // 2. Manage File Upload
+  const {
+    selectedFile,
+    isUploading,
+    uploadError,
+    handleFileSelect,
+    triggerFileInput,
+    clearSelectedFile,
+    uploadFile,
+    fileInputRef,
+  } = useFileUpload(projectId);
+
+  // 3. Manage WebSocket Connection & Events
+  const handleNewMessage = useCallback(
+    (newMessage) => {
+      setMessages((prevMessages) => {
+        // Prevent duplicates based on message ID
+        if (prevMessages.some((m) => m.id === newMessage.id)) {
+          return prevMessages;
+        }
+        return [...prevMessages, newMessage];
+      });
+      scrollToBottom("smooth");
+    },
+    [scrollToBottom]
+  );
+
+  const {
+    isConnected,
+    socketError: socketConnectionError, // Rename to avoid conflict with fetchError
+    typingUsers,
+    sendMessage: emitSendMessageViaSocket,
+    sendTyping: emitTypingViaSocket,
+    sendStopTyping: emitStopTypingViaSocket,
+  } = useChatSocket(
+    canAttemptConnect,
+    currentUserId,
+    projectId,
+    roomName,
+    handleNewMessage
+  );
+
+  // 4. Fetch Project Members (triggered manually)
+  const { memberList, loadingMembers, membersError, fetchMembers } =
+    useProjectMembers(projectId);
+
+  // --- Effects ---
+
+  // Effect to populate messages state once initial data is loaded
+  useEffect(() => {
+    setMessages(initialMessages);
+  }, [initialMessages]);
+
+  // Effect to scroll down when messages array changes (after initial load)
+  useEffect(() => {
+    if (
+      messages.length > initialMessages.length ||
+      (messages.length > 0 && initialMessages.length === 0)
+    ) {
+      scrollToBottom("smooth");
+    }
+  }, [messages, initialMessages.length, scrollToBottom]);
+
+  // Combine sending states for disabling UI elements
+  const isSendingOrUploading = isSendingText || isUploading;
+
+  // --- Event Handlers ---
+
+  const handleOpenMembersModal = useCallback(() => {
+    setShowMembersModal(true);
+    // Fetch members only if the list is empty and not already loading/error
+    if (memberList.length === 0 && !loadingMembers && !membersError) {
+      fetchMembers();
+    }
+  }, [memberList.length, loadingMembers, membersError, fetchMembers]);
+
+  const handleSendMessage = useCallback(
+    async (event) => {
+      event?.preventDefault(); // Allow calling without event (e.g., retry button)
+
+      if (!isConnected || !projectId || !currentUserId) {
+        console.error(
+          "handleSendMessage: Preconditions not met (connection/IDs)."
+        );
+        // Error state is handled by useChatSocket hook, maybe add a transient UI error?
+        return;
+      }
+      if (isSendingOrUploading) {
+        console.warn("handleSendMessage: Already sending/uploading.");
         return;
       }
 
-      // File Upload Logic
+      // --- File Upload Path ---
       if (selectedFile) {
-        setIsUploading(true);
-        setUploadError(null);
-        setSocketError(null);
-        const formData = new FormData();
-        formData.append("file", selectedFile);
-        try {
-          console.log(
-            `Uploading file: ${selectedFile.name} for project ${projectId}`
-          );
-          const token = localStorage.getItem("authToken");
-          const uploadResponse = await axios.post(
-            `${API_BASE_URL}/api/messaging/upload/project/${projectId}`,
-            formData,
-            {
-              headers: {
-                "Content-Type": "multipart/form-data",
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          );
+        // isUploading state is managed by useFileUpload hook
+        const uploadedFileData = await uploadFile(); // Returns file data or null
 
-          if (uploadResponse.data?.success && uploadResponse.data.data) {
-            const fileData = uploadResponse.data.data;
-            console.log("File Upload Success, emitting message:", fileData);
-            const fileMessageData = {
-              senderId: currentUserId,
-              projectId,
-              roomName,
-              messageType: "file",
-              fileUrl: fileData.fileUrl,
-              fileName: fileData.fileName,
-              mimeType: fileData.mimeType,
-              fileSize: fileData.fileSize,
-              content: `File: ${fileData.fileName}`, // Placeholder or filename
-            };
-            currentSocket
-              .timeout(SOCKET_TIMEOUT)
-              .emit("sendMessage", fileMessageData, (err, ack) => {
-                if (err) {
-                  console.error("Socket emit (file) error:", err);
-                  setSocketError("Error: File message send timed out.");
-                } else if (!ack?.success) {
-                  console.error("Socket emit (file) NACK:", ack?.error);
-                  setSocketError(
-                    `Send failed: ${ack?.error || "Server error"}`
-                  );
-                } else {
-                  console.log("File message emitted successfully via socket.");
-                }
-              });
-            clearSelectedFile();
-          } else {
-            throw new Error(
-              uploadResponse.data?.message || "File upload failed on server."
-            );
+        if (uploadedFileData) {
+          // Construct the message payload for the socket
+          const fileMessageData = {
+            senderId: currentUserId,
+            projectId,
+            roomName,
+            messageType: "file",
+            fileUrl: uploadedFileData.fileUrl,
+            fileName: uploadedFileData.fileName,
+            mimeType: uploadedFileData.mimeType,
+            fileSize: uploadedFileData.fileSize,
+            content: `File: ${uploadedFileData.fileName}`, // Fallback content
+          };
+          try {
+            await emitSendMessageViaSocket(fileMessageData);
+            console.log("File message emitted successfully.");
+            clearSelectedFile(); // Clear file input *after* successful emission
+          } catch (error) {
+            console.error("Failed to emit file message via socket:", error);
+            // Socket error state is already set by the hook
+            // Optionally set a more specific error here if needed
           }
-        } catch (err) {
-          console.error("File Upload Axios Error:", err);
-          let errorMsg = "Failed to upload file.";
-          if (err.response)
-            errorMsg =
-              err.response.data?.message ||
-              `Upload failed (${err.response.status})`;
-          else if (err.request) errorMsg = "Network error during upload.";
-          else errorMsg = err.message;
-          setUploadError(errorMsg);
-        } finally {
-          setIsUploading(false);
+        } else {
+          console.error(
+            "handleSendMessage: File upload failed, message not sent."
+          );
+          // uploadError state is already set by useFileUpload hook
         }
       }
-      // Text Message Logic
+      // --- Text Message Path ---
       else {
-        const contentToSend = newMessage.trim();
-        if (!contentToSend) return;
-        setIsSending(true);
-        setSocketError(null);
-        setUploadError(null);
-        const messageData = {
+        const contentToSend = newMessageInput.trim();
+        if (!contentToSend) return; // Don't send empty messages
+
+        setIsSendingText(true);
+        const textMessageData = {
           senderId: currentUserId,
           projectId,
           content: contentToSend,
           roomName,
           messageType: "text",
         };
-        console.log("Emitting text message:", messageData);
-        currentSocket
-          .timeout(SOCKET_TIMEOUT)
-          .emit("sendMessage", messageData, (err, ack) => {
-            setIsSending(false);
-            if (err) {
-              console.error("Socket emit (text) error:", err);
-              setSocketError("Error: Message send timed out.");
-            } else if (ack?.success) {
-              console.log("Text message emitted successfully.");
-              setNewMessage("");
-            } else {
-              console.error("Socket emit (text) NACK:", ack?.error);
-              setSocketError(`Send failed: ${ack?.error || "Server error"}`);
-            }
-          });
+
+        try {
+          await emitSendMessageViaSocket(textMessageData);
+          console.log("Text message emitted successfully.");
+          setNewMessageInput(""); // Clear input on success
+          emitStopTypingViaSocket(); // Ensure typing indicator stops
+        } catch (error) {
+          console.error("Failed to emit text message via socket:", error);
+          // Socket error state is already set by the hook
+        } finally {
+          setIsSendingText(false);
+        }
       }
     },
     [
-      // Dependencies
-      newMessage,
-      selectedFile,
-      currentUserId,
-      projectId,
-      roomName,
-      isSending,
-      isUploading,
-      API_BASE_URL,
       isConnected,
+      projectId,
+      currentUserId,
+      isSendingOrUploading,
+      selectedFile,
+      newMessageInput,
+      uploadFile,
+      emitSendMessageViaSocket,
+      clearSelectedFile,
+      roomName,
+      emitStopTypingViaSocket, // Added dependency
     ]
   );
 
-  // Typing Handlers
+  // Optimised typing handlers - avoid sending if file is selected
   const handleTyping = useCallback(() => {
-    const currentSocket = socketRef.current;
-    if (!currentSocket?.connected || !roomName || selectedFile) return;
-    clearTimeout(typingTimeoutRef.current);
-    currentSocket.emit("typing", { roomName });
-    typingTimeoutRef.current = setTimeout(() => {}, 2500);
-  }, [roomName, selectedFile]);
+    if (!selectedFile) {
+      emitTypingViaSocket();
+    }
+  }, [selectedFile, emitTypingViaSocket]);
 
   const handleStopTyping = useCallback(() => {
-    const currentSocket = socketRef.current;
-    if (!currentSocket?.connected || !roomName || selectedFile) return;
-    clearTimeout(typingTimeoutRef.current);
-    currentSocket.emit("stopTyping", { roomName });
-  }, [roomName, selectedFile]);
+    if (!selectedFile) {
+      emitStopTypingViaSocket();
+    }
+  }, [selectedFile, emitStopTypingViaSocket]);
 
   // --- Render Logic ---
 
-  // Initial Loading State
-  if (isLoading) {
+  // Loading State
+  if (isLoadingData) {
     return (
-      <div className="flex justify-center items-center h-[calc(100vh-8rem)] p-4">
+      <div className="flex justify-center items-center h-[calc(100vh-5rem)] p-4">
         <LoadingSpinner size="xl" message="Loading Chat..." />
       </div>
     );
   }
 
-  // Fatal Error State
+  // Fatal Error State (Access Denied, Not Found, Auth Errors)
   const isFatalError =
     fetchError &&
-    !isLoading &&
     (fetchError.includes("Access Denied") ||
       fetchError.includes("Not Found") ||
       fetchError.includes("Invalid Project ID") ||
-      fetchError.includes("Authentication Error"));
+      fetchError.includes("Authentication Error") ||
+      fetchError.includes("Authentication token")); // Covers token issues from hooks too
+
   if (isFatalError) {
+    const isAuthError = fetchError.includes("Authentication");
     const isForbidden = fetchError.includes("Access Denied");
     const isNotFound =
       fetchError.includes("Not Found") ||
       fetchError.includes("Invalid Project ID");
-    const isAuthError = fetchError.includes("Authentication");
 
-    // Correct JSX for Fatal Error Display
     return (
       <div className="p-4 sm:p-8 max-w-2xl mx-auto text-center">
         <Link
           to={isAuthError ? "/login" : "/messages"}
           className="text-sm text-indigo-600 hover:underline mb-6 inline-flex items-center gap-1.5"
         >
-          <FaArrowLeft /> {isAuthError ? "Back to Login" : "Back to Chats"}
+          <FaArrowLeft /> {isAuthError ? "Back to Login" : "Back to Messages"}
         </Link>
         <div className="mt-4 p-6 bg-white rounded-lg shadow border border-red-200">
           {isForbidden || isAuthError ? (
             <FaLock className="text-red-500 h-12 w-12 mx-auto mb-4" />
           ) : (
-            // Covers Not Found and Invalid ID
             <FaExclamationCircle className="text-red-500 h-12 w-12 mx-auto mb-4" />
           )}
           <ErrorMessage
@@ -735,34 +1080,29 @@ function ChatPage({ currentUser }) {
                 : "Error Loading Chat"
             }
             message={fetchError}
-            // Only show retry if it's not a permission/existence/auth issue
-            onRetry={
-              !isForbidden && !isNotFound && !isAuthError
-                ? fetchInitialData
-                : undefined
-            }
+            // No retry for fatal errors like these
           />
         </div>
       </div>
     );
-    // End Correct JSX
   }
 
-  // Get typing users list
-  const otherTypingUsers = Array.from(typingUsers.values())
-    .filter((user) => user.username)
-    .map((user) => user.username);
+  // Calculate derived UI data within the render function or using useMemo if complex
+  const otherTypingUsernames = Array.from(typingUsers.values())
+    .map((user) => user.username)
+    .filter((username) => !!username);
 
-  // Main Chat UI
+  // --- Main Chat UI ---
   return (
     <>
-      <div className="flex flex-col h-[calc(100vh-5rem)] max-w-5xl mx-auto bg-white shadow-2xl rounded-b-lg border border-t-0 border-gray-200 overflow-hidden">
+      {/* Main container with consistent height and styling */}
+      <div className="flex flex-col h-[calc(100vh-5rem)] max-w-5xl mx-auto bg-white shadow-xl rounded-b-lg border border-t-0 border-gray-200 overflow-hidden">
         {/* Chat Header */}
-        <div className="flex items-center p-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100 flex-shrink-0 sticky top-0 z-20 shadow-sm">
+        <header className="flex items-center p-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100 flex-shrink-0 sticky top-0 z-20 shadow-sm">
           <Link
             to="/messages"
-            className="text-gray-500 hover:text-indigo-600 mr-4 p-2 rounded-full hover:bg-gray-200 transition-colors"
-            aria-label="Back to Chats"
+            className="text-gray-500 hover:text-indigo-600 mr-4 p-2 rounded-full hover:bg-gray-200 transition-colors duration-150 ease-in-out"
+            aria-label="Back to Messages"
           >
             <FaArrowLeft size="1.1em" />
           </Link>
@@ -771,9 +1111,11 @@ function ChatPage({ currentUser }) {
               <div className="flex-shrink-0 mr-3 h-10 w-10 bg-indigo-100 border border-indigo-200 rounded-full flex items-center justify-center shadow-inner">
                 <FaProjectDiagram className="w-5 h-5 text-indigo-600" />
               </div>
-              <div className="flex-grow overflow-hidden">
+              <div className="flex-grow min-w-0">
+                {" "}
+                {/* Added min-w-0 for proper truncation */}
                 <h2
-                  className="font-semibold text-gray-800 truncate text-xl"
+                  className="font-semibold text-gray-800 truncate text-lg sm:text-xl"
                   title={projectDetails.name}
                 >
                   {projectDetails.name || `Project ${projectId}`}
@@ -782,7 +1124,7 @@ function ChatPage({ currentUser }) {
               </div>
               <button
                 onClick={handleOpenMembersModal}
-                className="ml-4 flex-shrink-0 p-2 text-gray-500 hover:text-indigo-600 rounded-full hover:bg-gray-200 transition-colors"
+                className="ml-auto mr-3 flex-shrink-0 p-2 text-gray-500 hover:text-indigo-600 rounded-full hover:bg-gray-200 transition-colors duration-150 ease-in-out"
                 title="View Project Members"
                 aria-label="View Project Members"
               >
@@ -790,163 +1132,178 @@ function ChatPage({ currentUser }) {
               </button>
             </>
           ) : (
-            <h2 className="font-semibold text-gray-800 text-xl">
+            // Should generally not be seen if loading handles properly, but good fallback
+            <h2 className="font-semibold text-gray-800 text-lg sm:text-xl">
               Loading Chat...
             </h2>
           )}
+          {/* Connection Status Indicator */}
           <div
-            className={`ml-auto text-xs font-medium px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm ${
+            className={`flex-shrink-0 text-xs font-medium px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm transition-colors duration-300 ${
               isConnected
                 ? "bg-green-100 text-green-800 border border-green-200"
                 : "bg-yellow-100 text-yellow-800 border border-yellow-200 animate-pulse"
             }`}
-            title={isConnected ? "Connected" : "Connecting..."}
+            title={
+              isConnected
+                ? "Connected to real-time server"
+                : "Connecting to real-time server..."
+            }
           >
-            <FaWifi className="w-3 h-3" />{" "}
+            <FaWifi
+              className={`w-3 h-3 ${isConnected ? "" : "animate-pulse"}`}
+            />
             {isConnected ? "Online" : "Connecting"}
           </div>
-        </div>
+        </header>
 
         {/* Messages Area */}
-        <div className="flex-grow p-4 md:p-6 overflow-y-auto bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 relative custom-scrollbar">
+        <main className="flex-grow p-4 md:p-6 overflow-y-auto bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 relative custom-scrollbar">
           {/* Display Non-Fatal Fetch/Socket Errors */}
-          {fetchError && !isFatalError && (
+          {fetchError &&
+            !isFatalError && ( // Show non-fatal fetch errors here
+              <ErrorMessage
+                message={fetchError}
+                onClose={() => {
+                  /* Maybe allow manual dismiss? If so, need state */
+                }}
+                isDismissible={false} // Make non-dismissible unless fetchInitialData is exposed for retry
+                type="warning"
+                className="mb-3"
+              />
+            )}
+          {socketConnectionError && (
             <ErrorMessage
-              message={fetchError}
-              onClose={() => setFetchError(null)}
-              isDismissible={true}
+              message={socketConnectionError}
+              onClose={() => {
+                /* Maybe allow manual dismiss? */
+              }}
+              isDismissible={false} // Generally let the socket handle retries
               type="warning"
-            />
-          )}
-          {socketError && (
-            <ErrorMessage
-              message={socketError}
-              onClose={() => setSocketError(null)}
-              isDismissible={true}
-              type="warning"
+              className="mb-3"
             />
           )}
 
-          {/* Empty Chat Message */}
-          {messages.length === 0 && !fetchError && !isLoading && (
-            <div className="text-center py-20 px-6 text-gray-500">
-              {" "}
-              <FaComments className="mx-auto h-16 w-16 text-gray-300 mb-5" />{" "}
-              <p className="text-lg italic">No messages yet.</p>{" "}
-              <p className="text-base mt-1">
-                Start the conversation or send a file!
-              </p>{" "}
+          {/* Empty Chat Display */}
+          {!isLoadingData && messages.length === 0 && !fetchError && (
+            <div className="flex flex-col items-center justify-center h-full text-center py-10 px-6 text-gray-500">
+              <FaComments className="h-16 w-16 text-gray-300 mb-5" />
+              <p className="text-lg font-medium">It's quiet in here...</p>
+              <p className="text-sm mt-1">
+                Be the first to send a message or share a file!
+              </p>
             </div>
           )}
 
-          {/* List of Messages */}
-          <ul className="space-y-1">
+          {/* Messages List */}
+          <ul className="space-y-1 pb-2">
+            {" "}
+            {/* Added padding-bottom */}
             {messages.map((msg, index) => {
               const isCurrentUserSender =
                 msg.senderId?.toString() === currentUserId?.toString();
               const prevMessage = messages[index - 1];
+              const currentDateSeparator = formatDateSeparator(msg.createdAt);
+              const prevDateSeparator = prevMessage
+                ? formatDateSeparator(prevMessage.createdAt)
+                : null;
               const showDateSeparator =
-                !prevMessage ||
-                formatDateSeparator(msg.createdAt) !==
-                  formatDateSeparator(prevMessage.createdAt);
+                currentDateSeparator &&
+                currentDateSeparator !== prevDateSeparator;
               const isFileMessage = msg.messageType === "file";
 
               return (
-                <React.Fragment
-                  key={
-                    msg.id ||
-                    `msg-${msg.senderId}-${msg.createdAt || Date.now()}`
-                  }
-                >
-                  {" "}
-                  {/* Added fallback key */}
-                  {/* Date Separator Rendering */}
-                  {showDateSeparator && formatDateSeparator(msg.createdAt) && (
+                <React.Fragment key={msg.id || `msg-fallback-${index}`}>
+                  {/* Date Separator */}
+                  {showDateSeparator && (
                     <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="flex justify-center items-center my-6"
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.2 }}
+                      className="flex justify-center items-center my-5" // Increased margin
                     >
-                      <span className="px-3 py-1 bg-white text-gray-500 text-xs font-semibold rounded-full shadow border border-gray-200 flex items-center gap-1.5">
-                        <FaCalendarAlt className="w-3 h-3" />{" "}
-                        {formatDateSeparator(msg.createdAt)}
+                      <span className="px-3 py-1 bg-white text-gray-500 text-xs font-semibold rounded-full shadow-sm border border-gray-200 flex items-center gap-1.5">
+                        <FaCalendarAlt className="w-3 h-3" />
+                        {currentDateSeparator}
                       </span>
                     </motion.div>
                   )}
-                  {/* Message Bubble Rendering */}
+
+                  {/* Message Bubble */}
                   <motion.li
-                    initial={{ opacity: 0, y: isCurrentUserSender ? 10 : -10 }}
+                    initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className={`flex items-end gap-2.5 my-2 ${
+                    transition={{ duration: 0.3, ease: "easeOut" }}
+                    className={`flex items-end gap-2.5 my-1.5 ${
                       isCurrentUserSender ? "justify-end" : "justify-start"
                     }`}
                   >
-                    {/* Sender Avatar */}
+                    {/* Sender Avatar (only for others) */}
                     {!isCurrentUserSender && (
                       <div
-                        className="flex-shrink-0 self-start relative mt-1"
-                        title={msg.sender?.username || "User"}
+                        className="flex-shrink-0 self-start relative mt-1 group"
+                        title={msg.sender?.username || `User ${msg.senderId}`}
                       >
                         {msg.sender?.profilePictureUrl ? (
                           <img
                             src={msg.sender.profilePictureUrl}
-                            alt={msg.sender.username || ""}
-                            className="w-9 h-9 rounded-full object-cover border-2 border-white shadow"
-                            onError={(e) =>
-                              (e.target.src = "/default-avatar.png")
-                            }
+                            alt={`${msg.sender.username || "User"}'s avatar`}
+                            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover border-2 border-white shadow"
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = "/default-avatar.png";
+                            }}
                           />
                         ) : (
-                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-base font-semibold text-white shadow border-2 border-white">
-                            {" "}
-                            {(msg.sender?.username || "?")
-                              .charAt(0)
-                              .toUpperCase()}{" "}
+                          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-sm sm:text-base font-semibold text-white shadow border-2 border-white uppercase">
+                            {(msg.sender?.username || "?").charAt(0)}
                           </div>
                         )}
                       </div>
                     )}
+
                     {/* Message Content Box */}
                     <div
-                      className={`max-w-[70%] md:max-w-[65%] px-4 py-2.5 rounded-t-xl ${
+                      className={`max-w-[75%] sm:max-w-[70%] md:max-w-[65%] px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-t-xl text-sm sm:text-base ${
                         isCurrentUserSender
-                          ? "bg-gradient-to-br from-indigo-600 to-purple-600 text-white rounded-l-xl shadow-lg"
-                          : "bg-white text-gray-800 border border-gray-200 rounded-r-xl shadow-md"
+                          ? "bg-gradient-to-br from-indigo-600 to-purple-600 text-white rounded-l-xl shadow-md"
+                          : "bg-white text-gray-800 border border-gray-200 rounded-r-xl shadow-sm"
                       }`}
                     >
-                      {/* Sender Name */}
+                      {/* Sender Name (only for others) */}
                       {!isCurrentUserSender && (
                         <p className="text-xs font-bold mb-1 text-indigo-700">
-                          {" "}
-                          {msg.sender?.username || `User ${msg.senderId}`}{" "}
+                          {msg.sender?.username || `User ${msg.senderId}`}
                         </p>
                       )}
-                      {/* Text or File Link */}
+
+                      {/* Message Body (Text or File Link) */}
                       {isFileMessage ? (
                         <a
                           href={msg.fileUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className={`inline-flex items-center gap-2 text-sm font-medium hover:underline ${
+                          className={`inline-flex items-center gap-2 font-medium break-all ${
+                            // Added break-all for long names
                             isCurrentUserSender
-                              ? "text-indigo-100 hover:text-white"
-                              : "text-indigo-600 hover:text-indigo-800"
+                              ? "text-indigo-100 hover:text-white hover:underline"
+                              : "text-indigo-600 hover:text-indigo-800 hover:underline"
                           }`}
                           title={`Download ${msg.fileName || "file"}`}
                         >
                           <FaFileAlt className="w-4 h-4 flex-shrink-0" />
-                          <span className="truncate max-w-[200px] sm:max-w-[300px]">
+                          <span className="truncate max-w-[180px] xs:max-w-[250px] sm:max-w-[300px]">
                             {msg.fileName || "Attached File"}
                           </span>
+                          {/* Optional: File size display */}
                           {/* {msg.fileSize && <span className="text-xs opacity-70 ml-1">({(msg.fileSize / 1024 / 1024).toFixed(1)} MB)</span>} */}
                         </a>
                       ) : (
-                        <p className="text-sm whitespace-pre-wrap break-words">
-                          {" "}
-                          {msg.content}{" "}
+                        <p className="whitespace-pre-wrap break-words">
+                          {msg.content}
                         </p>
                       )}
+
                       {/* Timestamp */}
                       <p
                         className={`text-xs mt-1.5 opacity-80 ${
@@ -957,34 +1314,32 @@ function ChatPage({ currentUser }) {
                         title={
                           msg.createdAt
                             ? new Date(msg.createdAt).toLocaleString()
-                            : ""
+                            : "Sending..."
                         }
                       >
-                        {" "}
-                        {formatMessageTime(msg.createdAt) || "Sending..."}{" "}
+                        {formatMessageTime(msg.createdAt) || "..."}
                       </p>
                     </div>
-                    {/* Current User Avatar */}
+
+                    {/* Current User Avatar (only for self) */}
                     {isCurrentUserSender && (
                       <div
-                        className="flex-shrink-0 self-start relative mt-1"
+                        className="flex-shrink-0 self-start relative mt-1 group"
                         title={currentUser?.username || "You"}
                       >
                         {currentUser?.profilePictureUrl ? (
                           <img
                             src={currentUser.profilePictureUrl}
-                            alt={currentUser.username || ""}
-                            className="w-9 h-9 rounded-full object-cover border-2 border-white shadow"
-                            onError={(e) =>
-                              (e.target.src = "/default-avatar.png")
-                            }
+                            alt={`${currentUser.username || "Your"}'s avatar`}
+                            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover border-2 border-white shadow"
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = "/default-avatar.png";
+                            }}
                           />
                         ) : (
-                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-base font-semibold text-white shadow border-2 border-white">
-                            {" "}
-                            {(currentUser?.username || "?")
-                              .charAt(0)
-                              .toUpperCase()}{" "}
+                          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-sm sm:text-base font-semibold text-white shadow border-2 border-white uppercase">
+                            {(currentUser?.username || "?").charAt(0)}
                           </div>
                         )}
                       </div>
@@ -995,123 +1350,148 @@ function ChatPage({ currentUser }) {
             })}
             {/* Typing Indicator */}
             <AnimatePresence>
-              {" "}
-              {otherTypingUsers.length > 0 && (
+              {otherTypingUsernames.length > 0 && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
-                  className="text-left pl-12 pr-4 pt-1 pb-2"
+                  className="text-left pl-12 pr-4 pt-1 pb-2" // Adjusted padding
                 >
-                  {" "}
-                  <span className="text-xs italic text-gray-600 bg-gray-200 px-2 py-1 rounded-full shadow-sm">
-                    {" "}
-                    {otherTypingUsers.join(", ")}{" "}
-                    {otherTypingUsers.length === 1 ? "is" : "are"} typing...{" "}
-                  </span>{" "}
+                  <span className="text-xs italic text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full shadow-sm border border-gray-200">
+                    {otherTypingUsernames.join(", ")}
+                    {otherTypingUsernames.length === 1 ? " is" : " are"}{" "}
+                    typing...
+                  </span>
                 </motion.div>
-              )}{" "}
+              )}
             </AnimatePresence>
+            {/* Scroll Anchor */}
             <div ref={messagesEndRef} style={{ height: "1px" }} />
           </ul>
-        </div>
+        </main>
 
         {/* Input Area */}
-        <div className="p-4 border-t border-gray-200 bg-white flex-shrink-0">
-          {/* Selected File Display */}
-          {selectedFile && (
-            <div className="mb-2 flex items-center justify-between text-sm p-2 bg-indigo-50 border border-indigo-200 rounded-md">
-              {" "}
-              <div className="flex items-center gap-2 overflow-hidden">
-                {" "}
-                <FaPaperclip className="text-indigo-600 flex-shrink-0" />{" "}
-                <span
-                  className="text-indigo-800 truncate"
-                  title={selectedFile.name}
-                >
-                  {selectedFile.name}
-                </span>{" "}
-              </div>{" "}
-              <button
-                onClick={clearSelectedFile}
-                className="p-1 text-red-500 hover:text-red-700"
-                title="Clear selected file"
-              >
-                <FaTimesCircle />
-              </button>{" "}
-            </div>
-          )}
-          {/* Upload Error Display */}
-          {uploadError && (
-            <div className="mb-2">
-              {" "}
-              <ErrorMessage
-                message={uploadError}
-                onClose={() => setUploadError(null)}
-                type="error"
-                isDismissible={true}
-              />{" "}
+        <footer className="p-3 sm:p-4 border-t border-gray-200 bg-white flex-shrink-0">
+          {/* Selected File Preview & Upload Error */}
+          {(selectedFile || uploadError) && (
+            <div className="mb-2 px-2 py-1.5">
+              {selectedFile && (
+                <div className="flex items-center justify-between text-sm p-2 bg-indigo-50 border border-indigo-200 rounded-md">
+                  <div className="flex items-center gap-2 overflow-hidden min-w-0">
+                    {" "}
+                    {/* Added min-w-0 */}
+                    <FaPaperclip className="text-indigo-600 flex-shrink-0 h-4 w-4" />
+                    <span
+                      className="text-indigo-800 truncate font-medium"
+                      title={selectedFile.name}
+                    >
+                      {selectedFile.name}
+                    </span>
+                    <span className="text-xs text-gray-500 whitespace-nowrap">
+                      ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+                    </span>
+                  </div>
+                  <button
+                    onClick={clearSelectedFile}
+                    disabled={isUploading} // Disable clear while uploading
+                    className="p-1 text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Clear selected file"
+                    aria-label="Clear selected file"
+                  >
+                    <FaTimesCircle />
+                  </button>
+                </div>
+              )}
+              {uploadError && (
+                <div className="mt-1">
+                  {" "}
+                  {/* Add margin if both are shown (unlikely but possible) */}
+                  <ErrorMessage
+                    message={uploadError}
+                    onClose={() => {
+                      /* Upload errors are typically cleared on next action */
+                    }}
+                    type="error"
+                    isDismissible={false}
+                    className="text-xs"
+                  />
+                </div>
+              )}
             </div>
           )}
 
           {/* Input Form */}
           <form
             onSubmit={handleSendMessage}
-            className="flex items-center gap-3"
+            className="flex items-center gap-2 sm:gap-3"
           >
-            {/* File Upload Trigger */}
+            {/* Hidden File Input */}
             <input
               type="file"
               ref={fileInputRef}
               onChange={handleFileSelect}
               className="hidden"
-              disabled={!isConnected || isUploading || isSending}
-              accept="image/*,application/pdf,.doc,.docx,.txt,.csv,.xls,.xlsx"
+              disabled={!isConnected || isSendingOrUploading}
+              accept="image/*,application/pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,.zip,.rar,.mp3,.wav" // Expanded accepted types slightly
+              aria-hidden="true"
             />
+            {/* File Upload Button */}
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={!isConnected || isUploading || isSending}
-              className="p-3 text-gray-500 hover:text-indigo-600 disabled:opacity-50 rounded-full hover:bg-gray-100 transition-colors"
+              onClick={triggerFileInput}
+              disabled={!isConnected || isSendingOrUploading}
+              className="flex-shrink-0 p-2.5 sm:p-3 text-gray-500 hover:text-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-full hover:bg-gray-100 transition-colors duration-150"
+              title="Attach file"
+              aria-label="Attach file"
             >
-              {" "}
-              <FaPaperclip className="h-5 w-5" />{" "}
+              <FaPaperclip className="h-5 w-5" />
             </button>
-            {/* Text Input */}
+
+            {/* Text Input Field */}
             <input
               type="text"
-              value={newMessage}
+              value={newMessageInput}
               onChange={(e) => {
-                setNewMessage(e.target.value);
-                handleTyping();
+                setNewMessageInput(e.target.value);
+                handleTyping(); // Notify typing on change
               }}
-              onBlur={handleStopTyping}
-              placeholder={isConnected ? "Send a message..." : "Connecting..."}
-              className="flex-grow px-5 py-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-base disabled:bg-gray-100 disabled:cursor-not-allowed"
-              disabled={
-                !isConnected || isUploading || isSending || !!selectedFile
+              onBlur={handleStopTyping} // Notify stop typing on blur
+              placeholder={
+                !isConnected
+                  ? "Connecting..."
+                  : isUploading
+                  ? "Uploading file..."
+                  : selectedFile
+                  ? "File ready to send"
+                  : "Type a message..."
               }
+              className="flex-grow px-4 py-2.5 sm:px-5 sm:py-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm sm:text-base disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors duration-150"
+              disabled={!isConnected || isSendingOrUploading || !!selectedFile} // Disable if disconnected, sending, uploading, or file selected
               autoComplete="off"
+              aria-label="Message input"
             />
+
             {/* Send Button */}
             <button
               type="submit"
               disabled={
                 !isConnected ||
-                isUploading ||
-                isSending ||
-                (!selectedFile && !newMessage.trim())
+                isSendingOrUploading ||
+                (!selectedFile && !newMessageInput.trim()) // Disabled if nothing to send
               }
-              className="bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-full p-3.5 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all flex items-center justify-center shadow-md hover:shadow-lg"
+              className="flex-shrink-0 bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-full p-3 sm:p-3.5 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-150 flex items-center justify-center shadow-md hover:shadow-lg active:shadow-inner"
+              aria-label={
+                isSendingOrUploading ? "Sending" : "Send message or file"
+              }
             >
-              {isUploading || isSending ? (
+              {isSendingOrUploading ? (
                 <FaSpinner className="animate-spin h-5 w-5" />
               ) : (
                 <FaPaperPlane className="h-5 w-5" />
               )}
             </button>
           </form>
-        </div>
+        </footer>
       </div>
 
       {/* Member List Modal */}
@@ -1122,7 +1502,7 @@ function ChatPage({ currentUser }) {
         isLoading={loadingMembers}
         error={membersError}
         projectName={projectDetails?.name}
-        onRetry={fetchMembers}
+        onRetry={fetchMembers} // Allow retrying member fetch from modal
         currentUserId={currentUserId}
       />
     </>
