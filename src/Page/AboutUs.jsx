@@ -279,6 +279,7 @@ const AboutUs = () => {
           ))}
         </div>
       </motion.section>
+      {/* --- Meet the Team Section (Placeholder - Polished) --- */}
       <motion.section
         className="bg-gray-100 py-16 md:py-20 mb-16 md:mb-20"
         initial="hidden"
