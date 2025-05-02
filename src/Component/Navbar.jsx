@@ -83,7 +83,7 @@ const Navbar = ({
                   {" "}
                   Home{" "}
                 </NavLink>
-                <NavLink
+                {/* <NavLink
                   to="/explore"
                   className={({ isActive }) =>
                     `${commonClasses} ${
@@ -93,7 +93,7 @@ const Navbar = ({
                 >
                   {" "}
                   Explore{" "}
-                </NavLink>
+                </NavLink> */}
                 <NavLink
                   to="/projects"
                   className={({ isActive }) =>
@@ -288,7 +288,7 @@ const Navbar = ({
                 >
                   Home
                 </NavLink>
-                <NavLink
+                {/* <NavLink
                   to="/explore"
                   className={({ isActive }) =>
                     `${commonClasses} ${
@@ -298,7 +298,7 @@ const Navbar = ({
                   onClick={toggleMenu}
                 >
                   Explore
-                </NavLink>
+                </NavLink> */}
                 <NavLink
                   to="/projects"
                   className={({ isActive }) =>
