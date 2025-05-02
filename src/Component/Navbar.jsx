@@ -116,6 +116,17 @@ const Navbar = ({
                   {" "}
                   Publications{" "}
                 </NavLink>
+                <NavLink
+                  to="/AboutUS"
+                  className={({ isActive }) =>
+                    `${commonClasses} ${
+                      isActive ? activeClassName : inactiveClassName
+                    }`
+                  }
+                >
+                  {" "}
+                  AboutUS{" "}
+                </NavLink>
                 {/* Messages only shown if logged in, but still hidden in UserLayout */}
                 {isLoggedIn && (
                   <NavLink
@@ -320,6 +331,17 @@ const Navbar = ({
                   onClick={toggleMenu}
                 >
                   Publications
+                </NavLink>
+                <NavLink
+                  to="/aboutus"
+                  className={({ isActive }) =>
+                    `${commonClasses} ${
+                      isActive ? activeClassName : inactiveClassName
+                    }`
+                  }
+                  onClick={toggleMenu}
+                >
+                  AboutUS
                 </NavLink>
                 {isLoggedIn && (
                   <NavLink

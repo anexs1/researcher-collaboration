@@ -51,6 +51,7 @@ import ChatPage from "./Page/ChatPage";
 import PostPublicationPage from "./Page/PostPublicationPage";
 import AccountSettingsPage from "./Page/Settings/AccountSettingsPage";
 import NotFoundPage from "./Page/NotFoundPage";
+import AboutUs from "./Page/AboutUs";
 
 // --- Page Imports (Admin Facing) ---
 import AdminDashboardPage from "./Page/Admin/AdminDashboardPage";
@@ -309,6 +310,7 @@ function App() {
             {/* ================================================== */}
             <Route path="/" element={<Home />} />
             <Route path="/explore" element={<ExplorePage />} />
+            <Route path="/aboutus" element={<AboutUs />} />
             {/* --- Publicly Accessible Publication Routes --- */}
             {/* NOTE: Components must handle currentUser being null */}
             <Route path="/publications" element={<PublicationPage />} />
