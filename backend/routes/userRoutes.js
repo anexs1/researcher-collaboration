@@ -2,14 +2,13 @@
 import express from "express";
 import { protect } from "../middleware/authMiddleware.js"; // Your auth middleware
 
-// Correctly import all needed functions from userController
+// Import controller functions
 import {
   getUserPublicProfile,
   updateUserProfile,
-  updateUserEmail,
-  updateUserPassword,
-  // --- IMPORT THE NEW FUNCTION ---
-  getSelectableUsers, // <-- Import the function for collaborator selection
+  updateUserEmail, // Handles PUT /api/users/me/email
+  updateUserPassword, // Handles PUT /api/users/me/password
+  getSelectableUsers,
 } from "../controllers/userController.js"; // Adjust path if needed
 
 // Optional: Import upload middleware if needed for profile picture
@@ -19,28 +18,28 @@ const router = express.Router();
 
 // --- Public Routes ---
 // GET /api/users/public/:userId - Fetch public profile data for any user
+// NOTE: Parameter name is ':userId', ensure controller uses req.params.userId
 router.get("/public/:userId", getUserPublicProfile);
 
 // --- Protected 'Me' Routes (Operations on the logged-in user's own data) ---
+// These routes rely on `protect` middleware setting `req.user`
+
+// PUT /api/users/profile - Update non-sensitive profile info
 router.put("/profile", protect, updateUserProfile);
+
+// PUT /api/users/me/email - Update user's email (requires password verification)
 router.put("/me/email", protect, updateUserEmail);
+
+// PUT /api/users/me/password - Update user's password (requires current password)
 router.put("/me/password", protect, updateUserPassword);
 
-// --- !!! NEW ROUTE FOR COLLABORATOR SELECTION !!! ---
+// --- Route for Collaborator Selection ---
 // GET /api/users/selectable - Fetches users suitable for collaborator selection
-// Requires user to be logged in, but NOT necessarily an admin
-router.get(
-  "/selectable", // <-- The new path
-  protect, // <-- Requires login
-  getSelectableUsers // <-- Points to the new controller function
-);
-// --- END NEW ROUTE ---
+// Requires user to be logged in.
+router.get("/selectable", protect, getSelectableUsers);
 
-// --- Protected Route for Getting OWN profile (optional alternative to /public/:id) ---
-// Example: Could add a route like this if needed, uses req.user.id
-// router.get("/me", protect, getMyProfileController);
-
-// --- NOTE: Admin routes (e.g., GET /api/users/ or DELETE /api/users/:id)
-// should be defined in adminRoutes.js and mounted under /api/admin ---
+// --- NOTE: Admin routes (e.g., GET /api/admin/users/ or DELETE /api/admin/users/:id)
+// should be defined in a separate adminRoutes.js file and mounted under /api/admin
+// using admin-specific middleware checks.
 
 export default router;
