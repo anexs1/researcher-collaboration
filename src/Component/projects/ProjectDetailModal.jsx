@@ -1,12 +1,13 @@
+// src/Component/Project/ProjectDetailModal.jsx
 import React, { useState, useEffect, useCallback } from "react";
-import axios from "axios"; // Ensure axios is imported
+import axios from "axios";
 import { motion } from "framer-motion";
 import { FaTimes, FaUniversity, FaExternalLinkAlt } from "react-icons/fa";
 import { Link } from "react-router-dom";
 
 // Adjust paths for common components if needed
-import LoadingSpinner from "../Common/LoadingSpinner";
-import ErrorMessage from "../Common/ErrorMessage";
+import LoadingSpinner from "../Common/LoadingSpinner"; // Assuming correct path
+import ErrorMessage from "../Common/ErrorMessage"; // Assuming correct path
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
@@ -21,7 +22,7 @@ const ProjectDetailModal = ({ project, onClose, currentUser }) => {
       console.log(`ProjectDetailModal: Fetching details for ID: ${projectId}`);
       setIsLoading(true);
       setError("");
-      setDetailedProject(null); // Clear previous details before fetching
+      setDetailedProject(null);
       const token = localStorage.getItem("authToken");
 
       try {
@@ -33,24 +34,18 @@ const ProjectDetailModal = ({ project, onClose, currentUser }) => {
         // Log the raw response for easier debugging
         console.log("ProjectDetailModal: API Response Data:", response.data);
 
-        // Check if the API call was successful according to the API's own flag
         if (response.data?.success) {
-          // --- !!! KEY CHANGE BASED ON DEBUGGING !!! ---
-          // Check if the 'project' payload exists and is an object, instead of 'data'
-          // Based on log: "API success true, but data payload is missing or invalid. {success: true, project: {…}}"
-          if (
-            response.data.project &&
-            typeof response.data.project === "object"
-          ) {
+          // --- !!! KEY CHANGE: Check for 'data' key instead of 'project' key !!! ---
+          if (response.data.data && typeof response.data.data === "object") {
             console.log(
-              "ProjectDetailModal: Details fetched successfully from 'project' field."
+              "ProjectDetailModal: Details fetched successfully from 'data' field."
             );
-            // --- Assign data from the 'project' field ---
-            const apiData = response.data.project;
+            // --- Assign data from the correct 'data' field ---
+            const apiData = response.data.data;
 
-            // --- Mapping Logic (ensure fields match the structure inside response.data.project) ---
+            // --- Mapping Logic (ensure fields match the structure inside response.data.data) ---
             const fullData = {
-              id: apiData.id ?? projectId, // Use API ID first
+              id: apiData.id ?? projectId,
               title: apiData.title ?? project?.title ?? "Untitled Project",
               description:
                 apiData.description ??
@@ -63,7 +58,7 @@ const ProjectDetailModal = ({ project, onClose, currentUser }) => {
                 apiData.requiredCollaborators ??
                 project?.requiredCollaborators ??
                 0,
-              // Ensure skillsNeeded is always an array for consistent mapping
+              // Ensure skillsNeeded is always an array
               skillsNeeded: Array.isArray(apiData.skillsNeeded)
                 ? apiData.skillsNeeded
                 : [],
@@ -72,7 +67,7 @@ const ProjectDetailModal = ({ project, onClose, currentUser }) => {
               progress: apiData.progress ?? 0,
               views: apiData.views ?? 0,
               likes: apiData.likes ?? 0,
-              comments: apiData.comments ?? 0, // Assuming comments is a count or similar simple value
+              comments: apiData.comments ?? 0,
               duration: apiData.duration || null,
               funding: apiData.funding || null,
               // Ensure owner is an object or null
@@ -83,19 +78,23 @@ const ProjectDetailModal = ({ project, onClose, currentUser }) => {
               createdAt: apiData.createdAt || project?.createdAt,
               updatedAt: apiData.updatedAt || project?.updatedAt,
               projectUrl: apiData.projectUrl || null,
+              // Include any user-specific status if available from the API response
+              // (This assumes getProjectById was updated to return it like getAllProjects)
+              currentUserMembershipStatus:
+                apiData.currentUserMembershipStatus || null,
             };
             // --- End Mapping ---
 
             setDetailedProject(fullData);
           } else {
-            // API reported success: true, but the 'project' field was missing, null, or not an object.
+            // API reported success: true, but the 'data' field was missing, null, or not an object.
             console.error(
-              "ProjectDetailModal: API success true, but 'project' payload is missing or invalid.",
+              "ProjectDetailModal: API success true, but 'data' payload is missing or invalid.",
               response.data
             );
             // Throw a specific error indicating the expected data structure wasn't found
             throw new Error(
-              "Project details structure not found in the API response."
+              "Project details structure not found in the API response (expected 'data' field)."
             );
           }
         } else {
@@ -104,71 +103,50 @@ const ProjectDetailModal = ({ project, onClose, currentUser }) => {
             "ProjectDetailModal: API indicated failure.",
             response.data
           );
-          // Use the message from the API if available, otherwise provide a generic failure message
           throw new Error(
             response.data?.message ||
               "The server indicated an error processing the request."
           );
         }
       } catch (err) {
-        // Enhanced error handling for different scenarios
+        // (Keep existing enhanced error handling logic)
         console.error(
           "ProjectDetailModal: Error fetching/processing details:",
           err
         );
-
-        let message = "Could not load project details."; // Default error message
-
-        // Check if it's an Axios error to access response details
+        let message = "Could not load project details.";
         if (axios.isAxiosError(err)) {
           if (err.response) {
-            // Server responded with an error status code (4xx or 5xx)
             console.error("API Error Response Status:", err.response.status);
             console.error("API Error Response Data:", err.response.data);
-
-            if (err.response.status === 401) {
-              message = "Unauthorized. Please check your login status.";
-            } else if (err.response.status === 404) {
-              message = "Project not found (API returned 404).";
-            } else {
-              // Try to use server-provided error message, otherwise use status code
+            if (err.response.status === 401)
+              message = "Unauthorized. Please log in.";
+            else if (err.response.status === 404)
+              message = "Project not found.";
+            else
               message =
-                err.response.data?.message || // Use message from response body if available
-                `Server error (${err.response.status}). Please try again later.`;
-            }
-          } else if (err.request) {
-            // Request was made but no response received (network error, CORS, timeout)
-            console.error("Network Error:", err.request);
-            message =
-              "Network error. Unable to reach the server. Check connection or API status.";
-          } else {
-            // Error setting up the request (rare)
-            console.error("Axios Setup Error:", err.message);
-            message = "Error configuring the request.";
-          }
-        } else {
-          // Handle errors thrown explicitly within the try block (like new Error(...))
-          // or other non-Axios JavaScript errors
-          message = err.message || message; // Use the thrown error's message if available
-        }
-
+                err.response.data?.message ||
+                `Server error (${err.response.status}).`;
+          } else if (err.request)
+            message = "Network error. Unable to reach server.";
+          else message = "Error configuring the request.";
+        } else message = err.message || message;
         setError(message);
-        setDetailedProject(null); // Ensure details are cleared on any error
+        setDetailedProject(null);
       } finally {
         setIsLoading(false);
       }
     },
-    // Dependencies for useCallback: Include props used as fallbacks or essential config
+    // Dependencies for useCallback
     [
-      project?.title, // Used as fallback
-      project?.description, // Used as fallback
-      project?.image, // Used as fallback
-      project?.requiredCollaborators, // Used as fallback
-      project?.status, // Used as fallback
-      project?.owner, // Used as fallback
-      project?.createdAt, // Used as fallback
-      project?.updatedAt, // Used as fallback
-      // Note: API_BASE_URL is constant, token is fetched inside, projectId is passed as arg
+      project?.title,
+      project?.description,
+      project?.image,
+      project?.requiredCollaborators,
+      project?.status,
+      project?.owner,
+      project?.createdAt,
+      project?.updatedAt,
     ]
   );
 
@@ -178,16 +156,14 @@ const ProjectDetailModal = ({ project, onClose, currentUser }) => {
     if (projectId) {
       fetchDetails(projectId);
     } else {
-      // Handle case where the initial 'project' prop might lack an ID
       console.error("ProjectDetailModal: Initial project prop missing ID.");
       setError("No project ID provided to modal.");
       setIsLoading(false);
       setDetailedProject(null);
     }
-    // Dependency array includes the specific ID and the memoized fetch function
   }, [project?.id, fetchDetails]);
 
-  // --- Render Logic (Includes minor improvements and assumes structure from mapping) ---
+  // --- Render Logic (keep as is, it uses `detailedProject` state) ---
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-[70] p-4 animate-fade-in">
       {/* Modal Container */}
@@ -196,7 +172,7 @@ const ProjectDetailModal = ({ project, onClose, currentUser }) => {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 30, scale: 0.95 }}
         transition={{ type: "spring", stiffness: 300, damping: 25 }}
-        className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden dark:bg-gray-800" // Added dark mode bg
+        className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden dark:bg-gray-800"
       >
         {/* Header */}
         <div className="flex justify-between items-center p-4 sm:p-5 border-b border-gray-200 flex-shrink-0 dark:border-gray-700">
@@ -234,26 +210,20 @@ const ProjectDetailModal = ({ project, onClose, currentUser }) => {
               {detailedProject.image ? (
                 <img
                   src={
-                    // Check if it's an absolute URL or needs prefixing
-                    detailedProject.image.startsWith("http://") ||
-                    detailedProject.image.startsWith("https://") ||
-                    detailedProject.image.startsWith("data:") // Handle base64 data URLs
+                    detailedProject.image.startsWith("http") ||
+                    detailedProject.image.startsWith("data:")
                       ? detailedProject.image
                       : `${API_BASE_URL}${
-                          detailedProject.image.startsWith("/") ? "" : "/" // Ensure single slash
+                          detailedProject.image.startsWith("/") ? "" : "/"
                         }${detailedProject.image}`
                   }
                   alt={detailedProject.title || "Project Image"}
                   className="w-full h-auto max-h-72 object-contain rounded-lg mb-4 border bg-gray-50 dark:bg-gray-700 dark:border-gray-600"
-                  // Add error handling for broken images
                   onError={(e) => {
-                    e.target.onerror = null; // Prevent infinite loop if fallback fails
-                    e.target.style.display = "none"; // Hide broken image element
-                    // Optionally display a fallback placeholder here if needed
-                  }}
+                    e.target.style.display = "none";
+                  }} // Hide broken image
                 />
               ) : (
-                // Placeholder if no image
                 <div className="w-full h-48 bg-gradient-to-br from-gray-100 to-indigo-100 dark:from-gray-700 dark:to-indigo-900 flex items-center justify-center rounded-lg mb-4">
                   <FaUniversity className="text-6xl text-gray-300 dark:text-gray-500" />
                 </div>
@@ -281,7 +251,7 @@ const ProjectDetailModal = ({ project, onClose, currentUser }) => {
                         ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
                         : detailedProject.status?.toLowerCase() === "on hold"
                         ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-                        : "bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-200" // Default/Unknown
+                        : "bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-200"
                     }`}
                   >
                     {detailedProject.status || "N/A"}
@@ -313,7 +283,7 @@ const ProjectDetailModal = ({ project, onClose, currentUser }) => {
                     <div className="flex flex-wrap gap-2">
                       {detailedProject.skillsNeeded.map((skill, index) => (
                         <span
-                          key={`${skill}-${index}`} // Consider a more stable key if skills have IDs
+                          key={`${skill}-${index}`}
                           className="bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 text-xs font-medium px-2.5 py-1 rounded-full"
                         >
                           {skill}
@@ -361,7 +331,6 @@ const ProjectDetailModal = ({ project, onClose, currentUser }) => {
                   </strong>{" "}
                   {detailedProject.likes ?? 0}
                 </p>
-                {/* External Project Link */}
                 {detailedProject.projectUrl && (
                   <p className="md:col-span-2">
                     <strong className="font-medium text-gray-800 dark:text-gray-100">
@@ -387,28 +356,49 @@ const ProjectDetailModal = ({ project, onClose, currentUser }) => {
                   </strong>
                   <Link
                     to={
-                      detailedProject.owner.id // Ensure owner object has an ID for the link
+                      detailedProject.owner.id
                         ? `/profile/${detailedProject.owner.id}`
-                        : "#" // Fallback if no ID
+                        : "#"
                     }
-                    onClick={onClose} // Close modal when clicking profile link
+                    onClick={onClose}
                     className="ml-1.5 text-indigo-600 hover:underline font-medium dark:text-indigo-400 dark:hover:text-indigo-300"
                   >
                     {detailedProject.owner.username || "Unknown User"}
                   </Link>
-                  {/* Conditionally display email - consider privacy */}
-                  {/* {detailedProject.owner.email && (
-                    <span className="text-gray-500 dark:text-gray-400 text-xs ml-2">
-                      ({detailedProject.owner.email})
-                    </span>
-                  )} */}
-                  {/* Highlight if owner is the current user */}
                   {currentUser &&
                     detailedProject.owner.id === currentUser?.id && (
                       <span className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold ml-1">
                         (You)
                       </span>
                     )}
+                </div>
+              )}
+
+              {/* Display Membership Status (if available and user is logged in) */}
+              {currentUser && detailedProject.currentUserMembershipStatus && (
+                <div className="pt-2 mt-2 text-sm">
+                  <strong className="font-medium text-gray-800 dark:text-gray-100">
+                    Your Status:
+                  </strong>
+                  <span
+                    className={`ml-1.5 font-medium px-2 py-0.5 rounded-full text-xs ${
+                      detailedProject.currentUserMembershipStatus === "approved"
+                        ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                        : detailedProject.currentUserMembershipStatus ===
+                          "pending"
+                        ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+                        : "bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-200"
+                    }`}
+                  >
+                    {
+                      detailedProject.currentUserMembershipStatus === "approved"
+                        ? "Member"
+                        : detailedProject.currentUserMembershipStatus ===
+                          "pending"
+                        ? "Request Pending"
+                        : detailedProject.currentUserMembershipStatus /* Or 'N/A' */
+                    }
+                  </span>
                 </div>
               )}
 
@@ -445,8 +435,8 @@ const ProjectDetailModal = ({ project, onClose, currentUser }) => {
           {/* Edit button example (conditional) */}
           {currentUser && detailedProject?.owner?.id === currentUser.id && (
             <Link
-              to={`/projects/edit/${detailedProject?.id}`} // Use optional chaining for safety
-              onClick={onClose} // Close modal when navigating away
+              to={`/projects/edit/${detailedProject?.id}`}
+              onClick={onClose}
               className="bg-indigo-600 text-white hover:bg-indigo-700 px-5 py-2 rounded-md text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800"
             >
               Edit Project
