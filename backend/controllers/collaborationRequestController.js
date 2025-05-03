@@ -681,7 +681,6 @@ export const cancelRequest = asyncHandler(async (req, res) => {
       );
     }
 
-    // --- Delete the Request ---
     await request.destroy(); // Permanently delete the request record
     console.log(
       `Request ${parsedRequestId} deleted successfully by user ${requesterId}.`
