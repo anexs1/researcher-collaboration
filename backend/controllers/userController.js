@@ -3,8 +3,26 @@ import asyncHandler from "express-async-handler";
 import db from "../models/index.js"; // Ensure User model is loaded here
 import bcrypt from "bcryptjs"; // Needed for password matching/hashing
 import { Op } from "sequelize"; // For operators like Op.ne
+// --- ADD Required imports for file handling ---
+import fs from "fs/promises";
+import path from "path";
+import { fileURLToPath } from "url";
+// --- END ADD ---
 
-const { User } = db; // Destructure User model
+const { User, sequelize /* Add other models if needed directly here */ } = db; // Destructure User model, include sequelize if needed for transactions directly
+
+// --- ES Module __dirname setup ---
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+// Assumes controllers/ is a subdirectory of backend/
+const BACKEND_ROOT_DIR = path.resolve(__dirname, "..");
+// Define specific upload directory for profile pictures inside backend/uploads/
+const PROFILE_PIC_UPLOADS_DIR = path.join(
+  BACKEND_ROOT_DIR,
+  "uploads",
+  "profilePictures"
+);
+// --- End Setup ---
 
 // --- Helper: Define fields to select for different views ---
 const publicProfileFields = [
@@ -18,6 +36,8 @@ const publicProfileFields = [
   "jobTitle",
   "medicalSpecialty",
   "hospitalName",
+  "socialLinks", // Include social links if they should be public
+  "skillsNeeded", // Include skills if they should be public
   "createdAt",
 ];
 const adminUserListFields = [
@@ -46,10 +66,31 @@ const adminUserDetailFields = [
   "hospitalName",
   "profilePictureUrl",
   "bio",
+  "socialLinks",
+  "skillsNeeded",
   "createdAt",
   "updatedAt",
 ];
 const selectableUserFields = ["id", "username", "email"]; // Fields for collaborator dropdown
+
+// --- Helper function to ensure upload directory exists ---
+const ensureUploadsDirExists = async (dirPath) => {
+  try {
+    await fs.access(dirPath);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      console.log(`Directory ${dirPath} not found, creating...`);
+      await fs.mkdir(dirPath, { recursive: true });
+    } else {
+      // Re-throw other errors (like permission errors)
+      throw error;
+    }
+  }
+};
+// Ensure directory exists on server startup (run once)
+// Removed the immediate call here - better to call it within the function that needs it (updateUserProfile)
+// ensureUploadsDirExists(PROFILE_PIC_UPLOADS_DIR).catch(err => console.error("Failed to ensure initial profile pic uploads directory:", err));
+// --- End Helper ---
 
 // --- Public User Route Controller ---
 /**
@@ -91,7 +132,7 @@ export const getUserPublicProfile = asyncHandler(async (req, res) => {
     }
 
     console.log(`[getUserPublicProfile] User found: ${user.username}`);
-    res.status(200).json({ success: true, data: user });
+    res.status(200).json({ success: true, data: user }); // Return user data under 'data' key
   } catch (error) {
     console.error(
       `[getUserPublicProfile] Error fetching user ${userId}:`,
@@ -106,84 +147,264 @@ export const getUserPublicProfile = asyncHandler(async (req, res) => {
 });
 
 // --- Protected User 'Me' Route Controllers ---
+
+// ========================================================================
+// ========= THIS IS THE CORRECTED updateUserProfile FUNCTION =========
+// ========================================================================
 /**
- * @desc    Update own user profile (non-sensitive fields)
+ * @desc    Update own user profile (handles text fields and profile picture upload)
  * @route   PUT /api/users/profile
- * @access  Private (Requires login via `protect` middleware)
+ * @access  Private
  */
 export const updateUserProfile = asyncHandler(async (req, res) => {
-  const userId = req.user.id; // Assumes `protect` middleware adds user to req
+  const userId = req.user.id;
   console.log(`API: updateUserProfile invoked for User ${userId}`);
+  console.log("updateUserProfile - Received req.body:", req.body); // Log parsed text fields from FormData
+  console.log(
+    "updateUserProfile - Received req.file:",
+    req.file?.originalname || "No file uploaded"
+  );
+
   if (!User) throw new Error("User model not loaded.");
+  if (!sequelize) throw new Error("Sequelize instance not available from db."); // Check sequelize import
 
-  const {
-    username,
-    university,
-    department,
-    companyName,
-    jobTitle,
-    medicalSpecialty,
-    hospitalName,
-    profilePictureUrl,
-    bio,
-  } = req.body;
-
-  // Build object with only the fields provided in the request
+  // --- Prepare Update Data Object ---
   const updateData = {};
-  if (username !== undefined) updateData.username = username.trim();
-  if (university !== undefined) updateData.university = university;
-  if (department !== undefined) updateData.department = department;
-  if (companyName !== undefined) updateData.companyName = companyName;
-  if (jobTitle !== undefined) updateData.jobTitle = jobTitle;
-  if (medicalSpecialty !== undefined)
-    updateData.medicalSpecialty = medicalSpecialty;
-  if (hospitalName !== undefined) updateData.hospitalName = hospitalName;
-  if (profilePictureUrl !== undefined)
-    updateData.profilePictureUrl = profilePictureUrl;
-  if (bio !== undefined) updateData.bio = bio;
+  // Define fields allowed to be updated directly from req.body text fields
+  const allowedFields = [
+    "bio",
+    "university",
+    "department",
+    "companyName",
+    "jobTitle",
+    "medicalSpecialty",
+    "hospitalName",
+  ];
 
-  if (Object.keys(updateData).length === 0) {
-    res.status(400);
-    throw new Error("No valid profile fields provided for update.");
-  }
-
-  try {
-    const user = await User.findByPk(userId);
-    if (!user) {
-      res.status(404);
-      throw new Error("User not found for update."); // Should not happen if authenticated
-    }
-
-    // Check for username uniqueness if it's being updated
-    if (updateData.username && updateData.username !== user.username) {
-      const existingUser = await User.findOne({
-        where: { username: updateData.username },
-      });
-      if (existingUser) {
-        res.status(400);
-        throw new Error("Username is already taken.");
+  // Populate updateData with allowed simple text fields from req.body
+  for (const field of allowedFields) {
+    if (req.body[field] !== undefined) {
+      // Trim strings, allow setting to null/empty if desired
+      if (typeof req.body[field] === "string") {
+        updateData[field] = req.body[field].trim() || null; // Store empty string as null? Adjust if needed
+      } else {
+        updateData[field] = req.body[field]; // Assign non-string values directly
       }
     }
+  }
 
-    await user.update(updateData);
-    console.log(`User ${userId} profile updated successfully.`);
+  // --- Handle Nested/JSON Fields ---
+  // Skills Needed (Assuming frontend sends as JSON string named 'skillsNeeded')
+  if (req.body.skillsNeeded !== undefined) {
+    try {
+      let skills = [];
+      // Allow clearing the field by sending empty string or null
+      if (req.body.skillsNeeded !== null && req.body.skillsNeeded !== "") {
+        skills = JSON.parse(req.body.skillsNeeded);
+      }
+      if (!Array.isArray(skills)) throw new Error("Skills must be an array.");
+      updateData.skillsNeeded = skills; // Add parsed array to updates
+      console.log("Parsed skillsNeeded:", skills);
+    } catch (e) {
+      console.error(
+        "Error parsing skillsNeeded JSON:",
+        e.message,
+        "Input:",
+        req.body.skillsNeeded
+      );
+      res.status(400);
+      throw new Error(
+        "Invalid format for 'skillsNeeded'. Expected a valid JSON array string (e.g., '[\"React\"]') or empty string/null."
+      );
+    }
+  }
 
-    // Fetch updated user data (excluding sensitive fields like password)
+  // Social Links (Assuming frontend sends as JSON string named 'socialLinksJson')
+  // *** REMEMBER: Frontend MUST send socialLinks as a JSON string ***
+  if (req.body.socialLinksJson !== undefined) {
+    try {
+      let links = {};
+      // Allow clearing the field by sending empty string or null
+      if (
+        req.body.socialLinksJson !== null &&
+        req.body.socialLinksJson !== ""
+      ) {
+        links = JSON.parse(req.body.socialLinksJson);
+      }
+      if (typeof links !== "object" || Array.isArray(links))
+        throw new Error("Social links must be an object.");
+      // Optionally validate specific link keys (linkedin, github etc.) here if needed
+      updateData.socialLinks = links; // Add parsed object to updates
+      console.log("Parsed socialLinks:", links);
+    } catch (e) {
+      console.error(
+        "Error parsing socialLinks JSON:",
+        e.message,
+        "Input:",
+        req.body.socialLinksJson
+      );
+      res.status(400);
+      throw new Error(
+        "Invalid format for 'socialLinksJson'. Expected a valid JSON object string (e.g., '{\"linkedin\":\"url\"}') or empty string/null."
+      );
+    }
+  }
+  // --- End Handle Nested/JSON Fields ---
+
+  // --- Handle File Upload ---
+  let newImageUrl = null; // DB path e.g., /uploads/profilePictures/image.jpg
+  let oldImageUrl = null; // Path of image being replaced (if any)
+  let absoluteFilePath = null; // Filesystem path for saving new file
+
+  if (req.file) {
+    // Check if multer processed a file
+    console.log(
+      "Processing uploaded profile picture file:",
+      req.file.originalname
+    );
+    try {
+      await ensureUploadsDirExists(PROFILE_PIC_UPLOADS_DIR); // Ensure target dir exists before writing
+
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      // Sanitize original name
+      const safeOriginalName = path
+        .basename(req.file.originalname)
+        .replace(/[^a-zA-Z0-9._-]/g, "_");
+      const filename = `${uniqueSuffix}-${safeOriginalName}`;
+
+      absoluteFilePath = path.join(PROFILE_PIC_UPLOADS_DIR, filename);
+      newImageUrl = `/uploads/profilePictures/${filename}`; // <<< URL path saved to DB
+
+      if (!req.file.buffer)
+        throw new Error(
+          "File buffer is missing from upload (using memory storage)."
+        );
+
+      await fs.writeFile(absoluteFilePath, req.file.buffer); // Save the file buffer
+      console.log(
+        `New profile picture saved to filesystem: ${absoluteFilePath}`
+      );
+
+      updateData.profilePictureUrl = newImageUrl; // Add the NEW URL path to the update data
+    } catch (uploadError) {
+      console.error("Failed to write uploaded profile picture:", uploadError);
+      res.status(500); // Internal server error for file system issues
+      throw new Error("Server error saving uploaded profile picture.");
+    }
+  }
+  // --- End Handle File Upload ---
+
+  // --- Check if any updates were actually prepared ---
+  // This check runs AFTER processing text fields AND attempting file upload
+  if (Object.keys(updateData).length === 0) {
+    // This means no recognized text fields were changed AND no new file was successfully processed and added to updateData
+    console.log("No valid fields found in updateData to apply.");
+    res.status(400);
+    throw new Error("No valid profile fields provided for update."); // <<< This is the error you were seeing
+  }
+  // --- End Check ---
+
+  // --- Perform Database Update within a Transaction ---
+  const transaction = await sequelize.transaction();
+  try {
+    // Find user within transaction
+    const user = await User.findByPk(userId, { transaction });
+    if (!user) {
+      // Should not happen if protect middleware worked, but check anyway
+      await transaction.rollback(); // Rollback before throwing
+      res.status(404);
+      throw new Error("User not found for update.");
+    }
+
+    // Store old image path *before* updating, but only if a new one is being set
+    if (updateData.profilePictureUrl) {
+      oldImageUrl = user.profilePictureUrl; // Get the current path from DB
+    }
+
+    // Apply the collected updates
+    console.log(`Applying final updates to user ${userId}:`, updateData);
+    await user.update(updateData, { transaction });
+
+    // Commit the transaction if update is successful
+    await transaction.commit();
+    console.log(
+      `User ${userId} profile update transaction committed successfully.`
+    );
+
+    // --- Delete Old Profile Picture (AFTER successful commit) ---
+    if (oldImageUrl && oldImageUrl !== newImageUrl) {
+      // Ensure it's a different image
+      console.log(`Attempting to delete old profile picture: ${oldImageUrl}`);
+      try {
+        // Construct the absolute path from the stored URL path
+        // Assumes URLs start '/uploads/' and BACKEND_ROOT_DIR/uploads is static root
+        const oldAbsoluteFilePath = path.join(
+          BACKEND_ROOT_DIR,
+          "uploads",
+          oldImageUrl.substring("/uploads/".length)
+        ); // Be careful with path construction
+        await fs.unlink(oldAbsoluteFilePath);
+        console.log(
+          `Successfully deleted old profile picture: ${oldAbsoluteFilePath}`
+        );
+      } catch (deleteError) {
+        // Log error but don't fail the request if old image deletion fails
+        if (deleteError.code !== "ENOENT") {
+          // Ignore "file not found"
+          console.error(
+            `Error deleting old profile picture file (${oldImageUrl}):`,
+            deleteError
+          );
+        } else {
+          console.warn(
+            `Old profile picture file not found for deletion: ${oldImageUrl}`
+          );
+        }
+      }
+    }
+    // --- End Delete Old Image ---
+
+    // Fetch updated user data (excluding password) to return to frontend
     const updatedUser = await User.findByPk(userId, {
-      attributes: { exclude: ["password"] }, // Ensure password is excluded
+      attributes: { exclude: ["password"] },
     });
     res.status(200).json({
       success: true,
       message: "Profile updated successfully.",
-      data: updatedUser,
+      data: updatedUser, // Send back updated user data
     });
   } catch (error) {
-    console.error(`Error updating profile for User ${userId}:`, error);
+    // Rollback transaction if any error occurred during the try block
+    if (transaction && !transaction.finished) {
+      await transaction.rollback();
+      console.log("Update transaction rolled back due to error.");
+    }
+    // If a *new* file was successfully saved to disk but DB transaction failed, delete the new file
+    if (absoluteFilePath) {
+      // Check if we saved a new file path
+      console.log(
+        `Transaction failed, attempting to delete newly saved file: ${absoluteFilePath}`
+      );
+      try {
+        await fs.unlink(absoluteFilePath);
+        console.log("Successfully deleted new profile picture after error.");
+      } catch (e) {
+        console.error(
+          "Error deleting new profile picture after transaction error:",
+          e
+        );
+      }
+    }
+
+    console.error(
+      `Error during profile update database operation for User ${userId}:`,
+      error
+    );
+    // Handle specific Sequelize errors
     if (error.name === "SequelizeUniqueConstraintError") {
-      // This might catch other unique constraints if defined (e.g., email if updated here)
       res.status(400).json({
         success: false,
-        message: "A unique field constraint was violated.",
+        message: "Update failed. A unique value constraint was violated.",
       });
     } else if (error.name === "SequelizeValidationError") {
       res.status(400).json({
@@ -191,139 +412,104 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
         message: error.errors.map((e) => e.message).join(". "),
       });
     } else {
+      // Use status code set before throwing, or default
       const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
+      const message = error.message || "Server error updating profile.";
+      // Avoid sending headers twice
       if (!res.headersSent) {
-        res.status(statusCode).json({
-          success: false,
-          message: error.message || "Server error updating profile.",
-        });
+        res.status(statusCode).json({ success: false, message });
       }
     }
   }
 });
+// ========================================================================
+// ========= END OF CORRECTED updateUserProfile FUNCTION ==================
+// ========================================================================
 
-// ==========================================================
-// ========= CORRECTED updateUserEmail Function =============
-// ==========================================================
 /**
  * @desc    Update own user email (requires current password verification)
  * @route   PUT /api/users/me/email
  * @access  Private (Requires login via `protect` middleware)
  */
 export const updateUserEmail = asyncHandler(async (req, res) => {
-  const userId = req.user.id; // Assumes `protect` middleware adds user to req
-
-  // --- *** FIX: Destructure 'newEmail' from req.body, matching the frontend *** ---
+  const userId = req.user.id;
   const { newEmail, currentPassword } = req.body;
-  // --- *** END FIX *** ---
 
   console.log(
     `API: updateUserEmail invoked for User ${userId} with new email: ${newEmail}`
   );
   if (!User) throw new Error("User model not loaded.");
 
-  // --- *** FIX: Validate 'newEmail' instead of 'email' *** ---
   if (!newEmail || !currentPassword) {
-    res.status(400); // Bad Request: Missing required fields
+    res.status(400);
     throw new Error("New email and current password are required.");
   }
-  // --- *** END FIX *** ---
-
-  // --- *** FIX: Validate format of 'newEmail' *** ---
-  // Basic email format validation (consider a more robust library like validator.js)
   if (!/\S+@\S+\.\S+/.test(newEmail)) {
-    res.status(400); // Bad Request: Invalid format
+    res.status(400);
     throw new Error("Invalid email format provided.");
   }
-  // --- *** END FIX *** ---
 
   try {
-    // Fetch user including password field for verification
-    // Ensure you have a scope 'withPassword' defined in your User model
-    // or fetch normally if password field is not excluded by default scopes.
     const user = await User.scope("withPassword").findByPk(userId);
     if (!user) {
-      res.status(404); // Not Found
-      throw new Error("User not found."); // Should not happen if authenticated
+      res.status(404);
+      throw new Error("User not found.");
     }
 
-    // Verify the provided current password
-    // Assumes `matchPassword` method exists on your User model instance
-    // (uses bcrypt.compare internally)
     const isMatch = await user.matchPassword(currentPassword);
     if (!isMatch) {
-      res.status(401); // Unauthorized: Incorrect password
+      res.status(401);
       throw new Error("Incorrect current password provided.");
     }
 
-    // --- *** FIX: Check if the new email is the same as the current one *** ---
     if (user.email === newEmail) {
-      // It's not an error, but no update is needed.
       return res.status(200).json({
-        // OK
         success: true,
         message: "Email is already set to this address. No update performed.",
-        data: { email: user.email }, // Return current email
+        data: { email: user.email },
       });
     }
-    // --- *** END FIX *** ---
 
-    // Check if the new email address is already taken by *another* user
-    // --- *** FIX: Query based on 'newEmail' *** ---
     const existingUserWithEmail = await User.findOne({
       where: {
-        email: newEmail, // Check if 'newEmail' exists...
-        id: { [Op.ne]: userId }, // ... for a user other than the current one
+        email: newEmail,
+        id: { [Op.ne]: userId },
       },
     });
-    // --- *** END FIX *** ---
     if (existingUserWithEmail) {
-      res.status(400); // Bad Request: Client provided an email that cannot be used
+      res.status(400);
       throw new Error("Email address is already in use by another account.");
     }
 
-    // If all checks pass, update the email in the database
-    // --- *** FIX: Update the 'email' field with the value of 'newEmail' *** ---
     await user.update({
       email: newEmail,
-      // status: 'pending_email_verification' // Optional: Uncomment if you implement email verification
     });
     console.log(`User ${userId} email updated successfully to ${newEmail}.`);
-    // --- *** END FIX *** ---
 
-    // TODO: If implementing email verification, trigger sending the verification email here.
-
-    // Respond with success
     res.status(200).json({
       success: true,
-      message: "Email updated successfully.", // Adjust if verification needed
-      data: { email: newEmail }, // Return the newly set email
+      message: "Email updated successfully.",
+      data: { email: newEmail },
     });
   } catch (error) {
     console.error(`Error updating email for User ${userId}:`, error);
-    // Handle potential database errors during the update itself (e.g., unexpected constraint violation)
     if (error.name === "SequelizeUniqueConstraintError") {
-      // This might catch the email uniqueness again if the check above somehow missed it (race condition?)
       res
         .status(400)
         .json({ success: false, message: "Email address already in use." });
     } else if (error.name === "SequelizeValidationError") {
-      // Handle validation errors defined in the Sequelize model
       res.status(400).json({
         success: false,
         message: error.errors.map((e) => e.message).join(". "),
       });
     } else {
-      // Use status code set before throwing (like 400, 401, 404) or default to 500
       const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
-      // Ensure we don't try to set headers again if already sent (e.g., in the 'same email' check)
       if (!res.headersSent) {
         res.status(statusCode).json({
           success: false,
           message: error.message || "Server error updating email.",
         });
       } else {
-        // Log if headers were already sent (e.g., due to the early return for same email)
         console.error(
           "Headers already sent, could not send error response for:",
           error.message
@@ -332,9 +518,6 @@ export const updateUserEmail = asyncHandler(async (req, res) => {
     }
   }
 });
-// ==========================================================
-// ==========================================================
-// ==========================================================
 
 /**
  * @desc    Update own user password
@@ -342,58 +525,48 @@ export const updateUserEmail = asyncHandler(async (req, res) => {
  * @access  Private (Requires login via `protect` middleware)
  */
 export const updateUserPassword = asyncHandler(async (req, res) => {
-  const userId = req.user.id; // Assumes `protect` middleware adds user to req
+  const userId = req.user.id;
   const { currentPassword, newPassword } = req.body;
 
   console.log(`API: updateUserPassword invoked for User ${userId}`);
   if (!User) throw new Error("User model not loaded.");
 
-  // Basic validation
   if (!currentPassword || !newPassword) {
-    res.status(400); // Bad Request
+    res.status(400);
     throw new Error("Current password and new password are required.");
   }
-  // Add password complexity/length checks as needed
   if (newPassword.length < 6) {
-    // Example: Minimum length
-    res.status(400); // Bad Request
+    res.status(400);
     throw new Error("New password must be at least 6 characters long.");
   }
   if (currentPassword === newPassword) {
-    res.status(400); // Bad Request
+    res.status(400);
     throw new Error("New password cannot be the same as the current password.");
   }
 
   try {
-    // Fetch user including password field for verification
     const user = await User.scope("withPassword").findByPk(userId);
     if (!user) {
-      res.status(404); // Not Found
+      res.status(404);
       throw new Error("User not found.");
     }
 
-    // Verify the provided current password
     const isMatch = await user.matchPassword(currentPassword);
     if (!isMatch) {
-      res.status(401); // Unauthorized: Incorrect password
+      res.status(401);
       throw new Error("Incorrect current password provided.");
     }
 
-    // If password matches, update the password.
-    // The 'beforeSave' or 'beforeUpdate' hook in your User model should handle hashing.
     user.password = newPassword;
-    await user.save(); // This triggers the hook and saves the hashed password
-
+    await user.save();
     console.log(`User ${userId} password updated successfully.`);
 
     res.status(200).json({
-      // OK
       success: true,
       message: "Password updated successfully.",
     });
   } catch (error) {
     console.error(`Error updating password for User ${userId}:`, error);
-    // Use status code set before throwing (like 400, 401, 404) or default to 500
     const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
     if (!res.headersSent) {
       res.status(statusCode).json({
@@ -410,35 +583,31 @@ export const updateUserPassword = asyncHandler(async (req, res) => {
  * @access  Private (Logged-in users via `protect` middleware)
  */
 export const getSelectableUsers = asyncHandler(async (req, res) => {
-  const requestingUserId = req.user.id; // ID of the user making the request
+  const requestingUserId = req.user.id;
   console.log(`API: getSelectableUsers invoked by User ${requestingUserId}`);
   if (!User) {
-    // This is a server configuration issue
     return res
       .status(500)
       .json({ success: false, message: "User model not loaded." });
   }
 
   try {
-    // Find users who are active/approved and are not the user making the request
     const users = await User.findAll({
       where: {
-        status: "approved", // Example: Only find active users
-        id: { [Op.ne]: requestingUserId }, // Exclude the current user
+        status: "approved",
+        id: { [Op.ne]: requestingUserId },
       },
-      attributes: selectableUserFields, // Select only id, username, email
-      order: [["username", "ASC"]], // Order alphabetically by username
+      attributes: selectableUserFields,
+      order: [["username", "ASC"]],
     });
 
-    // Return the list of users
-    res.status(200).json({ success: true, data: users }); // Return array under 'data' key
+    res.status(200).json({ success: true, data: users });
   } catch (error) {
     console.error(
       `Error fetching selectable users for User ${requestingUserId}:`,
       error
     );
     res.status(500).json({
-      // Internal Server Error
       success: false,
       message: "Server error fetching user list.",
     });
@@ -446,14 +615,13 @@ export const getSelectableUsers = asyncHandler(async (req, res) => {
 });
 
 // --- Admin User Route Controllers ---
-// These functions should be called by routes protected by admin-specific middleware
-
 /**
  * @desc    Get all users (Admin only) with pagination and filtering
  * @route   GET /api/admin/users (Example route)
  * @access  Private/Admin
  */
 export const adminGetAllUsers = asyncHandler(async (req, res) => {
+  /* ... Keep implementation ... */
   console.log(`ADMIN API: adminGetAllUsers invoked by Admin ${req.user.id}`);
   if (!User) {
     return res
@@ -464,17 +632,17 @@ export const adminGetAllUsers = asyncHandler(async (req, res) => {
     const { page = 1, limit = 15, search, role, status } = req.query;
     const where = {};
     if (search) {
+      const likeOperator =
+        sequelize.getDialect() === "postgres" ? Op.iLike : Op.like;
       where[Op.or] = [
-        { username: { [Op.iLike]: `%${search}%` } }, // Use iLike for case-insensitive search (PostgreSQL)
-        { email: { [Op.iLike]: `%${search}%` } }, // Use 'like' for MySQL/SQLite
+        { username: { [likeOperator]: `%${search}%` } },
+        { email: { [likeOperator]: `%${search}%` } },
       ];
     }
     if (role) where.role = role;
     if (status) where.status = status;
-
     const parsedLimit = parseInt(limit, 10);
     const parsedPage = parseInt(page, 10);
-
     if (
       isNaN(parsedLimit) ||
       parsedLimit <= 0 ||
@@ -483,26 +651,22 @@ export const adminGetAllUsers = asyncHandler(async (req, res) => {
     ) {
       return res
         .status(400)
-        .json({ success: false, message: "Invalid pagination parameters." });
+        .json({ success: false, message: "Invalid pagination params." });
     }
-
     const offset = (parsedPage - 1) * parsedLimit;
-
     console.log("Admin Get All Users - Query:", {
       where,
       limit: parsedLimit,
       offset,
     });
-
     const { count, rows: users } = await User.findAndCountAll({
       where,
-      attributes: adminUserListFields, // Use fields defined for admin list view
+      attributes: adminUserListFields,
       order: [["createdAt", "DESC"]],
       limit: parsedLimit,
       offset,
-      distinct: true, // Important for counts with joins/complex where clauses
+      distinct: true,
     });
-
     console.log(`ADMIN: Found ${count} users, returning page ${parsedPage}.`);
     const responsePayload = {
       success: true,
@@ -531,6 +695,7 @@ export const adminGetAllUsers = asyncHandler(async (req, res) => {
  * @access  Private/Admin
  */
 export const adminGetPendingUsers = asyncHandler(async (req, res) => {
+  /* ... Keep implementation ... */
   console.log(
     `ADMIN API: adminGetPendingUsers invoked by Admin ${req.user.id}`
   );
@@ -542,8 +707,8 @@ export const adminGetPendingUsers = asyncHandler(async (req, res) => {
   try {
     const pendingUsers = await User.findAll({
       where: { status: "pending" },
-      attributes: adminUserListFields, // Reuse list fields or define specific ones
-      order: [["createdAt", "ASC"]], // Show oldest pending first
+      attributes: adminUserListFields,
+      order: [["createdAt", "ASC"]],
     });
     res
       .status(200)
@@ -563,7 +728,8 @@ export const adminGetPendingUsers = asyncHandler(async (req, res) => {
  * @access  Private/Admin
  */
 export const adminGetUserById = asyncHandler(async (req, res) => {
-  const userIdParam = req.params.id; // Assumes parameter name is :id in the route
+  /* ... Keep implementation ... */
+  const userIdParam = req.params.id;
   console.log(
     `ADMIN API: adminGetUserById for User ID: ${userIdParam} by Admin ${req.user.id}`
   );
@@ -577,19 +743,17 @@ export const adminGetUserById = asyncHandler(async (req, res) => {
     if (isNaN(userId) || userId <= 0) {
       return res
         .status(400)
-        .json({ success: false, message: "Invalid User ID provided." });
+        .json({ success: false, message: "Invalid User ID." });
     }
-
     const user = await User.findByPk(userId, {
-      attributes: adminUserDetailFields, // Use detailed fields for admin view
+      attributes: adminUserDetailFields,
     });
-
     if (!user) {
       return res
         .status(404)
         .json({ success: false, message: "User not found." });
     }
-    res.status(200).json({ success: true, data: user }); // Return user details under 'data' key
+    res.status(200).json({ success: true, data: user });
   } catch (error) {
     console.error(`Admin Error fetching user ${userIdParam}:`, error);
     res
@@ -600,50 +764,37 @@ export const adminGetUserById = asyncHandler(async (req, res) => {
 
 /**
  * @desc    Update a user's status (e.g., approve/reject/suspend) (Admin only)
- * @route   PATCH /api/admin/users/:id/status (Example route using PATCH)
+ * @route   PATCH /api/admin/users/:id/status (Example route)
  * @access  Private/Admin
  */
 export const adminUpdateUserStatus = asyncHandler(async (req, res) => {
+  /* ... Keep implementation ... */
   const userIdParam = req.params.id;
-  const { status } = req.body; // Expecting { "status": "approved" } or similar
+  const { status } = req.body;
   const adminUserId = req.user.id;
-
   console.log(
     `ADMIN API: adminUpdateUserStatus for User ${userIdParam} to status '${status}' by Admin ${adminUserId}`
   );
-
   if (!User) {
     return res
       .status(500)
       .json({ success: false, message: "User model not loaded." });
   }
-
-  // Validate the provided status against allowed values in the model definition
-  const validStatuses = User.getAttributes().status?.values; // ['pending', 'approved', 'rejected', 'suspended'] etc.
+  const validStatuses = User.getAttributes().status?.values;
   if (!status || !validStatuses || !validStatuses.includes(status)) {
-    return res.status(400).json({
-      success: false,
-      message: `Invalid or missing status provided. Must be one of: ${validStatuses?.join(
-        ", "
-      )}`,
-    });
+    return res.status(400).json({ success: false, message: `Invalid status.` });
   }
-
   const userId = parseInt(userIdParam, 10);
-  if (isNaN(userId) || userId <= 0) {
+  if (isNaN(userId)) {
     return res
       .status(400)
-      .json({ success: false, message: "Invalid User ID provided." });
+      .json({ success: false, message: "Invalid User ID." });
   }
-
-  // Optional: Prevent admin from changing their own status?
   if (userId === adminUserId) {
-    return res.status(400).json({
-      success: false,
-      message: "Administrators cannot change their own status.",
-    });
+    return res
+      .status(400)
+      .json({ success: false, message: "Cannot change own status." });
   }
-
   try {
     const user = await User.findByPk(userId);
     if (!user) {
@@ -651,34 +802,21 @@ export const adminUpdateUserStatus = asyncHandler(async (req, res) => {
         .status(404)
         .json({ success: false, message: "User not found." });
     }
-
-    // Optional: Check if status is already set to the target value
     if (user.status === status) {
       return res.status(200).json({
         success: true,
-        message: `User status is already '${status}'. No update performed.`,
-        data: user, // Return current user data
+        message: `Status already '${status}'.`,
+        data: user,
       });
     }
-
-    // Update the user's status
     user.status = status;
-    await user.save(); // Save the changes
-
-    console.log(
-      `ADMIN: Successfully updated user ${userId} status to ${status}`
-    );
-
-    // TODO: Implement notification logic if needed (e.g., email the user about status change)
-
-    // Fetch updated user data to return (excluding password)
+    await user.save();
     const updatedUser = await User.findByPk(userId, {
       attributes: { exclude: ["password"] },
     });
-
     res.status(200).json({
       success: true,
-      message: `User status successfully updated to ${status}.`,
+      message: `Status updated to ${status}.`,
       data: updatedUser,
     });
   } catch (error) {
@@ -688,57 +826,43 @@ export const adminUpdateUserStatus = asyncHandler(async (req, res) => {
     );
     res
       .status(500)
-      .json({ success: false, message: "Server error updating user status." });
+      .json({ success: false, message: "Server error updating status." });
   }
 });
 
 /**
  * @desc    Update a user's role (Admin only)
- * @route   PATCH /api/admin/users/:id/role (Example route using PATCH)
+ * @route   PATCH /api/admin/users/:id/role (Example route)
  * @access  Private/Admin
  */
 export const adminUpdateUserRole = asyncHandler(async (req, res) => {
+  /* ... Keep implementation ... */
   const userIdParam = req.params.id;
-  const { role } = req.body; // Expecting { "role": "admin" } or "user" etc.
+  const { role } = req.body;
   const adminUserId = req.user.id;
-
   console.log(
     `ADMIN API: adminUpdateUserRole for User ${userIdParam} to role '${role}' by Admin ${adminUserId}`
   );
-
   if (!User) {
     return res
       .status(500)
       .json({ success: false, message: "User model not loaded." });
   }
-
-  // Validate the provided role against allowed values in the model definition
-  const validRoles = User.getAttributes().role?.values; // e.g., ['user', 'admin', 'moderator']
+  const validRoles = User.getAttributes().role?.values;
   if (!role || !validRoles || !validRoles.includes(role)) {
-    return res.status(400).json({
-      success: false,
-      message: `Invalid or missing role provided. Must be one of: ${validRoles?.join(
-        ", "
-      )}`,
-    });
+    return res.status(400).json({ success: false, message: `Invalid role.` });
   }
-
   const userId = parseInt(userIdParam, 10);
-  if (isNaN(userId) || userId <= 0) {
+  if (isNaN(userId)) {
     return res
       .status(400)
-      .json({ success: false, message: "Invalid User ID provided." });
+      .json({ success: false, message: "Invalid User ID." });
   }
-
-  // Prevent admin from changing their own role via this endpoint
   if (userId === adminUserId) {
-    return res.status(400).json({
-      success: false,
-      message:
-        "Administrators cannot change their own role using this function.",
-    });
+    return res
+      .status(400)
+      .json({ success: false, message: "Cannot change own role." });
   }
-
   try {
     const user = await User.findByPk(userId);
     if (!user) {
@@ -746,39 +870,28 @@ export const adminUpdateUserRole = asyncHandler(async (req, res) => {
         .status(404)
         .json({ success: false, message: "User not found." });
     }
-
-    // Optional: Check if role is already set
     if (user.role === role) {
       return res.status(200).json({
         success: true,
-        message: `User role is already '${role}'. No update performed.`,
+        message: `Role already '${role}'.`,
         data: user,
       });
     }
-
-    // Optional: Add checks to prevent demoting the last admin, depending on application logic
-
-    // Update the user's role
     user.role = role;
-    await user.save(); // Save changes
-
-    console.log(`ADMIN: Successfully updated user ${userId} role to ${role}`);
-
-    // Fetch updated user data (excluding password)
+    await user.save();
     const updatedUser = await User.findByPk(userId, {
       attributes: { exclude: ["password"] },
     });
-
     res.status(200).json({
       success: true,
-      message: `User role successfully updated to ${role}.`,
+      message: `Role updated to ${role}.`,
       data: updatedUser,
     });
   } catch (error) {
     console.error(`Admin Error updating role for user ${userIdParam}:`, error);
     res
       .status(500)
-      .json({ success: false, message: "Server error updating user role." });
+      .json({ success: false, message: "Server error updating role." });
   }
 });
 
@@ -788,34 +901,28 @@ export const adminUpdateUserRole = asyncHandler(async (req, res) => {
  * @access  Private/Admin
  */
 export const adminDeleteUser = asyncHandler(async (req, res) => {
+  /* ... Keep implementation ... */
   const userIdToDeleteParam = req.params.id;
-  const adminUserId = req.user.id; // ID of the admin performing the action
-
+  const adminUserId = req.user.id;
   console.log(
-    `ADMIN API: adminDeleteUser request for User ${userIdToDeleteParam} by Admin ${adminUserId}`
+    `ADMIN API: adminDeleteUser for User ${userIdToDeleteParam} by Admin ${adminUserId}`
   );
-
   if (!User) {
     return res
       .status(500)
       .json({ success: false, message: "User model not loaded." });
   }
-
   const userIdToDelete = parseInt(userIdToDeleteParam, 10);
-  if (isNaN(userIdToDelete) || userIdToDelete <= 0) {
+  if (isNaN(userIdToDelete)) {
     return res
       .status(400)
-      .json({ success: false, message: "Invalid User ID provided." });
+      .json({ success: false, message: "Invalid User ID." });
   }
-
-  // Critical check: Prevent admin from deleting their own account
   if (userIdToDelete === adminUserId) {
-    return res.status(400).json({
-      success: false,
-      message: "Administrators cannot delete their own account.",
-    });
+    return res
+      .status(400)
+      .json({ success: false, message: "Cannot delete own account." });
   }
-
   try {
     const user = await User.findByPk(userIdToDelete);
     if (!user) {
@@ -823,32 +930,15 @@ export const adminDeleteUser = asyncHandler(async (req, res) => {
         .status(404)
         .json({ success: false, message: "User not found." });
     }
-
-    // --- IMPORTANT ---
-    // Add logic here BEFORE destroying the user if you need to handle their associated data:
-    // - Reassign ownership of projects/documents?
-    // - Anonymize posts/comments?
-    // - Delete related records (if CASCADE delete is not set up or not desired)?
-    // Example: await Project.update({ ownerId: null }, { where: { ownerId: userIdToDelete } });
+    await user.destroy();
     console.log(
-      `ADMIN: Preparing to delete user ${userIdToDelete} (${user.username}). Performing pre-delete actions if any...`
+      `Admin ${adminUserId} deleted user ${userIdToDelete} (${user.username}).`
     );
-    // --- END IMPORTANT ---
-
-    await user.destroy(); // This will permanently delete the user record. Triggers model hooks/CASCADE deletes if configured.
-
-    console.log(
-      `Admin ${adminUserId} successfully deleted user ${userIdToDelete} (${user.username}).`
-    );
-
-    res.status(200).json({
-      // OK or 204 No Content could also be used
-      success: true,
-      message: "User deleted successfully.",
-    });
+    res
+      .status(200)
+      .json({ success: true, message: "User deleted successfully." });
   } catch (error) {
     console.error(`Admin Error deleting user ${userIdToDeleteParam}:`, error);
-    // Check if the error is related to foreign key constraints (if deletion was blocked)
     if (error.name === "SequelizeForeignKeyConstraintError") {
       return res.status(400).json({
         success: false,
@@ -861,5 +951,3 @@ export const adminDeleteUser = asyncHandler(async (req, res) => {
       .json({ success: false, message: "Server error deleting user." });
   }
 });
-
-// No need for a final export {} block when using 'export const' for each function.

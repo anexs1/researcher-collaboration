@@ -1,45 +1,55 @@
 // backend/routes/userRoutes.js
 import express from "express";
-import { protect } from "../middleware/authMiddleware.js"; // Your auth middleware
+import multer from "multer"; // Import multer
+import path from "path"; // Import path
+import { protect } from "../middleware/authMiddleware.js";
 
-// Import controller functions
+// --- !!! CORRECTED IMPORT !!! ---
+// Make sure ALL controller functions used in this file are imported
 import {
-  getUserPublicProfile,
+  getUserPublicProfile, // <<<=== ADDED THIS
   updateUserProfile,
-  updateUserEmail, // Handles PUT /api/users/me/email
-  updateUserPassword, // Handles PUT /api/users/me/password
+  updateUserEmail,
+  updateUserPassword,
   getSelectableUsers,
 } from "../controllers/userController.js"; // Adjust path if needed
-
-// Optional: Import upload middleware if needed for profile picture
-// import upload from '../middleware/uploadMiddleware.js';
+// --- END CORRECTION ---
 
 const router = express.Router();
 
+// --- Multer Configuration for Profile Pictures ---
+const storage = multer.memoryStorage(); // Use memory storage
+const fileFilter = (req, file, cb) => {
+  if (file.mimetype.startsWith("image/")) {
+    // Accept only images
+    cb(null, true);
+  } else {
+    // Use a standard Error object for the callback
+    cb(new Error("Invalid file type. Only images are allowed."), false);
+  }
+};
+const uploadProfilePic = multer({
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+});
+// --- End Multer Configuration ---
+
 // --- Public Routes ---
-// GET /api/users/public/:userId - Fetch public profile data for any user
-// NOTE: Parameter name is ':userId', ensure controller uses req.params.userId
+// This route now correctly uses the imported controller
 router.get("/public/:userId", getUserPublicProfile);
 
-// --- Protected 'Me' Routes (Operations on the logged-in user's own data) ---
-// These routes rely on `protect` middleware setting `req.user`
+// --- Protected 'Me' Routes ---
+// Apply Multer middleware for the profile update route
+router.put(
+  "/profile",
+  protect, // 1. Authenticate
+  uploadProfilePic.single("profileImageFile"), // 2. Process form data (file + text fields)
+  updateUserProfile // 3. Call controller
+);
 
-// PUT /api/users/profile - Update non-sensitive profile info
-router.put("/profile", protect, updateUserProfile);
-
-// PUT /api/users/me/email - Update user's email (requires password verification)
 router.put("/me/email", protect, updateUserEmail);
-
-// PUT /api/users/me/password - Update user's password (requires current password)
 router.put("/me/password", protect, updateUserPassword);
-
-// --- Route for Collaborator Selection ---
-// GET /api/users/selectable - Fetches users suitable for collaborator selection
-// Requires user to be logged in.
 router.get("/selectable", protect, getSelectableUsers);
-
-// --- NOTE: Admin routes (e.g., GET /api/admin/users/ or DELETE /api/admin/users/:id)
-// should be defined in a separate adminRoutes.js file and mounted under /api/admin
-// using admin-specific middleware checks.
 
 export default router;
