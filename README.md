@@ -1,7 +1,3 @@
-Here's your **revised, interactive, and corrected project setup documentation**, formatted clearly for readability and usability in a collaborative development environment. It includes improvements in grammar, structure, consistency, and clarity.
-
----
-
 # 🌐 Researcher Collaboration Portal – Project Setup Guide
 
 This guide outlines everything you need to set up, run, and manage the full-stack portal (React + Node.js + MySQL + Socket.io).
