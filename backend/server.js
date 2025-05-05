@@ -10,7 +10,7 @@ import http from "http";
 
 // --- Config & Middleware ---
 import { initSocketIO } from "./config/socketSetup.js";
-import { connectDB } from "./config/db.js";
+import { connectDB } from "./config/db.js"; // Assuming this connects Sequelize/DB
 import { notFound, errorHandler } from "./middleware/errorMiddleware.js";
 
 // --- Route Imports ---
@@ -21,6 +21,7 @@ import publicationRoutes from "./routes/publicationRoutes.js";
 import collaborationRequestRoutes from "./routes/collaborationRequestRoutes.js";
 import messagingRoutes from "./routes/messagingRoutes.js";
 import adminRoutes from "./routes/admin.routes.js";
+import notificationRoutes from "./routes/notificationRoutes.js"; // <<<=== IMPORT NOTIFICATION ROUTES
 
 // --- Environment Variable Check & Setup ---
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -53,7 +54,6 @@ try {
 }
 
 // --- ES Module __dirname Configuration ---
-// This correctly determines the directory where server.js resides.
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -64,20 +64,10 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" })); // For parsing a
 
 // =======================================================
 // --- Static File Serving Configuration ---
-// This section tells Express how to handle requests for static assets like images.
-// =======================================================
-
-// 1. Calculate the absolute path to the 'uploads' directory.
-//    Assumes 'uploads' is directly inside the 'backend' directory (where server.js is).
-//    Verify your actual project structure matches this assumption.
 const uploadsPath = path.join(__dirname, "uploads");
-
-// 2. Log the path being used (useful for debugging). Check this path in your console!
 console.log(
   `[Server Config] Configuring static file serving for URL '/uploads' from filesystem path: ${uploadsPath}`
 );
-
-// 3. Ensure the 'uploads' directory exists. Create it if it doesn't.
 if (!fs.existsSync(uploadsPath)) {
   try {
     fs.mkdirSync(uploadsPath, { recursive: true });
@@ -89,46 +79,30 @@ if (!fs.existsSync(uploadsPath)) {
       `❌ [Server Config] Failed to create 'uploads' directory at: ${uploadsPath}`,
       mkdirErr
     );
-    // Decide if you want to exit or just warn if directory creation fails
   }
 }
-
-// 4. Mount the static middleware.
-//    Any request starting with '/uploads' (e.g., '/uploads/projects/image.jpg')
-//    will make Express look for the corresponding file inside the 'uploadsPath' directory
-//    (e.g., looking for '[absolute path]/backend/uploads/projects/image.jpg').
-//    *This setup looks correct.* If you still get 404s, the issue is likely:
-//      a) The files DO NOT EXIST in the expected subdirectories (e.g., 'uploads/projects/').
-//      b) The file upload process (Multer) is saving files to a DIFFERENT location.
-//      c) The file URLs in your database/API response are incorrect (e.g., missing '/uploads/').
 app.use("/uploads", express.static(uploadsPath));
-
-// =======================================================
-// --- End Static File Serving Configuration ---
 // =======================================================
 
 // --- API Route Mounting ---
 console.log("[Server Config] Mounting API routes...");
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
-app.use("/api/projects", projectRoutes); // Ensure Multer config within these routes saves to 'uploads/projects' (or respective subdirs)
+app.use("/api/projects", projectRoutes);
 app.use("/api/collaboration-requests", collaborationRequestRoutes);
-app.use("/api/publications", publicationRoutes); // Ensure Multer config within these routes saves to 'uploads/publications' etc.
+app.use("/api/publications", publicationRoutes);
 app.use("/api/messaging", messagingRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/notifications", notificationRoutes); // <<<=== MOUNT NOTIFICATION ROUTES
 console.log("✅ [Server Config] API routes mounted.");
 
 // --- Serve React Frontend Build (Production Mode Only) ---
 if (NODE_ENV === "production") {
-  // Path to the frontend build output directory
-  const buildPath = path.join(__dirname, "../frontend/dist"); // Assumes frontend is sibling to backend
+  const buildPath = path.join(__dirname, "../frontend/dist");
   console.log(`[Server Prod] Checking for frontend build at: ${buildPath}`);
 
   if (fs.existsSync(buildPath)) {
-    // Serve static assets from the build directory
     app.use(express.static(buildPath));
-
-    // For any other GET request, serve the index.html (for SPA routing)
     app.get("*", (req, res) => {
       res.sendFile(path.resolve(buildPath, "index.html"));
     });
@@ -139,7 +113,6 @@ if (NODE_ENV === "production") {
     console.warn(
       `⚠️ [Server Prod] Frontend build directory not found at ${buildPath}. Cannot serve frontend.`
     );
-    // Fallback for root path if build is missing in production
     app.get("/", (req, res) => {
       res
         .status(404)
@@ -147,26 +120,27 @@ if (NODE_ENV === "production") {
     });
   }
 } else {
-  // Root path response for development mode
   app.get("/", (req, res) => {
     res.send("API is running (Development Mode)...");
   });
 }
 
 // --- Custom Error Handling Middleware (Must be defined LAST) ---
-// Handles routes that are not found (404)
 app.use(notFound);
-// Catches errors passed via next(err) or thrown in async handlers (using express-async-handler)
 app.use(errorHandler);
 
 // --- Start Server Function ---
 const startServer = async () => {
   try {
     console.log("[Server Start] Attempting database connection...");
-    await connectDB(); // Connect to MongoDB or your database
+    // Make sure connectDB establishes the Sequelize connection used by models/index.js
+    await connectDB();
     console.log("✅ [Server Start] Database connected successfully.");
 
-    // Start listening only after DB connection is successful
+    // Optional: Sync models (use migrations in production)
+    // await db.sequelize.sync({ alter: true }); // { force: true } drops tables! Use { alter: true } carefully in dev.
+    // console.log('✅ [Server Start] Sequelize models synced.');
+
     server.listen(PORT, () => {
       console.log(`\n🚀 Server listening on port ${PORT} [${NODE_ENV}]`);
       console.log(`   CORS enabled for: ${FRONTEND_URL}`);
@@ -174,10 +148,26 @@ const startServer = async () => {
       console.log(`   Static uploads served from: ${uploadsPath}`);
     });
   } catch (err) {
-    console.error("❌ [Server Start] Failed to connect to database:", err);
-    process.exit(1); // Exit if database connection fails
+    console.error("❌ [Server Start] Failed to start server:", err);
+    process.exit(1);
   }
 };
 
 // --- Run the Server ---
 startServer();
+
+// Handle unhandled promise rejections
+process.on("unhandledRejection", (err, promise) => {
+  console.error(`Unhandled Rejection at: ${promise}, reason: ${err.message}`);
+  // process.exit(1); // Optionally exit
+});
+
+// Handle graceful shutdown (optional but good)
+process.on("SIGTERM", () => {
+  console.info("SIGTERM signal received: closing HTTP server");
+  server.close(() => {
+    console.log("HTTP server closed");
+    // Close database connection here if needed
+    process.exit(0);
+  });
+});

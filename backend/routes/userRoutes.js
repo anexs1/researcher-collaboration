@@ -4,14 +4,15 @@ import multer from "multer"; // Import multer
 import path from "path"; // Import path
 import { protect } from "../middleware/authMiddleware.js";
 
-// --- !!! CORRECTED IMPORT !!! ---
+// --- !!! CORRECTED & ADDED IMPORT !!! ---
 // Make sure ALL controller functions used in this file are imported
 import {
-  getUserPublicProfile, // <<<=== ADDED THIS
+  getUserPublicProfile,
   updateUserProfile,
   updateUserEmail,
   updateUserPassword,
   getSelectableUsers,
+  getUserActivity, // <<<=== ADDED THIS CONTROLLER IMPORT
 } from "../controllers/userController.js"; // Adjust path if needed
 // --- END CORRECTION ---
 
@@ -36,11 +37,9 @@ const uploadProfilePic = multer({
 // --- End Multer Configuration ---
 
 // --- Public Routes ---
-// This route now correctly uses the imported controller
 router.get("/public/:userId", getUserPublicProfile);
 
 // --- Protected 'Me' Routes ---
-// Apply Multer middleware for the profile update route
 router.put(
   "/profile",
   protect, // 1. Authenticate
@@ -51,5 +50,11 @@ router.put(
 router.put("/me/email", protect, updateUserEmail);
 router.put("/me/password", protect, updateUserPassword);
 router.get("/selectable", protect, getSelectableUsers);
+
+// ==============================================
+// === ADDED ROUTE FOR USER ACTIVITY ==========
+// ==============================================
+// Use :userId because the request comes as /api/users/:userId/activity
+router.get("/:userId/activity", protect, getUserActivity);
 
 export default router;

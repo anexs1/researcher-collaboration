@@ -14,6 +14,7 @@ import MessageModel from "./Message.js";
 import GroupModel from "./Group.js"; // Keep if used
 import SettingModel from "./Setting.js";
 import UserBookmarkModel from "./UserBookmark.js"; // <<< IMPORT UserBookmark Model
+import defineNotificationModel from "./notificationModel.js"; // <<<=== ADD THIS IMPORT for Notification Model
 
 const db = {};
 
@@ -29,6 +30,7 @@ db.Message = MessageModel(sequelize, DataTypes);
 db.Group = GroupModel(sequelize, DataTypes); // Keep if used
 db.Setting = SettingModel(sequelize, DataTypes);
 db.UserBookmark = UserBookmarkModel(sequelize, DataTypes); // <<< INITIALIZE UserBookmark Model
+db.Notification = defineNotificationModel(sequelize); // <<<=== INITIALIZE NOTIFICATION MODEL
 console.log("Models initialized:", Object.keys(db).join(", "));
 
 // Apply associations
