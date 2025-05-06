@@ -2,98 +2,83 @@
 import React, { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import {
-  FaBell,
+  // FaBell, // No longer needed directly
   FaBars,
   FaTimes,
   FaSignOutAlt,
   FaSignInAlt,
   FaUserPlus,
   FaNetworkWired,
-  FaCog, // Added Cog for settings link example
 } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
-import { useNotifications } from "../context/NotificationContext";
+// import { useNotifications } from "../context/NotificationContext"; // No longer needed directly
 
-// ADD layoutType PROP
+// +++ IMPORT THE NEW COMPONENT +++
+import Notifications from "./Notifications"; // Adjust path if needed
+
 const Navbar = ({
   isLoggedIn,
   currentUser,
   onLogout,
-  layoutType = "public",
+  layoutType = "public", // Default to public layout
 }) => {
-  // Default to 'public'
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
-  const { unreadCount, markAsRead } = useNotifications();
+  // const { unreadCount, markAsRead } = useNotifications(); // No longer needed directly
 
-  const isUserLayout = layoutType === "user"; // Check if used in UserLayout
+  const isUserLayout = layoutType === "user"; // Check if it's the user-specific layout
 
   const handleLogoutClick = () => {
-    onLogout();
-    navigate("/login");
-    setIsOpen(false);
+    if (onLogout) {
+      onLogout(); // Call the logout function passed from props
+    }
+    navigate("/login"); // Navigate to login after logout
+    setIsOpen(false); // Close mobile menu
   };
 
-  const toggleMenu = () => {
-    setIsOpen(!isOpen);
-  };
+  const toggleMenu = () => setIsOpen(!isOpen);
 
-  const handleNotificationClick = () => {
-    // ... (notification logic)
-    markAsRead();
-    navigate("/profile/activity"); // Example: navigate to activity or notifications page
-    setIsOpen(false);
-  };
+  // --- REMOVE handleNotificationClick ---
+  // const handleNotificationClick = () => { /* ... */ };
 
+  // Define styles for NavLink active/inactive states
   const activeClassName = "text-white bg-indigo-700";
   const inactiveClassName = "text-gray-300 hover:bg-gray-700 hover:text-white";
   const commonClasses =
-    "px-3 py-2 rounded-md text-sm font-medium transition-colors block md:inline-block";
+    "px-3 py-2 rounded-md text-sm font-medium transition-colors block md:inline-block"; // Base classes for links
 
   return (
     <nav className="bg-gray-900 fixed w-full z-50 shadow-lg">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          {/* Logo/Brand - Always visible */}
+          {/* --- Logo --- */}
           <div className="flex-shrink-0">
             <Link
               to="/"
-              className="text-white hover:text-indigo-300 transition-colors flex items-center"
-              aria-label="Home"
+              className="text-white hover:text-indigo-300 flex items-center"
+              aria-label="Homepage"
             >
-              <FaNetworkWired size={28} />
-              {/* <span className="font-bold text-xl ml-2">Portal</span> */}
+              <FaNetworkWired size={28} /> {/* Example Logo Icon */}
+              {/* Optional: Add text logo */}
+              {/* <span className="ml-2 text-xl font-bold">CollabApp</span> */}
             </Link>
           </div>
 
-          {/* Desktop Menu Links - Conditionally Rendered */}
-          {/* Show full nav only if NOT in UserLayout */}
+          {/* --- Main Navigation Links (Desktop - shown if NOT user layout) --- */}
           {!isUserLayout && (
             <div className="hidden md:block">
               <div className="ml-10 flex items-baseline space-x-4">
                 <NavLink
                   to="/"
-                  end
+                  end // Use 'end' for exact match on root path
                   className={({ isActive }) =>
                     `${commonClasses} ${
                       isActive ? activeClassName : inactiveClassName
                     }`
                   }
                 >
-                  {" "}
-                  Home{" "}
+                  Home
                 </NavLink>
-                {/* <NavLink
-                  to="/explore"
-                  className={({ isActive }) =>
-                    `${commonClasses} ${
-                      isActive ? activeClassName : inactiveClassName
-                    }`
-                  }
-                >
-                  {" "}
-                  Explore{" "}
-                </NavLink> */}
                 <NavLink
                   to="/projects"
                   className={({ isActive }) =>
@@ -102,8 +87,7 @@ const Navbar = ({
                     }`
                   }
                 >
-                  {" "}
-                  Projects{" "}
+                  Projects
                 </NavLink>
                 <NavLink
                   to="/publications"
@@ -113,21 +97,19 @@ const Navbar = ({
                     }`
                   }
                 >
-                  {" "}
-                  Publications{" "}
+                  Publications
                 </NavLink>
                 <NavLink
-                  to="/AboutUS"
+                  to="/aboutus"
                   className={({ isActive }) =>
                     `${commonClasses} ${
                       isActive ? activeClassName : inactiveClassName
                     }`
                   }
                 >
-                  {" "}
-                  AboutUS{" "}
+                  About Us
                 </NavLink>
-                {/* Messages only shown if logged in, but still hidden in UserLayout */}
+                {/* Conditionally show Messages link if logged in */}
                 {isLoggedIn && (
                   <NavLink
                     to="/messages"
@@ -137,130 +119,83 @@ const Navbar = ({
                       }`
                     }
                   >
-                    {" "}
-                    Messages{" "}
+                    Messages
                   </NavLink>
                 )}
               </div>
             </div>
           )}
 
-          {/* Right Side - Notifications, Profile/Auth - Always visible */}
+          {/* --- Right Side Actions (Desktop) --- */}
           <div className="hidden md:flex md:items-center md:ml-6">
             {isLoggedIn && currentUser ? (
+              // --- Logged In State ---
               <>
-                {/* Notification Bell */}
-                <button
-                  onClick={handleNotificationClick}
-                  className="relative p-1 mr-4 rounded-full text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-white transition-colors"
-                  aria-label="View notifications"
+                {/* +++ RENDER NOTIFICATIONS COMPONENT +++ */}
+                <Notifications />
+
+                {/* --- Profile Link --- */}
+                <Link
+                  to="/profile"
+                  className="flex items-center text-sm rounded-full text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-white mr-4" // Added margin right
+                  aria-label="User Profile"
                 >
-                  <span className="sr-only">View notifications</span>
-                  <FaBell className="h-6 w-6" />
-                  <AnimatePresence>
-                    {unreadCount > 0 && (
-                      <motion.span
-                        initial={{ scale: 0, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0, opacity: 0 }}
-                        className="absolute -top-1 -right-1 block h-4 w-4 rounded-full text-white bg-red-600 text-[10px] font-bold flex items-center justify-center ring-1 ring-white"
-                        aria-hidden="true"
-                      >
-                        {" "}
-                        {unreadCount > 9 ? "9+" : unreadCount}{" "}
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                </button>
+                  <img
+                    className="h-8 w-8 rounded-full object-cover ring-1 ring-gray-500"
+                    src={currentUser.profilePictureUrl || "/default-avatar.png"} // Use default if no picture
+                    alt="User profile picture"
+                  />
+                  {/* Show username on larger screens */}
+                  <span className="ml-2 hidden lg:block">
+                    {currentUser.username}
+                  </span>
+                </Link>
 
-                {/* Profile Area */}
-                <div className="ml-3 relative flex items-center">
-                  <Link
-                    to="/profile"
-                    className="flex items-center text-sm rounded-full text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-white mr-4 group"
-                  >
-                    <span className="sr-only">Open user menu</span>
-                    <img
-                      className="h-8 w-8 rounded-full object-cover ring-1 ring-gray-500"
-                      src={
-                        currentUser.profilePictureUrl || "/default-avatar.png"
-                      }
-                      alt="User profile picture"
-                    />
-                    <span className="ml-2 hidden lg:block text-white group-hover:text-indigo-300 transition-colors">
-                      {" "}
-                      {currentUser.username}{" "}
-                    </span>
-                  </Link>
-                  {/* Optional: Settings Icon Link */}
-                  {/* <Link to="/settings/account" className="p-1 rounded-full text-gray-400 hover:text-white focus:outline-none focus:ring-1 focus:ring-white mr-3" aria-label="Account Settings"><FaCog className="h-5 w-5" /></Link> */}
-                </div>
-
-                {/* Logout Button */}
+                {/* --- Logout Button --- */}
                 <button
                   onClick={handleLogoutClick}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${inactiveClassName}`}
+                  className={`${commonClasses} ${inactiveClassName}`}
+                  aria-label="Logout"
                 >
                   <FaSignOutAlt className="inline mr-1" aria-hidden="true" />{" "}
                   Logout
                 </button>
               </>
             ) : (
+              // --- Logged Out State ---
               <>
-                {" "}
-                {/* Login/Signup Buttons */}
                 <Link
                   to="/login"
                   className={`${commonClasses} ${inactiveClassName}`}
                 >
-                  {" "}
-                  <FaSignInAlt
-                    className="inline mr-1"
-                    aria-hidden="true"
-                  />{" "}
-                  Login{" "}
+                  <FaSignInAlt className="inline mr-1" aria-hidden="true" />{" "}
+                  Login
                 </Link>
                 <Link
                   to="/signup"
-                  className="ml-4 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                  className="ml-4 px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-indigo-500" // Added focus styles
                 >
-                  {" "}
                   <FaUserPlus className="inline mr-1" aria-hidden="true" /> Sign
-                  Up{" "}
+                  Up
                 </Link>
               </>
             )}
           </div>
 
-          {/* Mobile Menu Button */}
+          {/* --- Mobile Menu Button Area --- */}
           <div className="-mr-2 flex md:hidden">
-            {/* Mobile Notifications (if logged in) */}
+            {/* --- RENDER NOTIFICATIONS COMPONENT (Mobile) --- */}
             {isLoggedIn && (
-              <button
-                onClick={handleNotificationClick}
-                className="relative p-1 mr-2 rounded-full text-gray-400 hover:text-white focus:outline-none focus:ring-1 focus:ring-white"
-                aria-label="View notifications"
-              >
-                {" "}
-                <FaBell className="h-6 w-6" />{" "}
-                {unreadCount > 0 && (
-                  <span
-                    className="absolute -top-1 -right-1 block h-4 w-4 transform rounded-full text-white bg-red-600 text-[10px] font-bold flex items-center justify-center ring-1 ring-gray-900"
-                    aria-hidden="true"
-                  >
-                    {" "}
-                    {unreadCount > 9 ? "9+" : unreadCount}{" "}
-                  </span>
-                )}{" "}
-              </button>
+              <Notifications /> // Renders button + dropdown
             )}
-            {/* Hamburger Button */}
+            {/* --- Hamburger Button --- */}
             <button
               onClick={toggleMenu}
               type="button"
               className="bg-gray-800 inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-white"
               aria-controls="mobile-menu"
               aria-expanded={isOpen}
+              aria-label="Open main menu"
             >
               <span className="sr-only">Open main menu</span>
               {isOpen ? (
@@ -273,18 +208,18 @@ const Navbar = ({
         </div>
       </div>
 
-      {/* Mobile Menu Panel - Conditionally Render Links */}
+      {/* --- Mobile Menu Dropdown Panel --- */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="md:hidden overflow-hidden"
+            transition={{ duration: 0.2, ease: "easeInOut" }}
+            className="md:hidden overflow-hidden" // Hide on medium screens and up
             id="mobile-menu"
           >
-            {/* Core Links (Show only if not in UserLayout) */}
+            {/* --- Main Nav Links (Mobile - shown if NOT user layout) --- */}
             {!isUserLayout && (
               <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
                 <NavLink
@@ -299,17 +234,6 @@ const Navbar = ({
                 >
                   Home
                 </NavLink>
-                {/* <NavLink
-                  to="/explore"
-                  className={({ isActive }) =>
-                    `${commonClasses} ${
-                      isActive ? activeClassName : inactiveClassName
-                    }`
-                  }
-                  onClick={toggleMenu}
-                >
-                  Explore
-                </NavLink> */}
                 <NavLink
                   to="/projects"
                   className={({ isActive }) =>
@@ -341,7 +265,7 @@ const Navbar = ({
                   }
                   onClick={toggleMenu}
                 >
-                  AboutUS
+                  About Us
                 </NavLink>
                 {isLoggedIn && (
                   <NavLink
@@ -358,92 +282,45 @@ const Navbar = ({
                 )}
               </div>
             )}
-            {/* User/Auth Section (Always shown based on login status) */}
+
+            {/* --- Auth/Profile Links (Mobile) --- */}
             <div className="pt-4 pb-3 border-t border-gray-700">
               {isLoggedIn && currentUser ? (
-                <>
-                  {" "}
-                  {/* Logged In Mobile View */}
-                  <div className="flex items-center px-5 mb-3">
-                    <div className="flex-shrink-0">
-                      <img
-                        className="h-10 w-10 rounded-full object-cover ring-1 ring-gray-500"
-                        src={
-                          currentUser.profilePictureUrl || "/default-avatar.png"
-                        }
-                        alt="User profile picture"
-                      />
-                    </div>
-                    <div className="ml-3">
-                      <div className="text-base font-medium leading-none text-white">
-                        {currentUser.username}
-                      </div>
-                      {currentUser.email && (
-                        <div className="text-sm font-medium leading-none text-gray-400 mt-1">
-                          {currentUser.email}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="mt-3 px-2 space-y-1">
-                    {/* If in UserLayout, these links might be redundant if also in sidebar, but okay to keep */}
-                    <NavLink
-                      to="/profile"
-                      className={({ isActive }) =>
-                        `${commonClasses} ${
-                          isActive ? activeClassName : inactiveClassName
-                        }`
-                      }
-                      onClick={toggleMenu}
-                    >
-                      Your Profile
-                    </NavLink>
-                    <NavLink
-                      to="/settings/account"
-                      className={({ isActive }) =>
-                        `${commonClasses} ${
-                          isActive ? activeClassName : inactiveClassName
-                        }`
-                      }
-                      onClick={toggleMenu}
-                    >
-                      Settings
-                    </NavLink>
-                    <button
-                      onClick={handleLogoutClick}
-                      className={`block w-full text-left ${commonClasses} ${inactiveClassName}`}
-                    >
-                      {" "}
-                      Logout{" "}
-                    </button>
-                  </div>
-                </>
-              ) : (
+                // --- Logged In State (Mobile) ---
                 <div className="px-2 space-y-1">
-                  {" "}
-                  {/* Logged Out Mobile View */}
-                  <NavLink
+                  {/* Mobile Profile Link */}
+                  <Link
+                    to="/profile"
+                    className="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700"
+                    onClick={toggleMenu}
+                  >
+                    Your Profile ({currentUser.username})
+                  </Link>
+                  {/* Mobile Logout Button */}
+                  <button
+                    onClick={handleLogoutClick} // Uses the same handler
+                    className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700"
+                  >
+                    Logout
+                  </button>
+                </div>
+              ) : (
+                // --- Logged Out State (Mobile) ---
+                <div className="px-2 space-y-1">
+                  <Link
                     to="/login"
-                    className={({ isActive }) =>
-                      `${commonClasses} ${
-                        isActive ? activeClassName : inactiveClassName
-                      }`
-                    }
+                    className={`${commonClasses} ${inactiveClassName}`}
                     onClick={toggleMenu}
                   >
                     Login
-                  </NavLink>
-                  <NavLink
+                  </Link>
+                  <Link
                     to="/signup"
-                    className={({ isActive }) =>
-                      `${commonClasses} ${
-                        isActive ? activeClassName : inactiveClassName
-                      }`
-                    }
+                    className={`${commonClasses} ${inactiveClassName}`}
                     onClick={toggleMenu}
                   >
                     Sign Up
-                  </NavLink>
+                  </Link>
                 </div>
               )}
             </div>

@@ -1,65 +1,67 @@
-// backend/models/notificationModel.js
 import { DataTypes, Model } from "sequelize";
 
 export default (sequelize) => {
   class Notification extends Model {
     static associate(models) {
       Notification.belongsTo(models.User, {
-        foreignKey: "userId",
-        as: "recipient", // Renamed for clarity - this is the recipient
+        foreignKey: "userId", // The user receiving the notification
+        as: "recipient",
         onDelete: "CASCADE",
-        onUpdate: "CASCADE",
       });
-      // You could add other associations here if needed, e.g., relating
-      // a notification directly to a Project or CollaborationRequest.
+      // Optional: Add association to User who triggered it (if needed)
+      // Notification.belongsTo(models.User, { foreignKey: 'senderId', as: 'sender' });
     }
   }
 
   Notification.init(
     {
       id: {
-        type: DataTypes.INTEGER,
+        type: DataTypes.INTEGER.UNSIGNED, // Use UNSIGNED if DB supports it
         autoIncrement: true,
         primaryKey: true,
       },
       userId: {
-        // The ID of the user RECEIVING the notification
-        type: DataTypes.INTEGER,
+        // ID of the recipient
+        type: DataTypes.INTEGER.UNSIGNED,
         allowNull: false,
-        references: { model: "Users", key: "id" },
+        references: { model: "Users", key: "id" }, // Ensure 'Users' is your actual user table name
         onDelete: "CASCADE",
-        onUpdate: "CASCADE",
         comment: "ID of the user who receives this notification.",
       },
       type: {
+        // e.g., 'NEW_COLLAB_JOIN_REQUEST', 'COLLAB_REQUEST_RESPONSE', 'NEW_MESSAGE'
         type: DataTypes.STRING,
         allowNull: false,
-        comment:
-          "Category (e.g., NEW_COLLABORATION_REQUEST, REQUEST_RESPONSE).",
+        comment: "Category of the notification.",
       },
       message: {
-        // Optional: Pre-formatted text
+        // Pre-formatted text for display
         type: DataTypes.TEXT,
         allowNull: true,
-        comment: "Pre-formatted notification message text (optional).",
+        comment: "Pre-formatted notification message text.",
       },
       data: {
-        // Crucial for context and links
+        // JSON blob for context (IDs, names, etc.)
         type: DataTypes.JSON,
         allowNull: true,
         comment:
           "JSON object with relevant IDs/context (e.g., { projectId: 1, requesterId: 5 }).",
         get() {
-          // Ensure data is always parsed from DB if stored as string
+          // Ensure data is always parsed from DB string
           const rawValue = this.getDataValue("data");
-          if (rawValue && typeof rawValue === "string") {
-            try {
-              return JSON.parse(rawValue);
-            } catch (e) {
-              return null;
-            }
+          try {
+            return rawValue && typeof rawValue === "string"
+              ? JSON.parse(rawValue)
+              : rawValue;
+          } catch (e) {
+            console.error(
+              "Error parsing notification data JSON:",
+              e,
+              "Raw:",
+              rawValue
+            );
+            return null;
           }
-          return rawValue;
         },
       },
       readStatus: {
@@ -68,14 +70,18 @@ export default (sequelize) => {
         defaultValue: false,
         comment: "True if the user has marked the notification as read.",
       },
-      // createdAt and updatedAt are added by timestamps: true
+      // createdAt, updatedAt added by timestamps: true
     },
     {
       sequelize,
       modelName: "Notification",
-      tableName: "Notifications",
-      timestamps: true,
-      indexes: [{ fields: ["userId"] }, { fields: ["userId", "readStatus"] }],
+      tableName: "Notifications", // Or your preferred table name
+      timestamps: true, // Adds createdAt and updatedAt
+      underscored: false, // Assume camelCase columns unless DB uses snake_case
+      indexes: [
+        { fields: ["userId"] }, // Index for fetching user's notifications
+        { fields: ["userId", "readStatus"] }, // Index for fetching unread count/notifications
+      ],
     }
   );
 

@@ -1,22 +1,19 @@
-// backend/routes/notificationRoutes.js
 import express from "express";
-import { protect } from "../middleware/authMiddleware.js"; // Assuming you have this auth middleware
+import { protect } from "../middleware/authMiddleware.js"; // Adjust path
 import {
   getNotificationsForUser,
   getUnreadNotificationCount,
   markNotificationsAsRead,
   deleteNotification,
-} from "../controllers/notificationController.js";
+} from "../controllers/notificationController.js"; // Adjust path
 
 const router = express.Router();
 
-// Apply protect middleware to all notification routes
-router.use(protect);
+router.use(protect); // Apply auth middleware to all routes below
 
-// Define routes
-router.get("/", getNotificationsForUser);
-router.get("/unread-count", getUnreadNotificationCount);
-router.patch("/mark-read", markNotificationsAsRead); // Use PATCH for updating status
-router.delete("/:notificationId", deleteNotification);
+router.get("/", getNotificationsForUser); // GET /api/notifications?limit=10&page=1&status=unread
+router.get("/unread-count", getUnreadNotificationCount); // GET /api/notifications/unread-count
+router.patch("/mark-read", markNotificationsAsRead); // PATCH /api/notifications/mark-read (body: { notificationIds: [1, 2] } or empty for all)
+router.delete("/:notificationId", deleteNotification); // DELETE /api/notifications/123
 
 export default router;

@@ -1,61 +1,53 @@
-// backend/config/socketSetup.js
 import { Server as SocketIOServer } from "socket.io";
 import jwt from "jsonwebtoken";
 import db from "../models/index.js"; // Adjust path if necessary
 
-// Ensure all needed models are correctly imported via the db object
-const { User, Message, Project, Member } = db;
+const { User } = db;
 
-// --- Module-level variables ---
 const userSockets = new Map(); // Stores mapping: userIdString -> Set<socketId>
-let io = null; // Holds the initialized Socket.IO server instance
+let io = null;
 
-// --- Initialization Function ---
+// --- Helper to log map contents (optional, can be verbose) ---
+const logUserSockets = (context) => {
+  // Convert map to a more readable format for logging
+  const mapEntries = Array.from(userSockets.entries()).map(
+    ([userId, socketSet]) => {
+      return `User ${userId}: ${Array.from(socketSet).join(", ")}`;
+    }
+  );
+  // Limit log length if map gets very large
+  const logString = `{ ${mapEntries.join("; ")} }`;
+  console.log(
+    `[${context}] Current userSockets Map (${
+      userSockets.size
+    } users): ${logString.substring(0, 500)}${
+      logString.length > 500 ? "..." : ""
+    }`
+  );
+};
+
 export const initSocketIO = (httpServer) => {
   const jwtSecret = process.env.JWT_SECRET;
-  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173"; // Your React app's default URL
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173"; // Ensure this matches your frontend
 
-  // --- Pre-checks ---
-  if (!jwtSecret) {
+  if (!jwtSecret)
     throw new Error("FATAL ERROR: JWT_SECRET Environment variable is Missing.");
-  }
-  if (!httpServer) {
-    throw new Error(
-      "FATAL ERROR: Valid httpServer instance was not provided to initSocketIO."
-    );
-  }
-  if (!User || !Message || !Project || !Member) {
-    console.error("Models loaded:", {
-      User: !!User,
-      Message: !!Message,
-      Project: !!Project,
-      Member: !!Member,
-    });
-    throw new Error(
-      "FATAL ERROR: Required database models (User, Message, Project, Member) are not loaded correctly."
-    );
-  }
+  if (!httpServer)
+    throw new Error("FATAL ERROR: Valid httpServer instance was not provided.");
+  if (!User)
+    throw new Error("FATAL ERROR: User model is not loaded correctly.");
+
   console.log(`Configuring Socket.IO for origin: ${frontendUrl}`);
 
-  // --- Create Socket.IO Server Instance ---
   try {
     io = new SocketIOServer(httpServer, {
-      cors: {
-        origin: frontendUrl, // Allow requests from your frontend
-        methods: ["GET", "POST"], // Methods needed for polling & WebSocket handshake
-        // credentials: true // Uncomment if using cookies/sessions with sockets
-      },
-      // REMOVED: transports: ["websocket"],
-      // Default transports ['polling', 'websocket'] will be used, allowing polling fallback
+      cors: { origin: frontendUrl, methods: ["GET", "POST"] },
     });
-    if (!io) {
+    if (!io)
       throw new Error(
         "Socket.IO server instance creation returned null/undefined."
       );
-    }
-    console.log(
-      "Socket.IO Server instance created successfully (allowing default transports)."
-    );
+    console.log("Socket.IO Server instance created successfully.");
   } catch (creationError) {
     console.error(
       "!!! FAILED TO CREATE Socket.IO Server instance !!!",
@@ -66,344 +58,191 @@ export const initSocketIO = (httpServer) => {
     );
   }
 
-  // --- Socket Authentication Middleware ---
-  try {
-    io.use(async (socket, next) => {
-      const token = socket.handshake.auth.token;
-      if (!token) {
-        console.warn(`Socket Auth Fail (No Token): Socket ${socket.id}`);
-        return next(new Error("Authentication error: No token provided."));
-      }
-      try {
-        const decoded = jwt.verify(token, jwtSecret);
-        const user = await User.findByPk(decoded.id, {
-          attributes: ["id", "username"], // Only fetch necessary fields
-        });
-        if (!user) {
-          // Throw specific error if user is not found after token decode
-          throw new Error(`User not found (ID: ${decoded.id})`);
-        }
-        socket.userId = user.id.toString(); // Store user ID as string on the socket
-        socket.username = user.username; // Store username
-
-        // Add socket ID to the user's set of sockets
-        if (!userSockets.has(socket.userId)) {
-          userSockets.set(socket.userId, new Set());
-        }
-        userSockets.get(socket.userId).add(socket.id);
-
-        next(); // Authentication successful
-      } catch (err) {
-        // Handle JWT errors (expired, invalid) or User not found error
-        console.error(`Socket Auth Fail: Socket ${socket.id}`, err.message);
-        next(new Error(`Authentication error: ${err.message}`)); // Pass error to client
-      }
-    });
-    console.log("Socket.IO authentication middleware configured.");
-  } catch (middlewareError) {
-    console.error(
-      "!!! FAILED TO CONFIGURE Socket.IO Middleware !!!",
-      middlewareError
-    );
-    throw new Error(
-      `Socket.IO Middleware setup failed: ${middlewareError.message}`
-    );
-  }
-
-  // --- Main Connection Handler ---
-  try {
-    io.on("connection", (socket) => {
-      // This code runs *after* the authentication middleware succeeds
-      const userId = socket.userId;
-      const username = socket.username;
-
-      // Double-check if userId is somehow missing after auth (shouldn't happen often)
-      if (!userId) {
-        console.error(
-          `Socket ${socket.id} connected but missing userId after auth middleware. Disconnecting.`
-        );
-        socket.disconnect(true);
-        return;
-      }
+  // Socket Authentication Middleware
+  io.use(async (socket, next) => {
+    const token = socket.handshake.auth.token;
+    console.log(
+      `[Socket Middleware] Incoming connection attempt: Socket ${socket.id}. Checking token...`
+    ); // Log attempt
+    if (!token) {
+      console.warn(`[Socket Auth Fail] No Token: Socket ${socket.id}`);
+      return next(new Error("Authentication error: No token provided.")); // Reject connection
+    }
+    try {
+      const decoded = jwt.verify(token, jwtSecret);
       console.log(
-        `✅ Client Connected: Socket ID ${socket.id}, User ID: ${userId} (${username})`
+        `[Socket Middleware] Token decoded for User ID: ${decoded.id}. Fetching user... Socket: ${socket.id}`
+      ); // Log decoded ID
+      const user = await User.findByPk(decoded.id, {
+        attributes: ["id", "username"],
+      });
+      if (!user) {
+        console.warn(
+          `[Socket Auth Fail] User Not Found in DB: Decoded ID ${decoded.id}, Socket ${socket.id}`
+        ); // Log user not found
+        // Explicitly pass an error indicating user not found associated with token
+        return next(
+          new Error(`Authentication error: User ${decoded.id} not found.`)
+        );
+      }
+
+      // --- Assign User Info and Map Socket ---
+      socket.userId = user.id.toString(); // Store user ID as string
+      socket.username = user.username;
+
+      console.log(
+        `[Socket Middleware] Adding User ${socket.userId} -> Socket ${socket.id} to map.`
       );
-
-      // --- Handle Socket Disconnection ---
-      socket.on("disconnect", (reason) => {
+      if (!userSockets.has(socket.userId)) {
+        userSockets.set(socket.userId, new Set());
         console.log(
-          `🔌 Client Disconnected: Socket ID ${socket.id}, User ID: ${userId}, Reason: ${reason}`
+          `[Socket Middleware] Created new Set in map for User ${socket.userId}.`
         );
-        // Clean up user's socket ID from the map
-        if (userSockets.has(userId)) {
-          const userSocketSet = userSockets.get(userId);
-          userSocketSet.delete(socket.id);
-          // If the user has no more active sockets, remove their entry from the map
-          if (userSocketSet.size === 0) {
-            userSockets.delete(userId);
-            console.log(
-              `User ${userId} (${username}) fully disconnected and removed from map.`
-            );
-          }
-        }
-      });
+      }
+      userSockets.get(socket.userId).add(socket.id);
+      logUserSockets("Socket Middleware - After Add"); // Log map state
 
-      // --- Handle Socket Connection Errors (after initial connection) ---
-      socket.on("connect_error", (err) => {
-        console.error(
-          `Socket Connect Error for ${socket.id} (User ${userId}): ${err.message}`
+      console.log(
+        `[Socket Auth OK] Socket ${socket.id} authenticated as User ${socket.userId} (${socket.username})`
+      );
+      next(); // Grant connection
+    } catch (err) {
+      // Handle JWT errors (expired, invalid signature) or other unexpected errors
+      console.error(
+        `[Socket Auth Fail] JWT/Other Error: Socket ${socket.id}, Message: ${err.message}`
+      );
+      // Pass a generic auth error to the client
+      next(
+        new Error(
+          `Authentication error: ${
+            err.name === "TokenExpiredError" ? "Token expired" : "Invalid token"
+          }`
+        )
+      );
+    }
+  }); // End io.use() Middleware
+
+  // Main Connection Handler (runs only AFTER middleware calls next())
+  io.on("connection", (socket) => {
+    const userId = socket.userId;
+    const username = socket.username;
+
+    // Should always have userId here due to middleware success
+    if (!userId) {
+      console.error(
+        `[Connection Handler] CRITICAL: Socket ${socket.id} connected BUT MISSING userId after auth middleware succeeded. Disconnecting.`
+      );
+      socket.disconnect(true); // Force disconnect
+      return;
+    }
+    console.log(
+      `✅ [Connection Handler] Client Connected and Authenticated: Socket ID ${socket.id}, User ID: ${userId} (${username})`
+    );
+    logUserSockets("Connection Handler - On Connect"); // Log map state upon successful connect
+
+    // --- Handle Socket Disconnection ---
+    socket.on("disconnect", (reason) => {
+      console.log(
+        `🔌 [Disconnect Handler] Client Disconnected: Socket ID ${socket.id}, User ID: ${userId}, Reason: ${reason}`
+      );
+      logUserSockets(
+        `Disconnect Handler - Before Cleanup for User ${userId}, Socket ${socket.id}`
+      ); // Log map state before cleanup
+
+      if (userSockets.has(userId)) {
+        const userSocketSet = userSockets.get(userId);
+        const deleted = userSocketSet.delete(socket.id); // Remove this specific socket ID from the user's set
+        console.log(
+          `[Disconnect Handler] Attempted to delete Socket ${socket.id} from User ${userId}'s Set. Deleted: ${deleted}. Set size now: ${userSocketSet.size}`
         );
-        // Optionally disconnect if the error is severe
-        // socket.disconnect(true);
-      });
-
-      // --- Chat Room Management Handlers ---
-      socket.on("joinChatRoom", ({ roomName }, callback) => {
-        if (roomName && typeof roomName === "string") {
-          socket.join(roomName); // Subscribe the socket to the given room
+        if (userSocketSet.size === 0) {
+          // If this was the user's last socket, remove the user entry from the map
+          userSockets.delete(userId);
           console.log(
-            `Socket ${socket.id} (User ${userId}) joined room: ${roomName}`
+            `[Disconnect Handler] User ${userId} (${username}) has no more sockets. Removed User entry from map.`
           );
-          // Acknowledge success via callback if provided
-          if (typeof callback === "function") callback({ success: true });
+          logUserSockets(`Disconnect Handler - After User ${userId} Removed`); // Log map state after user removal
         } else {
-          console.error(
-            `Invalid roomName provided by User ${userId}:`,
-            roomName
-          );
-          // Acknowledge failure via callback if provided
-          if (typeof callback === "function")
-            callback({ success: false, error: "Invalid room name." });
+          // User still has other sockets connected
+          logUserSockets(
+            `Disconnect Handler - After Socket ${socket.id} Removed for User ${userId}`
+          ); // Log map state after just socket removal
         }
-      });
-
-      socket.on("leaveChatRoom", ({ roomName }) => {
-        if (roomName && typeof roomName === "string") {
-          socket.leave(roomName); // Unsubscribe the socket from the room
-          console.log(
-            `Socket ${socket.id} (User ${userId}) left room: ${roomName}`
-          );
-          // No callback needed typically for leaving
-        }
-      });
-
-      // --- Handle Incoming Project Chat Messages ---
-      socket.on("sendMessage", async (messageData, callback) => {
-        const receivedDataString = JSON.stringify(messageData); // Log incoming data for debugging
-        console.log(
-          `---> ENTER sendMessage | User: ${userId} | Received: ${receivedDataString}`
+      } else {
+        // This might happen if disconnect fires before connection mapping completes fully, or if map state is somehow wrong
+        console.warn(
+          `[Disconnect Handler] User ${userId} NOT found in map upon disconnect of Socket ${socket.id}. Map might be inconsistent or disconnect happened before full connect.`
         );
+        logUserSockets(`Disconnect Handler - User ${userId} Not Found`);
+      }
+    }); // End socket.on("disconnect")
 
-        // 1. Extract data (use authenticated senderId)
-        const {
-          projectId,
-          content,
-          messageType = "text",
-          fileUrl,
-          fileName,
-          mimeType,
-          fileSize,
-        } = messageData;
-        const senderId = userId; // Trust the authenticated ID
+    // --- Handle Socket Connection Errors (Post-Connection) ---
+    socket.on("connect_error", (err) => {
+      // This usually indicates issues happening after the initial successful handshake/authentication
+      console.error(
+        `[Socket connect_error Event] Post-connection error for Socket ${socket.id} (User ${userId}): ${err.message}`
+      );
+    });
 
-        // 2. Validate Input Data
-        let validationError = null;
-        const numericProjectId = projectId ? parseInt(projectId, 10) : null;
-        const numericSenderId = parseInt(senderId, 10); // Should be valid from auth
-
-        if (!numericSenderId)
-          validationError = "Sender ID missing (auth issue).";
-        else if (
-          !numericProjectId ||
-          isNaN(numericProjectId) ||
-          numericProjectId <= 0
-        )
-          validationError = "Invalid Project ID.";
-        else if (
-          messageType === "text" &&
-          (!content || typeof content !== "string" || content.trim() === "")
-        )
-          validationError = "Text message content required.";
-        else if (messageType === "file" && (!fileUrl || !fileName || !mimeType))
-          validationError = "File message missing required fields.";
-        else if (!["text", "file"].includes(messageType))
-          validationError = `Invalid messageType: ${messageType}`;
-
-        if (validationError) {
-          console.error("---> VALIDATION FAILED:", validationError);
-          if (typeof callback === "function")
-            return callback({
-              success: false,
-              error: `Invalid input: ${validationError}`,
-            });
-          else return; // Stop if invalid
-        }
-        console.log(`---> Validation PASSED for messageType: ${messageType}`);
-
-        // 3. Authorization Check (Can sender post in this project?)
-        try {
-          const project = await Project.findByPk(numericProjectId, {
-            attributes: ["ownerId"],
-          });
-          if (!project) throw new Error("Project not found.");
-
-          const isOwner = project.ownerId === numericSenderId;
-          let isMember = false;
-          if (!isOwner) {
-            const membership = await Member.findOne({
-              where: {
-                userId: numericSenderId,
-                projectId: numericProjectId,
-                status: "active",
-              },
-              attributes: ["userId"],
-            });
-            isMember = !!membership;
-          }
-
-          if (!isOwner && !isMember)
-            throw new Error("Not an active member or owner.");
-          console.log(
-            `Authorization Passed for User ${senderId} in Project ${numericProjectId}.`
-          );
-        } catch (authError) {
-          console.error(
-            `Authorization Failed: User ${senderId}, Project ${numericProjectId}`,
-            authError
-          );
-          if (typeof callback === "function")
-            return callback({
-              success: false,
-              error: authError.message || "Permission denied.",
-            });
-          else return;
-        }
-
-        // 4. Prepare Data for Saving
-        const dataToSave = {
-          senderId: numericSenderId,
-          projectId: numericProjectId,
-          messageType: messageType,
-          content: typeof content === "string" ? content.trim() : content, // Trim text, keep file content as is (null)
-          fileUrl: messageType === "file" ? fileUrl : null,
-          fileName: messageType === "file" ? fileName : null,
-          mimeType: messageType === "file" ? mimeType : null,
-          fileSize:
-            messageType === "file" && !isNaN(parseInt(fileSize))
-              ? parseInt(fileSize)
-              : null,
-        };
-        console.log(
-          ">>> [sendMessage] Data prepared for saving:",
-          JSON.stringify(dataToSave, null, 2)
-        );
-
-        // 5. Save Message to Database
-        try {
-          const newMessage = await Message.create(dataToSave);
-
-          // 6. Fetch message with sender details for broadcast
-          const messageToSend = await Message.findByPk(newMessage.id, {
-            include: [
-              {
-                model: User,
-                as: "sender",
-                attributes: ["id", "username", "profilePictureUrl"],
-              },
-            ],
-          });
-          if (!messageToSend)
-            throw new Error("Failed to fetch created message with details.");
-
-          const finalMessageObject = messageToSend.toJSON();
-          console.log(
-            ">>> [sendMessage] Message fetched for broadcast:",
-            JSON.stringify(finalMessageObject, null, 2)
-          );
-
-          // 7. Broadcast the complete message object to the project room
-          const targetRoom = `project-${numericProjectId}`;
-          console.log(
-            `Message saved (ID: ${newMessage.id}, Type: ${finalMessageObject.messageType}), broadcasting to room: ${targetRoom}`
-          );
-          io.to(targetRoom).emit("newMessage", finalMessageObject); // Event name is 'newMessage'
-
-          // 8. Acknowledge success back to the sender
-          if (typeof callback === "function") {
-            callback({
-              success: true,
-              messageId: newMessage.id,
-              sentMessage: finalMessageObject,
-            }); // Optionally send back the full message
-          }
-        } catch (dbError) {
-          console.error(
-            `Error saving/broadcasting message: User ${senderId}, Project ${numericProjectId}`,
-            dbError
-          );
-          if (typeof callback === "function") {
-            callback({
-              success: false,
-              error: "Server error handling message.",
-            });
-          }
-        }
-      }); // --- End sendMessage Handler ---
-
-      // --- Add other socket event listeners here ---
-      // socket.on('typing', ({ roomName }) => { /* ... */ });
-      // socket.on('stopTyping', ({ roomName }) => { /* ... */ });
-    }); // --- End io.on("connection") ---
-
-    console.log("Socket.IO connection handler configured successfully.");
-  } catch (connectionHandlerError) {
-    console.error(
-      "!!! FAILED TO CONFIGURE Socket.IO Connection Handler !!!",
-      connectionHandlerError
-    );
-    throw new Error(
-      `Socket.IO Connection handler setup failed: ${connectionHandlerError.message}`
-    );
-  }
+    // --- Add other specific event listeners here if needed ---
+    // Example: socket.on('join_room', (room) => socket.join(room));
+  }); // End io.on("connection")
 
   console.log("💬 WebSocket server initialization completed successfully.");
-  return io; // Return the initialized io instance for potential use elsewhere
-}; // --- End initSocketIO ---
+  return io;
+}; // End initSocketIO
 
 // --- Function to Emit Event to Specific User(s) ---
-// Sends an event to all connected sockets for a given userId
 export const emitToUser = (targetUserId, eventName, data) => {
+  // Log the emit attempt and target user ID
+  console.log(
+    `[emitToUser] Prepare to emit '${eventName}' to User ${targetUserId}. Data preview:`,
+    JSON.stringify(data).substring(0, 150) + "..."
+  );
+
+  // --- Check io instance ---
   if (!io) {
-    // Check if io has been initialized
     console.error(
-      "Socket.IO WARN: emitToUser called before Socket.IO initialization finished."
+      "[emitToUser] Socket.IO WARN: emitToUser called before Socket.IO instance ('io') is initialized."
     );
-    return false; // Cannot emit if server isn't ready
+    return false;
   }
+  // --- Check targetUserId ---
   if (!targetUserId) {
     console.warn(
-      `emitToUser WARNING: No targetUserId provided for event '${eventName}'.`
+      `[emitToUser] WARNING: No targetUserId provided for event '${eventName}'. Cannot emit.`
     );
     return false;
   }
-  const userIdStr = targetUserId.toString(); // Ensure string format for map key
+  const userIdStr = targetUserId.toString(); // Ensure string key for map lookup
+
+  // --- LOG MAP STATE BEFORE CHECKING ---
+  logUserSockets(`emitToUser - Checking map for User ${userIdStr}`);
+
   const userSocketIds = userSockets.get(userIdStr); // Get the Set of socket IDs for the user
 
+  // --- LOG RESULT OF MAP LOOKUP ---
+  console.log(
+    `[emitToUser] Lookup result for User ${userIdStr} in map:`,
+    userSocketIds ? `Found Set(${userSocketIds.size})` : "Not Found (undefined)"
+  );
+
+  // --- Check if user exists in map AND has active sockets ---
   if (userSocketIds && userSocketIds.size > 0) {
-    // If the user has active sockets
     const socketIdArray = Array.from(userSocketIds); // Convert Set to Array for io.to()
     console.log(
-      `Emitting '${eventName}' to User ${userIdStr} (Sockets: ${socketIdArray.join(
+      `[emitToUser] Emitting '${eventName}' to User ${userIdStr} via Sockets: [${socketIdArray.join(
         ", "
-      )})`
+      )}]`
     );
-    io.to(socketIdArray).emit(eventName, data); // Emit to the specific socket IDs
+    io.to(socketIdArray).emit(eventName, data); // Emit event only to this user's sockets
     return true; // Indicate successful emission attempt
   } else {
-    // User is not currently connected with any socket
+    // Log clearly why emit didn't happen
     console.log(
-      `Emit Notice: User ${userIdStr} not currently connected for event '${eventName}'.`
+      `[emitToUser] Emit Notice: User ${userIdStr} not found in map OR has empty socket Set. Cannot emit '${eventName}' real-time.`
     );
-    return false;
+    return false; // Indicate user wasn't connected for real-time push
   }
-};
+}; // End emitToUser

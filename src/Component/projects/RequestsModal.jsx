@@ -113,10 +113,14 @@ const RequestsModal = ({
 
     try {
       // --- API Call ---
-      // Assumes GET /api/collaboration-requests?projectId=X&status=pending returns pending requests
-      const response = await apiClient.get(`/api/collaboration-requests`, {
-        params: { projectId: project.id, status: "pending" },
-      });
+      // CORRECTED URL: Added '/received' to the path
+      const response = await apiClient.get(
+        `/api/collaboration-requests/received`,
+        {
+          // <<< CORRECTED HERE
+          params: { projectId: project.id, status: "pending" },
+        }
+      );
 
       console.log(
         "RequestsModal API Response:",
@@ -131,7 +135,6 @@ const RequestsModal = ({
         setPendingRequests(pending);
 
         // Set initial count only ONCE per modal instance/project change
-        // Use fetchAttempted ref to ensure it's only set after the *first* successful fetch
         if (!fetchAttempted.current) {
           initialPendingCount.current = pending.length;
           console.log(
@@ -148,11 +151,12 @@ const RequestsModal = ({
     } catch (err) {
       console.error("Error fetching pending requests:", err);
       if (isMounted.current) {
+        // Check specifically for 404 which should now be less likely for this specific call
         const errorMsg =
           err.response?.status === 404
-            ? `API Route Not Found (${err.config?.url})`
+            ? `API Route Not Found (${err.config?.url}) - Check route definition.` // More specific 404 msg
             : err.response?.status === 403
-            ? "Permission Denied."
+            ? "Permission Denied to view requests."
             : err.response?.data?.message ||
               err.message ||
               "Could not load requests.";
@@ -207,13 +211,11 @@ const RequestsModal = ({
           showModalNotification(`Request ${action}.`, "success");
 
           // Update state: remove the handled request
-          // Use functional update to get the latest state length correctly
           let wasLastInitialRequest = false;
           setPendingRequests((prevPending) => {
-            const initialLength = initialPendingCount.current; // Capture initial count before state update
+            const initialLength = initialPendingCount.current;
             const currentLength = prevPending.length;
             const newList = prevPending.filter((req) => req.id !== requestId);
-            // Check if this action clears the list AND if there were initial requests
             if (
               newList.length === 0 &&
               initialLength > 0 &&
@@ -230,11 +232,8 @@ const RequestsModal = ({
               "Last initial request handled. Calling onAllRequestsHandled."
             );
             onAllRequestsHandled(project.id);
-            initialPendingCount.current = 0; // Reset as all initial ones are done
+            initialPendingCount.current = 0; // Reset
           }
-
-          // Optional: Optimistic update for an approved members list elsewhere if needed
-          // if (action === 'approved') { /* ... */ }
         } else {
           throw new Error(
             response.data?.message || `Failed to ${action} request.`
@@ -249,20 +248,17 @@ const RequestsModal = ({
             `Could not ${action} request.`;
           setError(errorMsg); // Show error in the modal
           showModalNotification(errorMsg, "error");
-          // Consider refetching on error? Depends on desired behavior
-          // fetchPendingRequests();
         }
       } finally {
         if (isMounted.current) {
           setProcessingRequestId(null); // Clear loading state for this specific request
         }
       }
-      // Dependencies
     },
     [
       project?.id,
       processingRequestId,
-      pendingRequests,
+      // pendingRequests, // Removed pendingRequests as direct dependency to avoid potential loops, logic relies on filter
       showModalNotification,
       onAllRequestsHandled,
     ]
@@ -276,41 +272,39 @@ const RequestsModal = ({
   // --- Render Logic ---
 
   const renderPendingRequestsList = () => {
-    // Only show messages or list *after* the initial fetch attempt is complete
+    // ... (Keep the existing rendering logic for the list items) ...
+    // It correctly handles loading, error, empty states, and maps the requests.
     if (!isLoading && fetchAttempted.current) {
       if (error) {
-        // Error is displayed globally, so don't show specific message here
         return null;
       }
       if (pendingRequests.length === 0) {
         if (initialPendingCount.current > 0) {
-          // Initial fetch had requests, now empty
           return (
             <p className="text-sm text-center text-green-600 py-4 italic">
-              All pending requests handled.
+              {" "}
+              All pending requests handled.{" "}
             </p>
           );
         } else {
-          // Initial fetch had no requests
           return (
             <p className="text-sm text-center text-gray-500 py-4 italic">
-              No pending requests found for this project.
+              {" "}
+              No pending requests found for this project.{" "}
             </p>
           );
         }
       }
     }
-    // If still loading initially or list is empty before fetch attempt completes
     if (isLoading || pendingRequests.length === 0) {
       return null;
     }
 
-    // Render the list
     return (
       <ul className="space-y-2">
         {pendingRequests.map((req) => {
           const isExpanded = expandedRequestId === req.id;
-          const requester = req.requester || {}; // Default for safety
+          const requester = req.requester || {};
           const isProcessingThis = processingRequestId === req.id;
 
           return (
@@ -323,7 +317,6 @@ const RequestsModal = ({
                 className={`p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
                   isExpanded ? "bg-gray-50" : "hover:bg-gray-50"
                 } transition-colors`}
-                // No onClick here, use button for explicit action
               >
                 {/* Requester Info */}
                 <div className="flex-grow min-w-0">
@@ -341,10 +334,12 @@ const RequestsModal = ({
                       className="font-medium text-gray-800 text-sm truncate"
                       title={requester.username || "Unknown"}
                     >
-                      {requester.username || "Unknown User"}
+                      {" "}
+                      {requester.username || "Unknown User"}{" "}
                     </span>
                     <span className="text-xs text-gray-400 flex-shrink-0">
-                      ({new Date(req.createdAt).toLocaleDateString()})
+                      {" "}
+                      ({new Date(req.createdAt).toLocaleDateString()}){" "}
                     </span>
                   </div>
                   {req.requestMessage && !isExpanded && (
@@ -362,11 +357,12 @@ const RequestsModal = ({
                     title={isExpanded ? "Hide Details" : "Show Details"}
                     onClick={() => toggleDetails(req.id)}
                   >
+                    {" "}
                     {isExpanded ? (
                       <FaChevronUp className="h-3 w-3" />
                     ) : (
                       <FaChevronDown className="h-3 w-3" />
-                    )}
+                    )}{" "}
                   </button>
                   <button
                     onClick={() => handleRequestAction(req.id, "approved")}
@@ -408,65 +404,82 @@ const RequestsModal = ({
                     className="bg-gray-50 border-t border-gray-200 px-4 py-3 text-xs overflow-hidden"
                   >
                     <h5 className="font-semibold text-gray-700 mb-1.5">
-                      Requester Details:
+                      {" "}
+                      Requester Details:{" "}
                     </h5>
                     {requester.email && (
                       <p>
+                        {" "}
                         <span className="font-medium text-gray-600">
-                          Email:
+                          {" "}
+                          Email:{" "}
                         </span>{" "}
-                        {requester.email}
+                        {requester.email}{" "}
                       </p>
                     )}
                     {requester.university && (
                       <p>
+                        {" "}
                         <span className="font-medium text-gray-600">
-                          University:
+                          {" "}
+                          University:{" "}
                         </span>{" "}
-                        {requester.university}
+                        {requester.university}{" "}
                       </p>
                     )}
                     {requester.department && (
                       <p>
+                        {" "}
                         <span className="font-medium text-gray-600">
-                          Department:
+                          {" "}
+                          Department:{" "}
                         </span>{" "}
-                        {requester.department}
+                        {requester.department}{" "}
                       </p>
                     )}
                     {requester.jobTitle && (
                       <p>
+                        {" "}
                         <span className="font-medium text-gray-600">
-                          Job Title:
+                          {" "}
+                          Job Title:{" "}
                         </span>{" "}
-                        {requester.jobTitle}
+                        {requester.jobTitle}{" "}
                       </p>
                     )}
                     {requester.bio && (
                       <p className="mt-1">
-                        <span className="font-medium text-gray-600">Bio:</span>{" "}
-                        {requester.bio}
+                        {" "}
+                        <span className="font-medium text-gray-600">
+                          Bio:
+                        </span>{" "}
+                        {requester.bio}{" "}
                       </p>
                     )}
                     {req.requestMessage && (
                       <div className="mt-2 pt-2 border-t border-gray-100">
+                        {" "}
                         <p className="font-medium text-gray-600 mb-0.5">
-                          Message:
-                        </p>
+                          {" "}
+                          Message:{" "}
+                        </p>{" "}
                         <p className="whitespace-pre-wrap break-words">
-                          {req.requestMessage}
-                        </p>
+                          {" "}
+                          {req.requestMessage}{" "}
+                        </p>{" "}
                       </div>
                     )}
                     <div className="mt-2">
+                      {" "}
                       <Link
                         to={`/profile/${requester.id}`}
                         className="text-indigo-600 hover:underline text-xs font-medium"
                         target="_blank"
                         rel="noopener noreferrer"
                       >
-                        View Full Profile →
-                      </Link>
+                        {" "}
+                        View Full Profile →{" "}
+                      </Link>{" "}
                     </div>
                   </motion.div>
                 )}
@@ -503,39 +516,52 @@ const RequestsModal = ({
           </button>
         </div>
 
-        {/* Notification */}
+        {/* Notification Area */}
         <AnimatePresence>
           {notification.show && (
-            <motion.div /* ... */ className="overflow-hidden">
-              {" "}
-              <Notification /* ... */ />{" "}
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden flex-shrink-0" // Prevent stretching
+            >
+              <Notification
+                message={notification.message}
+                type={notification.type}
+                onClose={() =>
+                  setNotification({ ...notification, show: false })
+                }
+              />
             </motion.div>
-          )}{" "}
+          )}
         </AnimatePresence>
 
         {/* Scrollable Body */}
         <div className="p-4 overflow-y-auto flex-grow">
-          {/* Loading Indicator - Centered */}
+          {/* Loading Indicator */}
           {isLoading && (
             <div className="flex justify-center items-center p-10">
-              {" "}
               <LoadingSpinner />
-              <span className="ml-3 text-gray-500">Loading...</span>{" "}
+              <span className="ml-3 text-gray-500">Loading requests...</span>
             </div>
           )}
 
-          {/* Error Message - Shown when not loading */}
+          {/* Error Message */}
           {!isLoading && error && (
             <div className="mb-4">
-              {" "}
               <ErrorMessage
                 message={error}
-                onClose={() => setError(null)}
+                onClose={() => {
+                  setError(null);
+                  fetchAttempted.current = false;
+                  fetchPendingRequests();
+                }}
               />{" "}
+              {/* Allow retry on close */}
             </div>
           )}
 
-          {/* Pending Requests Section - Shown when not loading and no error */}
+          {/* Pending Requests Section */}
           {!isLoading && !error && (
             <div className="mb-4">
               <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
@@ -545,8 +571,6 @@ const RequestsModal = ({
               {renderPendingRequestsList()}
             </div>
           )}
-
-          {/* Approved Members section removed for simplicity, add back if needed */}
         </div>
 
         {/* Footer */}
