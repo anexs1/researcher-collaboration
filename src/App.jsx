@@ -1,3 +1,5 @@
+// src/App.jsx
+
 import React, {
   useEffect,
   useState,
@@ -19,8 +21,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import "./index.css";
 
 // --- Context Imports ---
-// We NO LONGER call useNotifications directly in App
-import { useNotifications } from "./context/NotificationContext";
+import { useNotifications } from "./context/NotificationContext"; // Keep for SocketManager
 // Import your Auth Context hook
 // import { useAuth } from './context/AuthContext';
 
@@ -123,6 +124,8 @@ import AdminReportsPage from "./Page/Admin/AdminReportsPage";
 import AdminPendingUsersPage from "./Page/Admin/AdminPendingUsersPage";
 import AdminChatPage from "./Page/Admin/AdminChatPage";
 import AdminPublicationManagementPage from "./Page/Admin/AdminPublicationManagementPage";
+// +++ IMPORT ProjectDetailPage +++
+import ProjectDetailPage from "./Page/ProjectDetailPage"; // Adjust path if necessary
 
 // --- Helper Components ---
 const LoadingScreen = ({ message = "Loading..." }) => (
@@ -151,41 +154,32 @@ const ProtectedAdminRoutes = ({ isLoggedIn, isAdmin }) => {
 };
 
 // =========================================================================
-// --- Socket Manager - EDITED to call fetchInitialNotifications ---
+// --- Socket Manager - Includes fetchInitialNotifications call ---
 // =========================================================================
 const SocketManager = ({ token, API_BASE }) => {
-  // --- Get BOTH functions from context ---
   const { addNewNotification, fetchInitialNotifications } = useNotifications();
-  // --- END ---
   const socketRef = useRef(null);
-  const hasFetchedInitial = useRef(false); // Ref to track if initial fetch happened
+  const hasFetchedInitial = useRef(false);
 
   useEffect(() => {
     console.log(`[SocketManager Effect] Running. Token present: ${!!token}`);
-
-    // --- Fetch initial notifications ONCE when token becomes available ---
-    // Check if token exists AND initial fetch hasn't happened yet for this instance
     if (token && !hasFetchedInitial.current) {
       console.log(
         "[SocketManager Effect] Token found and initial fetch needed. CALLING fetchInitialNotifications()."
       );
       fetchInitialNotifications();
-      hasFetchedInitial.current = true; // Mark as fetched for this mount/token presence
+      hasFetchedInitial.current = true;
     }
-    // Reset fetch flag if token is removed (logout/expiry detected by parent)
     if (!token) {
       console.log(
         "[SocketManager Effect] Token removed. Resetting initial fetch flag."
       );
       hasFetchedInitial.current = false;
     }
-    // --- End initial fetch logic ---
 
-    // --- Define cleanup logic ---
     const cleanupSocket = () => {
       if (socketRef.current) {
-        /* ... (cleanup code remains the same) ... */ const socketId =
-          socketRef.current.id;
+        const socketId = socketRef.current.id;
         console.log(
           `[SocketManager Cleanup] Cleaning up socket instance ${socketId}...`
         );
@@ -204,8 +198,6 @@ const SocketManager = ({ token, API_BASE }) => {
         );
       }
     };
-
-    // --- Conditional Logic based on Token ---
     if (!token) {
       console.log(
         "[SocketManager Effect] No token. Ensuring disconnection and cleanup."
@@ -214,7 +206,6 @@ const SocketManager = ({ token, API_BASE }) => {
       return;
     }
 
-    // --- Token exists: Manage Connection ---
     if (!socketRef.current || !socketRef.current.connected) {
       if (socketRef.current) {
         console.warn(
@@ -222,7 +213,6 @@ const SocketManager = ({ token, API_BASE }) => {
         );
         cleanupSocket();
       }
-
       console.log(
         `[SocketManager Effect] Attempting NEW socket connection to ${API_BASE}. Token provided: ${
           token ? "Yes" : "No - ERROR"
@@ -234,8 +224,6 @@ const SocketManager = ({ token, API_BASE }) => {
         reconnectionAttempts: 5,
       });
       socketRef.current = newSocket;
-
-      // --- Define Event Handlers ---
       const handleConnect = () => {
         console.log(
           `✅ [Socket Event - ${newSocket.id}] Connected successfully.`
@@ -290,8 +278,6 @@ const SocketManager = ({ token, API_BASE }) => {
           );
         }
       };
-
-      // --- Attach Event Listeners ---
       console.log(
         `[SocketManager Effect] Attaching listeners for NEW Socket instance ${newSocket.id}`
       );
@@ -304,14 +290,10 @@ const SocketManager = ({ token, API_BASE }) => {
         `[SocketManager Effect] Socket already connected (ID: ${socketRef.current.id}). Maintaining existing connection.`
       );
     }
-
-    // --- Return the cleanup function ---
     return cleanupSocket;
-
-    // --- Added fetchInitialNotifications to dependency array ---
   }, [token, API_BASE, addNewNotification, fetchInitialNotifications]);
 
-  return null; // Component renders nothing
+  return null;
 };
 // ============================================
 // --- End Socket Manager ---
@@ -320,10 +302,7 @@ const SocketManager = ({ token, API_BASE }) => {
 // --- Main App Component ---
 function App() {
   const { user: currentUser, token, login, logout } = useAuth();
-  // --- NO LONGER CALL useNotifications() HERE ---
-  // const { fetchInitialNotifications, addNewNotification } = useNotifications();
-  // --- END ---
-
+  // No longer call useNotifications() here
   const [isAdmin, setIsAdmin] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
@@ -333,22 +312,17 @@ function App() {
     show: false,
   });
 
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000"; // Use your backend port
+  const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
   console.log(`[App Main] Using API_BASE URL: ${API_BASE}`);
 
   const showPopupNotification = useCallback((message, type = "info") => {
-    /* ... popup logic ... */ setPopupNotification({
-      message,
-      type,
-      show: true,
-    });
+    setPopupNotification({ message, type, show: true });
     setTimeout(
       () => setPopupNotification((prev) => ({ ...prev, show: false })),
       5000
     );
   }, []);
 
-  // --- Main Effect for Auth Changes (REMOVED fetchInitialNotifications call) ---
   useEffect(() => {
     console.log(
       "[App Main Effect - Auth Check] Running. Token:",
@@ -359,21 +333,14 @@ function App() {
     setLoadingAuth(true);
     const userIsLoggedIn = !!token && !!currentUser?.id;
     const userIsAdmin = userIsLoggedIn && currentUser?.role === "admin";
-
     setIsLoggedIn(userIsLoggedIn);
     setIsAdmin(userIsAdmin);
     setLoadingAuth(false);
     console.log(
       `[App Main Effect - Auth Check] Auth state update complete: isLoggedIn=${userIsLoggedIn}, isAdmin=${userIsAdmin}`
     );
-
-    // --- REMOVED fetchInitialNotifications call from here ---
-    // if (userIsLoggedIn && fetchInitialNotifications) {
-    //    console.log("[App Main Effect - Auth Check] User is logged in. CALLING fetchInitialNotifications().");
-    //    fetchInitialNotifications();
-    // }
-    // --- End removal ---
-  }, [token, currentUser]); // Dependency array no longer needs fetchInitialNotifications
+    // fetchInitialNotifications is now called inside SocketManager
+  }, [token, currentUser]);
 
   const handleLogout = logout;
 
@@ -382,12 +349,10 @@ function App() {
   }
 
   return (
-    // --- REMOVED NotificationProvider from here ---
+    // NotificationProvider MUST wrap App in main.jsx/index.js
     <Router>
       <NormalizeURL />
-      {/* SocketManager now handles fetching initial notifications internally */}
       {isLoggedIn && <SocketManager token={token} API_BASE={API_BASE} />}
-
       <ConditionalNavbar
         isLoggedIn={isLoggedIn}
         currentUser={currentUser}
@@ -397,17 +362,16 @@ function App() {
       <div className="pt-16 md:pt-20 bg-gray-100 min-h-screen">
         <AnimatePresence>
           {" "}
-          {/* For popup notifications */}
           {popupNotification.show && (
             <motion.div /* ... */>
               {" "}
               <Notification /* ... */ />{" "}
             </motion.div>
-          )}
+          )}{" "}
         </AnimatePresence>
 
+        {/* --- ROUTES --- */}
         <Routes>
-          {/* ... Keep all your Routes definitions exactly the same ... */}
           {/* Public Routes */}
           <Route path="/" element={<Home currentUser={currentUser} />} />
           <Route
@@ -427,6 +391,12 @@ function App() {
             path="/projects"
             element={<Projects currentUser={currentUser} />}
           />
+          {/* +++ ADDED PROJECT DETAIL ROUTE +++ */}
+          <Route
+            path="/projects/:projectId"
+            element={<ProjectDetailPage currentUser={currentUser} />}
+          />
+          {/* +++ END +++ */}
 
           {/* Auth Routes */}
           <Route
@@ -512,6 +482,7 @@ function App() {
                 path="/chat/project/:projectId"
                 element={<ChatPage currentUser={currentUser} />}
               />
+              {/* Note: Project detail route is currently public, move here if needed */}
             </Route>
           </Route>
 
@@ -543,7 +514,6 @@ function App() {
         </Routes>
       </div>
     </Router>
-    // --- REMOVED NotificationProvider from here ---
   );
 }
 
