@@ -1,4 +1,3 @@
-// backend/routes/projectRoutes.js
 import express from "express";
 import multer from "multer";
 import {
@@ -8,16 +7,20 @@ import {
   createProject,
   updateProject,
   deleteProject,
-  getProjectRequests, // Assuming controller still exports this for separate calls
+  getProjectRequests,
   getProjectMembers,
-  adminGetAllProjects, // Keep if controller exports it
+  adminGetAllProjects,
 } from "../controllers/projectController.js";
-import { protect, adminOnly } from "../middleware/authMiddleware.js"; // Keep protect for other routes
+// Import optionalProtect as well
+import {
+  protect,
+  optionalProtect,
+  adminOnly,
+} from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
 // --- Multer Configuration ---
-// (Keep Multer config as is - it's for file uploads, not route protection)
 const storage = multer.memoryStorage();
 const fileFilter = (req, file, cb) => {
   if (file.mimetype.startsWith("image/")) {
@@ -41,48 +44,34 @@ const upload = multer({
 
 // --- Project Routes ---
 
-// --- PUBLIC ROUTES ---
-// GET /api/projects - View all projects (Made public)
-router.get("/", getAllProjects); // <<< REMOVED 'protect'
+// --- PUBLIC / OPTIONALLY AUTHENTICATED ROUTES ---
+// GET /api/projects - View all projects
+// optionalProtect will set req.user if a valid token is present, otherwise req.user is null.
+router.get("/", optionalProtect, getAllProjects); // <<< CORRECTED: Use optionalProtect
 
-// GET /api/projects/:id - View a single project by ID (Made public)
-router.get("/:id", getProjectById); // <<< REMOVED 'protect'
+// GET /api/projects/:id - View a single project by ID
+router.get("/:id", optionalProtect, getProjectById); // <<< CORRECTED: Use optionalProtect
 
-// --- PROTECTED ROUTES (Require Login) ---
-// GET /api/projects/my - View projects created by the logged-in user
+// --- PROTECTED ROUTES (Require Login via 'protect' middleware) ---
+// GET /api/projects/my - View projects created/joined by the logged-in user
 router.get("/my", protect, getMyProjects);
 
-// GET /api/projects/:projectId/requests - View join requests for a specific project (Owner only logic likely in controller)
+// GET /api/projects/:projectId/requests - View join requests for a specific project
 router.get("/:projectId/requests", protect, getProjectRequests);
 
 // GET /api/projects/:projectId/members - View members of a specific project
 router.get("/:projectId/members", protect, getProjectMembers);
 
 // POST /api/projects - Create a new project
-router.post(
-  "/",
-  protect, // Keep protected
-  upload.single("projectImageFile"),
-  createProject
-);
+router.post("/", protect, upload.single("projectImageFile"), createProject);
 
-// PUT /api/projects/:id - Update a project by ID (Owner only logic likely in controller)
-router.put(
-  "/:id",
-  protect, // Keep protected
-  upload.single("projectImageFile"),
-  updateProject
-);
+// PUT /api/projects/:id - Update a project by ID
+router.put("/:id", protect, upload.single("projectImageFile"), updateProject);
 
-// DELETE /api/projects/:id - Delete a project by ID (Owner only logic likely in controller)
-router.delete(
-  "/:id",
-  protect, // Keep protected
-  deleteProject
-);
+// DELETE /api/projects/:id - Delete a project by ID
+router.delete("/:id", protect, deleteProject);
 
-// --- ADMIN ROUTES (Optional - Require Login and Admin Role) ---
-// Example Admin Route (Uncomment if needed and implemented)
+// --- ADMIN ROUTES (Example - Require Login and Admin Role) ---
 // router.get("/admin/all", protect, adminOnly, adminGetAllProjects);
 
 export default router;
