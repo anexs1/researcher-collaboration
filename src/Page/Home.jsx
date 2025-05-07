@@ -1,4 +1,3 @@
-// src/Page/Home.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -259,16 +258,17 @@ const Home = () => {
           >
             <motion.h1
               variants={itemVariants}
-              className="text-4xl md:text-5xl font-bold mb-6 leading-tight"
+              className="text-5xl md:text-6xl font-extrabold tracking-tight mb-6 leading-tight"
+              style={{ textShadow: "1px 1px 3px rgba(0,0,0,0.3)" }}
             >
-              Connect. Collaborate. Innovate.
+              Researcher Collaboration Portal
             </motion.h1>
             <motion.p
               variants={itemVariants}
               className="text-lg md:text-xl mb-10 opacity-90 max-w-2xl mx-auto"
             >
-              Ethiopia's premier platform for academic networking and research
-              collaboration
+              Uniting Minds, Powering Projects. Ethiopia's Premier Platform for
+              Collaborative Success.
             </motion.p>
             <motion.div
               variants={itemVariants}
@@ -284,7 +284,7 @@ const Home = () => {
                 onClick={() => navigate("/explore")}
                 className="bg-transparent border-2 border-white text-white py-3 px-8 rounded-lg hover:bg-white/10 transition-colors"
               >
-                Explore Research
+                Explore Projects
               </button>
             </motion.div>
           </motion.div>
@@ -330,13 +330,13 @@ const Home = () => {
               variants={itemVariants}
               className="text-3xl font-bold text-center mb-8 text-gray-800"
             >
-              Find Research Opportunities
+              Find Collaboration Opportunities
             </motion.h2>
             <motion.div variants={itemVariants} className="relative">
               <FaSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search researchers, projects, publications..."
+                placeholder="Search collaborators, projects, publications..."
                 className="w-full pl-12 pr-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -368,7 +368,7 @@ const Home = () => {
               variants={itemVariants}
               className="text-gray-600 text-center mb-12 max-w-2xl mx-auto"
             >
-              Powerful tools designed to enhance your research experience
+              Powerful tools designed to enhance your collaborative experience
             </motion.p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -433,7 +433,7 @@ const Home = () => {
                 variants={itemVariants}
                 className="text-3xl font-bold text-gray-800"
               >
-                Featured Researchers
+                Featured Collaborators
               </motion.h2>
               <motion.a
                 variants={itemVariants}
@@ -467,7 +467,7 @@ const Home = () => {
               variants={itemVariants}
               className="text-3xl font-bold mb-12 text-gray-800"
             >
-              What Researchers Say
+              What Our Users Say
             </motion.h2>
 
             <div className="relative h-64">
@@ -535,10 +535,10 @@ const Home = () => {
             viewport={{ once: true }}
           >
             <h2 className="text-3xl md:text-4xl font-bold mb-6">
-              Ready to Transform Your Research?
+              Ready to Supercharge Your Collaboration?
             </h2>
             <p className="text-lg mb-10 max-w-2xl mx-auto opacity-90">
-              Join thousands of researchers leveraging collaboration to achieve
+              Join thousands of users leveraging collaboration to achieve
               breakthroughs.
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-4">
@@ -564,9 +564,11 @@ const Home = () => {
         <div className="container mx-auto px-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
             <div>
-              <h3 className="text-white font-semibold mb-4">Research Portal</h3>
+              <h3 className="text-white font-semibold mb-4">
+                Researcher Collaboration Portal
+              </h3>
               <p className="text-sm">
-                Connecting researchers across Africa to foster innovation and
+                Connecting innovators across Africa to foster collaboration and
                 accelerate discovery.
               </p>
             </div>
@@ -583,39 +585,26 @@ const Home = () => {
                     Projects
                   </Link>
                 </li>
+
                 <li>
-                  <Link to="/researchers" className="hover:text-white">
-                    Researchers
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/publications" className="hover:text-white">
-                    Publications
+                  <Link to="/resources" className="hover:text-white">
+                    Resources
                   </Link>
                 </li>
               </ul>
             </div>
             <div>
-              <h3 className="text-white font-semibold mb-4">Resources</h3>
+              <h3 className="text-white font-semibold mb-4">Platform</h3>
               <ul className="space-y-2 text-sm">
                 <li>
                   <Link to="/about" className="hover:text-white">
-                    About
+                    About Us
                   </Link>
                 </li>
+
                 <li>
-                  <Link to="/blog" className="hover:text-white">
-                    Blog
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/help" className="hover:text-white">
-                    Help Center
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/faq" className="hover:text-white">
-                    FAQ
+                  <Link to="/terms" className="hover:text-white">
+                    Terms of Service
                   </Link>
                 </li>
               </ul>
@@ -633,7 +622,7 @@ const Home = () => {
             </div>
           </div>
           <div className="border-t border-gray-800 pt-8 text-sm text-center">
-            © {new Date().getFullYear()} Research Collaboration Portal. All
+            © {new Date().getFullYear()} Researcher Collaboration Portal. All
             rights reserved.
           </div>
         </div>
