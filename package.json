@@ -42,6 +42,8 @@
     "recharts": "^2.15.3",
     "redux": "^4.2.1",
     "sequelize": "^6.33.0",
+    "slate": "^0.114.0",
+    "slate-react": "^0.114.2",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
     "tsparticles": "^2.12.0"
