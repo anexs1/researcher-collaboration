@@ -22,6 +22,7 @@ import collaborationRequestRoutes from "./routes/collaborationRequestRoutes.js";
 import messagingRoutes from "./routes/messagingRoutes.js";
 import adminRoutes from "./routes/admin.routes.js";
 import notificationRoutes from "./routes/notificationRoutes.js"; // <<<=== IMPORT NOTIFICATION ROUTES
+import documentRoutes from "./routes/documentRoutes.js"; // Adjust path
 
 // --- Environment Variable Check & Setup ---
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -91,6 +92,8 @@ app.use("/api/users", userRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/collaboration-requests", collaborationRequestRoutes);
 app.use("/api/publications", publicationRoutes);
+app.use("/api/documents", documentRoutes); // Add this line
+
 app.use("/api/messaging", messagingRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/notifications", notificationRoutes); // <<<=== MOUNT NOTIFICATION ROUTES

@@ -15,6 +15,7 @@ import GroupModel from "./Group.js"; // Keep if used
 import SettingModel from "./Setting.js";
 import UserBookmarkModel from "./UserBookmark.js"; // <<< IMPORT UserBookmark Model
 import defineNotificationModel from "./notificationModel.js"; // <<<=== ADD THIS IMPORT for Notification Model
+import DocumentModel from "./documentModel.js"; // Add this
 
 const db = {};
 
@@ -23,6 +24,8 @@ console.log("Initializing models...");
 db.User = UserModel(sequelize, DataTypes);
 db.Publication = PublicationModel(sequelize, DataTypes);
 db.CollaborationRequest = CollaborationRequestModel(sequelize, DataTypes);
+db.Document = DocumentModel(sequelize, DataTypes); // Add this line
+
 db.Project = ProjectModel(sequelize, DataTypes);
 db.Member = MemberModel(sequelize, DataTypes);
 db.Comment = CommentModel(sequelize, DataTypes); // <<< Use Corrected import

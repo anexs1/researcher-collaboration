@@ -1,5 +1,3 @@
-// src/App.jsx
-
 import React, {
   useEffect,
   useState,
@@ -21,7 +19,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import "./index.css";
 
 // --- Slate.js Imports (for DocumentEditor) ---
-import { createEditor, Node as SlateNode } from "slate"; // Corrected SlateNode import
+import { createEditor } from "slate"; // Node as SlateNode is not directly used in this component, createEditor is enough for useMemo
 import { Slate, Editable, withReact } from "slate-react";
 import axios from "axios";
 
@@ -35,6 +33,7 @@ const useAuth = () => {
       const storedUser = localStorage.getItem("user");
       return storedUser ? JSON.parse(storedUser) : null;
     } catch (e) {
+      console.error("Failed to parse user from localStorage", e);
       return null;
     }
   });
@@ -61,20 +60,22 @@ const useAuth = () => {
       try {
         currentUser = currentUserJson ? JSON.parse(currentUserJson) : null;
       } catch (e) {
-        localStorage.removeItem("user");
+        console.error("Failed to parse user from localStorage during sync", e);
+        localStorage.removeItem("user"); // Clear corrupted data
       }
       setToken((prevToken) =>
         prevToken !== currentToken ? currentToken : prevToken
       );
+      // Deep comparison for user object might be too much, stringify is a pragmatic way if user object isn't too large or complex
       setUser((prevUser) =>
         JSON.stringify(prevUser) !== JSON.stringify(currentUser)
           ? currentUser
           : prevUser
       );
     };
-    syncAuth();
-    window.addEventListener("storage", syncAuth);
-    window.addEventListener("authChange", syncAuth);
+    syncAuth(); // Initial sync
+    window.addEventListener("storage", syncAuth); // Sync across tabs
+    window.addEventListener("authChange", syncAuth); // Sync on login/logout
     return () => {
       window.removeEventListener("storage", syncAuth);
       window.removeEventListener("authChange", syncAuth);
@@ -129,9 +130,11 @@ import ProjectDetailPage from "./Page/ProjectDetailPage";
 // --- Helper Components ---
 const LoadingScreen = ({ message = "Loading..." }) => (
   <div className="flex flex-col justify-center items-center h-screen text-lg font-medium text-gray-700 bg-gray-100">
-    <LoadingSpinner size="lg" /> <p className="mt-4">{message}</p>
+    <LoadingSpinner size="lg" />
+    <p className="mt-4">{message}</p>
   </div>
 );
+
 const ProtectedUserRoutes = ({ isLoggedIn, isAdmin }) => {
   const location = useLocation();
   if (isLoggedIn === null || isAdmin === null)
@@ -141,111 +144,132 @@ const ProtectedUserRoutes = ({ isLoggedIn, isAdmin }) => {
   if (isAdmin) return <Navigate to="/admin" replace />;
   return <Outlet />;
 };
+
 const ProtectedAdminRoutes = ({ isLoggedIn, isAdmin }) => {
   const location = useLocation();
   if (isLoggedIn === null || isAdmin === null)
     return <LoadingScreen message="Verifying access level..." />;
   if (!isLoggedIn)
     return <Navigate to="/login" state={{ from: location }} replace />;
-  if (!isAdmin) return <Navigate to="/" replace />;
+  if (!isAdmin) return <Navigate to="/" replace />; // Redirect non-admins from admin routes
   return <Outlet />;
 };
 
-// =========================================================================
-// --- Socket Manager (Keep As Is) ---
-// =========================================================================
+// --- Socket Manager ---
 const SocketManager = ({ token, API_BASE }) => {
   const { addNewNotification, fetchInitialNotifications } = useNotifications();
   const socketRef = useRef(null);
-  const hasFetchedInitial = useRef(false);
+  const hasFetchedInitialRef = useRef(false);
+
   useEffect(() => {
-    if (token && !hasFetchedInitial.current) {
+    if (token && !hasFetchedInitialRef.current) {
       fetchInitialNotifications();
-      hasFetchedInitial.current = true;
+      hasFetchedInitialRef.current = true;
     }
     if (!token) {
-      hasFetchedInitial.current = false;
+      hasFetchedInitialRef.current = false; // Reset if token is lost
     }
+
     const cleanupSocket = () => {
       if (socketRef.current) {
-        socketRef.current.off("connect");
-        socketRef.current.off("disconnect");
-        socketRef.current.off("connect_error");
-        socketRef.current.off("notification");
+        console.log(`🔌 Socket Disconnecting: ${socketRef.current.id}`);
+        socketRef.current.off(); // Remove all event listeners
         socketRef.current.disconnect();
         socketRef.current = null;
       }
     };
+
     if (!token) {
       cleanupSocket();
       return;
     }
+
     if (!socketRef.current || !socketRef.current.connected) {
       if (socketRef.current) {
+        // If exists but not connected, clean up first
         cleanupSocket();
       }
+      console.log("Attempting to connect socket...");
       const newSocket = io(API_BASE, {
-        auth: { token: token },
+        auth: { token },
         transports: ["websocket"],
         reconnectionAttempts: 5,
       });
       socketRef.current = newSocket;
+
       newSocket.on("connect", () =>
-        console.log(`✅ [Socket Event - ${newSocket.id}] Connected.`)
+        console.log(`✅ Socket Connected: ${newSocket.id}`)
       );
       newSocket.on("disconnect", (reason) => {
-        if (socketRef.current?.id === newSocket.id) socketRef.current = null;
+        console.log(
+          `🔌 Socket Disconnected: ${newSocket.id}, Reason: ${reason}`
+        );
+        // Only nullify if it's the current socket instance, to avoid race conditions on rapid re-connects/disconnects
+        if (socketRef.current?.id === newSocket.id) {
+          socketRef.current = null; // Allow re-connection attempt on next effect run if token still valid
+        }
       });
-      newSocket.on("connect_error", (err) =>
+      newSocket.on("connect_error", (error) =>
         console.error(
-          `❌ [Socket Event - ${newSocket.id || "_attempt_"}] Err: ${
-            err.message
+          `❌ Socket Connection Error (${newSocket.id || "attempting"}): ${
+            error.message
           }`
         )
       );
       newSocket.on("notification", (data) => {
-        if (data?.notification && data?.type && addNewNotification)
-          addNewNotification(data.notification);
+        console.log("Received notification event:", data);
+        if (data?.notification && data?.type && addNewNotification) {
+          addNewNotification(data.notification); // Assuming data.notification is the notification object
+        }
       });
     }
-    return cleanupSocket;
+
+    return cleanupSocket; // Cleanup on unmount or before re-running due to dependency change
   }, [token, API_BASE, addNewNotification, fetchInitialNotifications]);
-  return null;
+
+  return null; // This component does not render anything
 };
-// ============================================
-// --- End Socket Manager ---
-// ============================================
 
 // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-// +++ START: DOCUMENT EDITOR COMPONENT +++++++++++++++++++++++++++++++++++
+// +++ START: DOCUMENT EDITOR COMPONENT (WITH DEBUG LOGS) +++++++++++++++++
 // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 const API_BASE_URL_DOCS =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 function debounce(func, delay) {
-  let timeout;
+  let timeoutId;
   return function (...args) {
     const context = this;
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func.apply(context, args), delay);
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => func.apply(context, args), delay);
   };
 }
 
 const DocumentEditorComponent = ({ documentId, currentUser }) => {
+  console.log(
+    `%c[DocumentEditor] RENDER - documentId: ${documentId}`,
+    "color: red; font-size: 1.1em; font-weight: bold;"
+  );
+
   const editor = useMemo(() => withReact(createEditor()), []);
   const initialSlateValue = useMemo(
     () => [{ type: "paragraph", children: [{ text: "" }] }],
     []
   );
-  const [editorValue, setEditorValue] = useState(initialSlateValue);
+  // Slate's value state should be managed by Slate itself.
+  // We use initialValue prop on Slate component, and it manages its internal state.
+  // For controlled scenarios, you'd use `value` and `onChange`, but for fetching once, `initialValue` with a `key` is often better.
+  const [currentDocContent, setCurrentDocContent] = useState(initialSlateValue);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [docTitle, setDocTitle] = useState("No Document Selected");
 
-  // +++ DEBUG LOG: What props are received by the editor? +++
+  // Re-keying the Slate component is often the best way to handle new initial values.
+  // However, if you need to imperatively reset, you'd use editor.children = newValue and editor.onChange().
+
   useEffect(() => {
     console.log(
-      `%c[DocumentEditor] Props received - documentId: ${documentId}, currentUser: ${!!currentUser}`,
+      `%c[DocumentEditor] Props Change - documentId: ${documentId}, currentUser: ${!!currentUser}`,
       "color: blue; font-weight: bold;"
     );
   }, [documentId, currentUser]);
@@ -256,104 +280,112 @@ const DocumentEditorComponent = ({ documentId, currentUser }) => {
       baseURL: API_BASE_URL_DOCS,
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
-  }, []);
+  }, []); // Token changes won't re-memoize apiClient. Consider if this is intended.
+  // If token needs to be fresh for each request, it should be fetched inside request functions
+  // or apiClient re-created when token changes (which would require token as a dep).
+  // For now, assuming token is stable during component's lifecycle or auth wrapper handles refresh.
 
   useEffect(() => {
-    // +++ DEBUG LOG: Inside the data fetching useEffect +++
     console.log(
-      `%c[DocumentEditor] Fetch useEffect triggered. documentId: ${documentId}`,
+      `%c[DocumentEditor] Fetch Effect - documentId: ${documentId}`,
       "color: green;"
     );
 
     if (!documentId) {
-      console.log("[DocumentEditor] No documentId, resetting editor state.");
+      console.log("[DocumentEditor] No documentId, resetting.");
       setDocTitle("No Document Selected");
-      setEditorValue(initialSlateValue); // Reset to initial empty state
+      setCurrentDocContent(initialSlateValue);
       setError("");
       setLoading(false);
       return;
     }
-
     if (!currentUser || !currentUser.id) {
-      console.log(
-        "[DocumentEditor] No currentUser, cannot fetch. Resetting editor state."
-      );
-      setError("User not authenticated. Cannot load document.");
+      console.log("[DocumentEditor] No currentUser, resetting.");
+      setError("User not authenticated to load document.");
       setDocTitle("Authentication Required");
-      setEditorValue(initialSlateValue);
+      setCurrentDocContent(initialSlateValue);
       setLoading(false);
       return;
     }
 
     console.log(
-      `%c[DocumentEditor] Attempting to fetch document /api/documents/${documentId}`,
+      `%c[DocumentEditor] Fetching /api/documents/${documentId}`,
       "color: orange; font-weight: bold;"
     );
     setLoading(true);
     setError("");
-    setDocTitle(`Loading document ${documentId}...`);
+    setDocTitle(`Loading ${documentId}...`);
 
     apiClient
       .get(`/api/documents/${documentId}`)
       .then((response) => {
         console.log(
-          `[DocumentEditor] API response for doc ${documentId}:`,
+          `[DocumentEditor] API response for ${documentId}:`,
           response.data
         );
-        if (response.data.success) {
-          // Ensure content is an array, otherwise use initialSlateValue
+        if (response.data.success && response.data.data) {
           const fetchedContent =
             Array.isArray(response.data.data.content) &&
             response.data.data.content.length > 0
               ? response.data.data.content
               : initialSlateValue;
-          setEditorValue(fetchedContent);
+          setCurrentDocContent(fetchedContent); // This will be used as initialValue for Slate
           setDocTitle(response.data.data.title || "Untitled Document");
         } else {
-          setError(response.data.message || "Failed to load document");
-          setEditorValue(initialSlateValue);
+          setError(response.data.message || "Failed to load document content.");
+          setCurrentDocContent(initialSlateValue);
         }
       })
       .catch((err) => {
         console.error(
-          `[DocumentEditor] Error fetching document ${documentId}:`,
+          `[DocumentEditor] Error fetching ${documentId}:`,
           err.response || err.message || err
         );
-        setError(
-          err.response?.data?.message || "Error loading document content."
-        );
-        setEditorValue(initialSlateValue);
+        setError(err.response?.data?.message || "Error loading document.");
+        setCurrentDocContent(initialSlateValue);
       })
       .finally(() => setLoading(false));
-  }, [documentId, apiClient, initialSlateValue, currentUser]);
+  }, [documentId, apiClient, initialSlateValue, currentUser]); // currentUser dep ensures re-fetch if user changes
 
   const debouncedSave = useCallback(
-    debounce((newValue) => {
-      if (!documentId || !currentUser || !currentUser.id) {
-        console.warn(
-          "[DocumentEditor] Save skipped: No document ID or user not authenticated."
+    debounce((newValueToSave) => {
+      if (!documentId || !currentUser?.id) {
+        console.log(
+          "[DocumentEditor] Save skipped: no documentId or currentUser."
         );
         return;
       }
       console.log(`[DocumentEditor] Debounced save for doc ID: ${documentId}`);
-      apiClient
-        .put(`/api/documents/${documentId}`, { content: newValue })
-        .then((response) => {
+      // Ensure apiClient has fresh token if needed, or rely on its initial setup
+      const currentToken = localStorage.getItem("authToken");
+      axios
+        .put(
+          `${API_BASE_URL_DOCS}/api/documents/${documentId}`,
+          { content: newValueToSave },
+          {
+            headers: currentToken
+              ? { Authorization: `Bearer ${currentToken}` }
+              : {},
+          }
+        )
+        .then((res) =>
           console.log(
-            "[DocumentEditor] Document saved successfully:",
-            response.data.data.title
-          );
-        })
+            "[DocumentEditor] Save successful:",
+            res.data?.data?.title
+          )
+        )
         .catch((err) => {
-          console.error("[DocumentEditor] Error saving document:", err);
+          console.error("[DocumentEditor] Save error:", err.response || err);
           setError(err.response?.data?.message || "Error saving document.");
         });
     }, 2000),
-    [documentId, apiClient, currentUser]
+    [documentId, currentUser] // apiClient removed as it might hold stale token. API_BASE_URL_DOCS is stable.
   );
 
   const handleEditorChange = (newValue) => {
-    setEditorValue(newValue);
+    // This new Value is what Slate's internal state is.
+    // We don't need to set it in React state if using Slate as uncontrolled with initialValue + key.
+    // But if we want to trigger save, we need access to it.
     const isAstChange = editor.operations.some(
       (op) => op.type !== "set_selection"
     );
@@ -361,15 +393,6 @@ const DocumentEditorComponent = ({ documentId, currentUser }) => {
       debouncedSave(newValue);
     }
   };
-
-  if (loading && documentId) {
-    return (
-      <div className="flex items-center justify-center p-10 bg-white rounded-lg shadow">
-        <LoadingSpinner size="md" />
-        <span className="ml-3 text-gray-600">Loading document...</span>
-      </div>
-    );
-  }
 
   return (
     <div className="bg-white p-4 md:p-6 rounded-lg shadow">
@@ -380,11 +403,20 @@ const DocumentEditorComponent = ({ documentId, currentUser }) => {
         </p>
       )}
 
+      {loading && documentId && (
+        <div className="flex items-center justify-center p-10">
+          <LoadingSpinner size="md" />{" "}
+          <span className="ml-3 text-gray-600">
+            Loading document content...
+          </span>
+        </div>
+      )}
+
       {!loading && (
         <Slate
           editor={editor}
-          initialValue={editorValue}
-          key={documentId || "editor-no-doc-selected"} // Key to re-initialize Slate
+          initialValue={currentDocContent} // Use the fetched/default content
+          key={documentId || "editor-no-doc-selected"} // Crucial: re-mounts Slate instance on doc change
           onChange={handleEditorChange}
         >
           <Editable
@@ -392,7 +424,7 @@ const DocumentEditorComponent = ({ documentId, currentUser }) => {
             className="prose max-w-none p-3 border border-gray-300 rounded-md min-h-[300px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             spellCheck
             autoFocus={!!documentId}
-            readOnly={!documentId || loading}
+            readOnly={!documentId || loading || !currentUser?.id} // Ensure user is logged in to edit
           />
         </Slate>
       )}
@@ -404,7 +436,7 @@ const DocumentEditorComponent = ({ documentId, currentUser }) => {
 // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-// +++ START: DOCUMENT PAGE COMPONENT +++++++++++++++++++++++++++++++++++++
+// +++ START: DOCUMENT PAGE COMPONENT (WITH DEBUG LOGS) +++++++++++++++++++
 // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 const DocumentPageComponent = ({ currentUser }) => {
   const [currentDocumentId, setCurrentDocumentId] = useState(null);
@@ -413,14 +445,14 @@ const DocumentPageComponent = ({ currentUser }) => {
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
   const [errorDocs, setErrorDocs] = useState("");
 
-  // +++ DEBUG LOG: Check the value of currentDocumentId whenever the component re-renders +++
   console.log(
-    "%c[DocumentPage] currentDocumentId STATE:",
+    "%c[DocumentPage] Component Render. currentDocumentId STATE:",
     "color: purple;",
     currentDocumentId
   );
 
-  const apiClient = useMemo(() => {
+  // apiClient should be memoized or created per request with fresh token
+  const getApiClient = useCallback(() => {
     const token = localStorage.getItem("authToken");
     return axios.create({
       baseURL: API_BASE_URL_DOCS,
@@ -433,29 +465,37 @@ const DocumentPageComponent = ({ currentUser }) => {
       "[DocumentPage] fetchUserDocuments called. CurrentUser:",
       !!currentUser
     );
-    if (!currentUser || !currentUser.id) {
-      setErrorDocs("Please log in to see your documents.");
+    if (!currentUser?.id) {
+      setErrorDocs("Please log in to view documents.");
       setDocsList([]);
       setIsLoadingDocs(false);
       return;
     }
     setIsLoadingDocs(true);
     setErrorDocs("");
-    apiClient
+    getApiClient()
       .get("/api/documents")
       .then((res) => {
         console.log("[DocumentPage] Fetched documents list:", res.data);
-        if (res.data.success) setDocsList(res.data.data);
-        else setErrorDocs(res.data.message || "Failed to fetch documents.");
+        if (res.data.success && Array.isArray(res.data.data)) {
+          setDocsList(res.data.data);
+        } else {
+          setErrorDocs(res.data.message || "Failed to fetch documents.");
+          setDocsList([]);
+        }
       })
       .catch((err) => {
-        console.error("[DocumentPage] Error fetching documents list:", err);
-        setErrorDocs(
-          err.response?.data?.message || "Could not load your documents."
+        console.error(
+          "[DocumentPage] Error fetching documents list:",
+          err.response || err
         );
+        setErrorDocs(
+          err.response?.data?.message || "Error fetching documents."
+        );
+        setDocsList([]);
       })
       .finally(() => setIsLoadingDocs(false));
-  }, [apiClient, currentUser]);
+  }, [currentUser, getApiClient]);
 
   useEffect(() => {
     fetchUserDocuments();
@@ -463,10 +503,10 @@ const DocumentPageComponent = ({ currentUser }) => {
 
   const handleCreateDocument = async () => {
     if (!newDocTitle.trim()) {
-      alert("Please enter a title for the new document.");
+      alert("Please enter a document title.");
       return;
     }
-    if (!currentUser || !currentUser.id) {
+    if (!currentUser?.id) {
       alert("You must be logged in to create a document.");
       return;
     }
@@ -475,21 +515,28 @@ const DocumentPageComponent = ({ currentUser }) => {
       newDocTitle
     );
     try {
-      const response = await apiClient.post("/api/documents", {
+      const response = await getApiClient().post("/api/documents", {
         title: newDocTitle,
       });
       console.log("[DocumentPage] Create document response:", response.data);
-      if (response.data.success) {
+      if (response.data.success && response.data.data) {
         const newDoc = response.data.data;
-        alert(`Document "${newDoc.title}" created!`);
-        fetchUserDocuments();
-        setCurrentDocumentId(newDoc.id);
-        setNewDocTitle("");
+        alert(`Document "${newDoc.title}" created successfully!`);
+        fetchUserDocuments(); // Refresh the list
+        setCurrentDocumentId(newDoc.id); // Open the new document
+        setNewDocTitle(""); // Clear input
       } else {
-        alert(`Failed to create document: ${response.data.message}`);
+        alert(
+          `Failed to create document: ${
+            response.data.message || "Unknown error"
+          }`
+        );
       }
     } catch (error) {
-      console.error("[DocumentPage] Error creating document:", error);
+      console.error(
+        "[DocumentPage] Error creating document:",
+        error.response || error
+      );
       alert(
         `Error creating document: ${
           error.response?.data?.message || error.message
@@ -509,7 +556,7 @@ const DocumentPageComponent = ({ currentUser }) => {
           >
             log in
           </Link>{" "}
-          to access and manage your documents.
+          to access your documents.
         </p>
       </div>
     );
@@ -520,7 +567,8 @@ const DocumentPageComponent = ({ currentUser }) => {
       <div className="bg-white p-6 rounded-lg shadow mb-8">
         <h1 className="text-3xl font-bold text-gray-800 mb-2">My Documents</h1>
         <p className="text-gray-600">
-          Create, manage, and collaborate on your research documents.
+          Create, manage, and collaborate on your research documents in
+          real-time.
         </p>
         <div className="mt-6 flex flex-col sm:flex-row gap-3 items-center">
           <input
@@ -546,7 +594,6 @@ const DocumentPageComponent = ({ currentUser }) => {
           </h3>
           {isLoadingDocs && (
             <div className="flex items-center text-gray-500 py-2">
-              {" "}
               <LoadingSpinner size="sm" />{" "}
               <span className="ml-2">Loading documents...</span>
             </div>
@@ -558,22 +605,21 @@ const DocumentPageComponent = ({ currentUser }) => {
           )}
           {!isLoadingDocs && docsList.length === 0 && !errorDocs && (
             <p className="text-gray-500 italic py-2">
-              No documents found. Create one to get started!
+              No documents yet. Create one to get started!
             </p>
           )}
           <ul className="space-y-1 max-h-96 overflow-y-auto">
             {docsList.map((doc) => (
               <li
                 key={doc.id}
-                className={`block w-full text-left p-3 rounded-md cursor-pointer transition-colors duration-150 ease-in-out
-                                 ${
-                                   currentDocumentId === doc.id
-                                     ? "bg-indigo-600 text-white shadow-md"
-                                     : "text-gray-700 hover:bg-indigo-50 hover:text-indigo-700"
-                                 }`}
+                className={`block w-full text-left p-3 rounded-md cursor-pointer transition-colors duration-150 ease-in-out ${
+                  currentDocumentId === doc.id
+                    ? "bg-indigo-600 text-white shadow-md"
+                    : "text-gray-700 hover:bg-indigo-50 hover:text-indigo-700"
+                }`}
                 onClick={() => {
                   console.log(
-                    `%c[DocumentPage] "Open" clicked for doc ID: ${doc.id}. Previous currentDocumentId: ${currentDocumentId}`,
+                    `%c[DocumentPage] "Open" clicked for doc ID: ${doc.id}. Previous state: ${currentDocumentId}`,
                     "color: magenta; font-weight: bold;"
                   );
                   setCurrentDocumentId(doc.id);
@@ -598,13 +644,11 @@ const DocumentPageComponent = ({ currentUser }) => {
         </div>
 
         <div className="md:col-span-2">
-          {/* +++ DEBUG LOG: What ID is being passed to DocumentEditorComponent? +++ */}
           {console.log(
-            "%c[DocumentPage] Rendering DocumentEditorComponent with documentId PROPS:",
+            "%c[DocumentPage] Rendering DocumentEditorComponent with documentId PROP:",
             "color: purple;",
             currentDocumentId
           )}
-
           {currentDocumentId ? (
             <DocumentEditorComponent
               documentId={currentDocumentId}
@@ -612,30 +656,61 @@ const DocumentPageComponent = ({ currentUser }) => {
             />
           ) : (
             !isLoadingDocs &&
-            !errorDocs && (
-              <div className="bg-white p-6 rounded-lg shadow text-center text-gray-500 h-full flex flex-col justify-center items-center">
+            !errorDocs &&
+            docsList.length > 0 && (
+              <div className="bg-white p-10 rounded-lg shadow text-center text-gray-600">
                 <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-16 w-16 text-gray-300 mb-4"
+                  className="mx-auto h-12 w-12 text-gray-400"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    vectorEffect="non-scaling-stroke"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+                <h3 className="mt-2 text-lg font-medium text-gray-900">
+                  Select a document
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Choose a document from the list on the left to view or edit
+                  it.
+                </p>
+              </div>
+            )
+          )}
+          {!isLoadingDocs &&
+            !errorDocs &&
+            docsList.length === 0 &&
+            !currentDocumentId && (
+              <div className="bg-white p-10 rounded-lg shadow text-center text-gray-600">
+                <svg
+                  className="mx-auto h-12 w-12 text-gray-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  aria-hidden="true"
                 >
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                   />
                 </svg>
-                <p className="text-xl">Select a document to begin.</p>
-                <p className="text-sm">
-                  Choose a document from the list on the left, or create a new
-                  one.
+                <h3 className="mt-2 text-lg font-medium text-gray-900">
+                  No documents available
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Create your first document to get started.
                 </p>
               </div>
-            )
-          )}
+            )}
         </div>
       </div>
     </div>
@@ -648,8 +723,8 @@ const DocumentPageComponent = ({ currentUser }) => {
 // --- Main App Component ---
 function App() {
   const { user: currentUser, token, login, logout } = useAuth();
-  const [isAdmin, setIsAdmin] = useState(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(null); // Initialize as null to indicate loading state
+  const [isLoggedIn, setIsLoggedIn] = useState(null); // Initialize as null
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [popupNotification, setPopupNotification] = useState({
     message: "",
@@ -662,30 +737,43 @@ function App() {
   const showPopupNotification = useCallback((message, type = "info") => {
     setPopupNotification({ message, type, show: true });
     setTimeout(
-      () => setPopupNotification((prev) => ({ ...prev, show: false })),
+      () => setPopupNotification((p) => ({ ...p, show: false })),
       5000
     );
   }, []);
 
   useEffect(() => {
     setLoadingAuth(true);
-    const userIsLoggedIn = !!token && !!currentUser?.id;
-    const userIsAdmin = userIsLoggedIn && currentUser?.role === "admin";
-    setIsLoggedIn(userIsLoggedIn);
+    const userIsPresent = !!token && !!currentUser?.id;
+    // *** THIS IS THE CORRECTED LINE ***
+    const userIsAdmin = userIsPresent && currentUser?.role === "admin";
+
+    setIsLoggedIn(userIsPresent);
     setIsAdmin(userIsAdmin);
     setLoadingAuth(false);
+    console.log(
+      `Auth state updated: isLoggedIn=${userIsPresent}, isAdmin=${userIsAdmin}, User:`,
+      currentUser
+    );
   }, [token, currentUser]);
 
-  const handleLogout = logout;
+  const handleLogout = () => {
+    logout();
+    // Optionally, redirect to home or login page after logout
+    // navigate('/login'); // if using useNavigate hook from react-router-dom
+  };
 
   if (loadingAuth && isLoggedIn === null) {
+    // Check isLoggedIn as well, as it's derived
     return <LoadingScreen message="Initializing Application..." />;
   }
 
   return (
     <Router>
       <NormalizeURL />
-      {isLoggedIn && <SocketManager token={token} API_BASE={API_BASE} />}
+      {isLoggedIn && token && (
+        <SocketManager token={token} API_BASE={API_BASE} />
+      )}
       <ConditionalNavbar
         isLoggedIn={isLoggedIn}
         currentUser={currentUser}
@@ -705,7 +793,7 @@ function App() {
                 message={popupNotification.message}
                 type={popupNotification.type}
                 onClose={() =>
-                  setPopupNotification((prev) => ({ ...prev, show: false }))
+                  setPopupNotification((p) => ({ ...p, show: false }))
                 }
               />
             </motion.div>
@@ -713,7 +801,7 @@ function App() {
         </AnimatePresence>
 
         <Routes>
-          {/* Public Routes */}
+          {/* --- Public Routes --- */}
           <Route path="/" element={<Home currentUser={currentUser} />} />
           <Route
             path="/explore"
@@ -737,14 +825,26 @@ function App() {
             element={<ProjectDetailPage currentUser={currentUser} />}
           />
 
-          {/* Auth Routes */}
+          {/* --- Auth Routes --- */}
           <Route
             path="/login"
             element={
               isLoggedIn ? (
-                <Navigate to={isAdmin ? "/admin" : "/profile"} replace />
+                <Navigate
+                  to={
+                    isAdmin
+                      ? "/admin"
+                      : currentUser?.id
+                      ? `/profile/${currentUser.id}`
+                      : "/profile"
+                  }
+                  replace
+                />
               ) : (
-                <LoginPage login={login} />
+                <LoginPage
+                  login={login}
+                  showNotification={showPopupNotification}
+                />
               )
             }
           />
@@ -752,21 +852,49 @@ function App() {
             path="/signup"
             element={
               isLoggedIn ? (
-                <Navigate to={isAdmin ? "/admin" : "/profile"} replace />
+                <Navigate
+                  to={
+                    isAdmin
+                      ? "/admin"
+                      : currentUser?.id
+                      ? `/profile/${currentUser.id}`
+                      : "/profile"
+                  }
+                  replace
+                />
               ) : (
                 <SignupPage />
               )
             }
           />
-          <Route path="/signup/academic" element={<AcademicSignupForm />} />
-          <Route path="/signup/corporate" element={<CorporateSignupForm />} />
-          <Route path="/signup/medical" element={<MedicalSignupForm />} />
+          <Route
+            path="/signup/academic"
+            element={
+              <AcademicSignupForm showNotification={showPopupNotification} />
+            }
+          />
+          <Route
+            path="/signup/corporate"
+            element={
+              <CorporateSignupForm showNotification={showPopupNotification} />
+            }
+          />
+          <Route
+            path="/signup/medical"
+            element={
+              <MedicalSignupForm showNotification={showPopupNotification} />
+            }
+          />
           <Route
             path="/signup/not-researcher"
-            element={<NotResearcherSignupForm />}
+            element={
+              <NotResearcherSignupForm
+                showNotification={showPopupNotification}
+              />
+            }
           />
 
-          {/* Protected USER Routes */}
+          {/* --- Protected USER Routes --- */}
           <Route
             element={
               <ProtectedUserRoutes isLoggedIn={isLoggedIn} isAdmin={isAdmin} />
@@ -788,30 +916,56 @@ function App() {
               <Route
                 path="/profile/:userId"
                 element={<Profile currentUser={currentUser} />}
-              />
+              />{" "}
+              {/* Make sure Profile can handle both own and other's profiles */}
               <Route
                 path="/profile/activity"
                 element={<UserActivityPage currentUser={currentUser} />}
               />
               <Route
                 path="/settings/account"
-                element={<AccountSettingsPage currentUser={currentUser} />}
+                element={
+                  <AccountSettingsPage
+                    currentUser={currentUser}
+                    showNotification={showPopupNotification}
+                  />
+                }
               />
               <Route
                 path="/projects/new"
-                element={<CreateProjectPage currentUser={currentUser} />}
+                element={
+                  <CreateProjectPage
+                    currentUser={currentUser}
+                    showNotification={showPopupNotification}
+                  />
+                }
               />
               <Route
                 path="/projects/edit/:projectId"
-                element={<EditProjectPage currentUser={currentUser} />}
+                element={
+                  <EditProjectPage
+                    currentUser={currentUser}
+                    showNotification={showPopupNotification}
+                  />
+                }
               />
               <Route
                 path="/publications/new"
-                element={<PostPublicationPage currentUser={currentUser} />}
+                element={
+                  <PostPublicationPage
+                    currentUser={currentUser}
+                    showNotification={showPopupNotification}
+                  />
+                }
               />
               <Route
                 path="/publications/edit/:id"
-                element={<EditPublicationPage currentUser={currentUser} />}
+                element={
+                  <EditPublicationPage
+                    currentUser={currentUser}
+                    showNotification={showPopupNotification}
+                  />
+                }
               />
               <Route
                 path="/messages"
@@ -821,14 +975,16 @@ function App() {
                 path="/chat/project/:projectId"
                 element={<ChatPage currentUser={currentUser} />}
               />
+              {/* === Document Route === */}
               <Route
                 path="/documents"
                 element={<DocumentPageComponent currentUser={currentUser} />}
               />
+              {/* ==================== */}
             </Route>
           </Route>
 
-          {/* Protected ADMIN Routes */}
+          {/* --- Protected ADMIN Routes --- */}
           <Route
             element={
               <ProtectedAdminRoutes isLoggedIn={isLoggedIn} isAdmin={isAdmin} />
@@ -851,7 +1007,7 @@ function App() {
             </Route>
           </Route>
 
-          {/* Not Found Route */}
+          {/* --- Not Found Route --- */}
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </div>
@@ -862,8 +1018,10 @@ function App() {
 // --- Conditional Navbar Component ---
 const ConditionalNavbar = ({ isLoggedIn, currentUser, onLogout }) => {
   const location = useLocation();
-  const isAdminRoute = location.pathname.startsWith("/admin");
-  if (isAdminRoute) return null;
+  const isAdminPath = location.pathname.startsWith("/admin");
+
+  if (isAdminPath) return null; // No navbar for admin panel
+
   return (
     <Navbar
       isLoggedIn={isLoggedIn}
