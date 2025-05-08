@@ -560,12 +560,12 @@ const Home = () => {
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-gray-400 py-12">
-        <div className="container mx-auto px-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+      <footer className="bg-gray-900 text-gray-400 py-2">
+        <div className="container mx-auto px-1">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-1">
             <div>
               <h3 className="text-white font-semibold mb-4">
-                Researcher Collaboration Portal
+                searcher Collaboration Portal
               </h3>
               <p className="text-sm">
                 Connecting innovators across Africa to foster collaboration and
