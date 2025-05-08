@@ -234,6 +234,14 @@ const Home = () => {
         "The collaboration tools saved countless hours coordinating our team.",
       image: "/testimonial2.jpg",
     },
+    {
+      id: 2,
+      name: "Prof. Anuwar Addisu",
+      title: "Professor, UoG",
+      quote:
+        "its a great platform for researchers to collaborate and share knowledge.",
+      image: "/testimonial2.jpg",
+    },
   ];
 
   // Auto-rotate testimonials
