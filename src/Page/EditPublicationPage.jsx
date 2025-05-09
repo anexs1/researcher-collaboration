@@ -1,35 +1,38 @@
+// src/Page/EditPublicationPage.jsx (or similar filename for your edit form)
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import {
   FaSave,
-  FaTimes, // For Cancel button
-  FaSpinner, // Alternative loading icon
-  FaExclamationCircle, // For error messages
+  FaTimes,
+  FaSpinner,
+  FaExclamationCircle,
   FaUser,
   FaTag,
   FaFlask,
   FaCalendarAlt,
   FaLink,
-  FaUsers, // For Collaboration Status
-  FaInfoCircle, // For hints
+  // FaUsers, // REMOVED: Icon for Collaboration Status
+  FaInfoCircle,
+  FaGlobe, // For Language
+  FaCodeBranch, // For Version
+  FaCheckCircle, // For Peer Reviewed
+  FaBalanceScale, // For License
+  FaHistory, // For Last Reviewed At
 } from "react-icons/fa";
 
-import LoadingSpinner from "../Component/Common/LoadingSpinner"; // Verify path
-import ErrorMessage from "../Component/Common/ErrorMessage"; // Verify path
-import Notification from "../Component/Common/Notification"; // Verify path
+import LoadingSpinner from "../Component/Common/LoadingSpinner";
+import ErrorMessage from "../Component/Common/ErrorMessage";
+import Notification from "../Component/Common/Notification";
 
-// API Base URL (Ensure consistency)
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
-// Function to get authentication headers
 const getAuthHeaders = () => {
   const token = localStorage.getItem("authToken");
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-// --- Reusable Style Constants --- (Similar to Publication.jsx)
 const baseInputClass =
   "block w-full px-4 py-2 text-sm bg-white border border-gray-300 rounded-lg shadow-sm transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-70 disabled:bg-gray-100";
 const errorInputClass = "border-red-500 focus:ring-red-500";
@@ -40,12 +43,10 @@ const baseButtonClass =
 const primaryButtonClass = `${baseButtonClass} bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500 border border-transparent`;
 const secondaryButtonClass = `${baseButtonClass} bg-white text-gray-700 border border-gray-300 hover:bg-gray-100 focus:ring-indigo-500`;
 
-// --- Component ---
 const EditPublicationPage = () => {
   const { id: publicationId } = useParams();
   const navigate = useNavigate();
 
-  // --- State ---
   const [publicationData, setPublicationData] = useState(null);
   const [formData, setFormData] = useState({
     title: "",
@@ -55,19 +56,27 @@ const EditPublicationPage = () => {
     area: "",
     publicationDate: "",
     document_link: "",
-    collaborationStatus: "open",
+    journal: "", // Added
+    doi: "", // Added
+    thumbnail: "", // Added
+    // collaborationStatus: "open", // <<<< REMOVED
+    // 🆕 New fields
+    language: "English",
+    version: "v1.0",
+    isPeerReviewed: false,
+    license: "",
+    lastReviewedAt: "", // Keep as empty string for date input
   });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null); // General page load error
+  const [error, setError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [notification, setNotification] = useState({
     message: "",
     type: "",
     show: false,
   });
-  const [formErrors, setFormErrors] = useState({}); // Specific field errors
+  const [formErrors, setFormErrors] = useState({});
 
-  // --- Notification Handler ---
   const showNotification = useCallback((message, type = "success") => {
     setNotification({ message, type, show: true });
     setTimeout(
@@ -76,44 +85,37 @@ const EditPublicationPage = () => {
     );
   }, []);
 
-  // --- Fetch Publication Data ---
+  // --- Helper to format date for input type="date" (YYYY-MM-DD) ---
+  const formatDateForInput = (dateString) => {
+    if (!dateString) return "";
+    try {
+      const dateObj = new Date(dateString);
+      if (!isNaN(dateObj.getTime())) {
+        // For UTC dates (like publicationDate), toISOString().slice(0,10) is fine
+        // For local dates (like lastReviewedAt if it's meant to be local), ensure timezone handling
+        // For simplicity, we'll use toISOString for both here assuming backend handles timezone if necessary
+        return dateObj.toISOString().slice(0, 10);
+      }
+    } catch (e) {
+      /* ignore */
+    }
+    return ""; // Return empty if invalid
+  };
+
   useEffect(() => {
     const fetchPublication = async () => {
       setLoading(true);
       setError(null);
-      setFormErrors({}); // Clear previous form errors on load
+      setFormErrors({});
       try {
         if (!publicationId) throw new Error("No Publication ID provided.");
-
         const url = `${API_BASE_URL}/api/publications/${publicationId}`;
         const response = await axios.get(url, { headers: getAuthHeaders() });
 
         if (response.data?.success && response.data.data) {
           const fetchedPub = response.data.data;
-          setPublicationData(fetchedPub); // Keep original data for reference if needed
+          setPublicationData(fetchedPub);
 
-          // Format date for input type="date" (YYYY-MM-DD)
-          let formattedDate = "";
-          if (fetchedPub.publicationDate) {
-            try {
-              // Ensure it's a valid date object before formatting
-              const dateObj = new Date(fetchedPub.publicationDate);
-              if (!isNaN(dateObj.getTime())) {
-                // Format to YYYY-MM-DD. Handle timezone offset carefully.
-                //toISOString gives YYYY-MM-DDTHH:mm:ss.sssZ, slice(0, 10) gets the date part.
-                formattedDate = dateObj.toISOString().slice(0, 10);
-              } else {
-                console.warn(
-                  "Fetched publicationDate is invalid:",
-                  fetchedPub.publicationDate
-                );
-              }
-            } catch (dateError) {
-              console.error("Error parsing publicationDate:", dateError);
-            }
-          }
-
-          // Pre-fill form state
           setFormData({
             title: fetchedPub.title || "",
             summary: fetchedPub.summary || "",
@@ -122,9 +124,22 @@ const EditPublicationPage = () => {
               ? fetchedPub.tags.join(", ")
               : "",
             area: fetchedPub.area || "",
-            publicationDate: formattedDate,
+            publicationDate: formatDateForInput(fetchedPub.publicationDate),
             document_link: fetchedPub.document_link || "",
-            collaborationStatus: fetchedPub.collaborationStatus || "open",
+            journal: fetchedPub.journal || "",
+            doi: fetchedPub.doi || "",
+            thumbnail: fetchedPub.thumbnail || "",
+            // collaborationStatus: fetchedPub.collaborationStatus || "open", // <<<< REMOVED
+            // 🆕 Set new fields
+            language: fetchedPub.language || "English",
+            version: fetchedPub.version || "v1.0",
+            isPeerReviewed:
+              typeof fetchedPub.isPeerReviewed === "boolean"
+                ? fetchedPub.isPeerReviewed
+                : false,
+            license: fetchedPub.license || "",
+            lastReviewedAt: formatDateForInput(fetchedPub.lastReviewedAt),
+            // Note: rating and downloadCount are usually not directly edited in this form
           });
         } else {
           throw new Error(
@@ -145,16 +160,16 @@ const EditPublicationPage = () => {
         setLoading(false);
       }
     };
-
     fetchPublication();
   }, [publicationId]);
 
-  // --- Form Handling ---
   const handleInputChange = useCallback(
     (e) => {
-      const { name, value } = e.target;
-      setFormData((prev) => ({ ...prev, [name]: value }));
-      // Clear the specific error when user starts typing in the field
+      const { name, value, type, checked } = e.target;
+      setFormData((prev) => ({
+        ...prev,
+        [name]: type === "checkbox" ? checked : value,
+      }));
       if (formErrors[name]) {
         setFormErrors((prev) => {
           const newErrors = { ...prev };
@@ -164,16 +179,15 @@ const EditPublicationPage = () => {
       }
     },
     [formErrors]
-  ); // Include formErrors dependency
+  );
 
-  // --- Form Validation ---
   const validateForm = useCallback(() => {
     let errors = {};
     if (!formData.title?.trim()) errors.title = "Title cannot be empty.";
     if (!formData.summary?.trim()) errors.summary = "Summary cannot be empty.";
     if (!formData.author?.trim()) errors.author = "Author cannot be empty.";
     if (!formData.area?.trim()) errors.area = "Research Area cannot be empty.";
-    // Basic URL validation (can be improved)
+
     if (
       formData.document_link &&
       !/^https?:\/\/.+/.test(formData.document_link)
@@ -181,34 +195,36 @@ const EditPublicationPage = () => {
       errors.document_link =
         "Please enter a valid URL (starting with http:// or https://).";
     }
-    // Date validation (check if it's a reasonable date if entered)
-    if (formData.publicationDate) {
-      try {
-        const date = new Date(formData.publicationDate);
-        if (isNaN(date.getTime())) {
-          errors.publicationDate = "Invalid date format.";
-        }
-        // Optional: Check if date is in the future? Depends on requirements.
-        // else if (date > new Date()) {
-        //     errors.publicationDate = "Publication date cannot be in the future.";
-        // }
-      } catch (e) {
-        errors.publicationDate = "Invalid date format.";
-      }
+    if (formData.thumbnail && !/^https?:\/\/.+/.test(formData.thumbnail)) {
+      errors.thumbnail = "Please enter a valid URL for the thumbnail.";
     }
 
+    const validateDate = (dateStr, fieldName) => {
+      if (dateStr) {
+        try {
+          const date = new Date(dateStr);
+          if (isNaN(date.getTime())) errors[fieldName] = "Invalid date format.";
+        } catch (e) {
+          errors[fieldName] = "Invalid date format.";
+        }
+      }
+    };
+    validateDate(formData.publicationDate, "publicationDate");
+    validateDate(formData.lastReviewedAt, "lastReviewedAt");
+
+    // 🆕 Validate new fields if necessary (e.g., version format, license options)
+    // For simplicity, keeping basic validation for now.
+
     setFormErrors(errors);
-    return Object.keys(errors).length === 0; // True if no errors
+    return Object.keys(errors).length === 0;
   }, [formData]);
 
-  // --- Save Handler ---
   const handleSave = async (e) => {
     e.preventDefault();
-    setError(null); // Clear general errors before saving
+    setError(null);
 
     if (!validateForm()) {
       showNotification("Please review the form for errors.", "error");
-      // Find the first field with an error and focus it (optional UX improvement)
       const firstErrorField = document.querySelector('[aria-invalid="true"]');
       firstErrorField?.focus();
       return;
@@ -219,7 +235,7 @@ const EditPublicationPage = () => {
     const tagsArray = formData.tags
       .split(",")
       .map((tag) => tag.trim())
-      .filter(Boolean); // Filter out empty strings after trim
+      .filter(Boolean);
 
     const payload = {
       title: formData.title.trim(),
@@ -227,12 +243,22 @@ const EditPublicationPage = () => {
       author: formData.author.trim(),
       tags: tagsArray,
       area: formData.area.trim(),
-      // Ensure date is sent in a format backend expects (or null)
-      // Sending YYYY-MM-DD might be fine, or convert back to ISOString if needed
       publicationDate: formData.publicationDate || null,
       document_link: formData.document_link?.trim() || null,
-      collaborationStatus: formData.collaborationStatus,
+      journal: formData.journal?.trim() || null,
+      doi: formData.doi?.trim() || null,
+      thumbnail: formData.thumbnail?.trim() || null,
+      // collaborationStatus: formData.collaborationStatus, // <<<< REMOVED
+      // 🆕 Add new fields to payload
+      language: formData.language?.trim() || null,
+      version: formData.version?.trim() || null,
+      isPeerReviewed: formData.isPeerReviewed,
+      license: formData.license?.trim() || null,
+      lastReviewedAt: formData.lastReviewedAt || null,
+      // rating and downloadCount are generally not updated here by user
     };
+    // Filter out null values if backend expects undefined for no change or prefers cleaner payload
+    // Object.keys(payload).forEach(key => payload[key] === null && delete payload[key]);
 
     try {
       const url = `${API_BASE_URL}/api/publications/${publicationId}`;
@@ -241,17 +267,9 @@ const EditPublicationPage = () => {
       });
 
       if (response.data?.success) {
-        // Update local state with the *saved* data (optional, depends if you stay on page)
-        const savedPub = response.data.data;
-        setPublicationData(savedPub); // Update the reference data
-        // You might re-format the form data based on savedPub if needed, e.g., date format
-        // setFormData({...}); // Or just rely on navigation
-
         showNotification("Publication updated successfully!", "success");
-        // Navigate back to the publications list after a short delay
         setTimeout(() => navigate("/publications"), 1500);
       } else {
-        // Handle specific backend failure messages
         throw new Error(
           response.data?.message || "Failed to update publication."
         );
@@ -262,47 +280,41 @@ const EditPublicationPage = () => {
         err.response?.data?.message ||
         err.message ||
         "Could not update publication.";
-      setError(errMsg); // Show a general error message at the top
-      showNotification(`Update failed: ${errMsg}`, "error"); // Show detailed error in notification
+      setError(errMsg);
+      showNotification(`Update failed: ${errMsg}`, "error");
     } finally {
       setIsSaving(false);
     }
   };
 
-  // --- Render Logic ---
-
-  // 1. Initial Loading State
   if (loading) {
+    /* ... (loading spinner - no change) ... */
     return (
       <div className="flex justify-center items-center min-h-[calc(100vh-200px)]">
         {" "}
-        {/* Adjust height as needed */}
-        <LoadingSpinner size="xl" />
+        <LoadingSpinner size="xl" />{" "}
       </div>
     );
   }
-
-  // 2. Page Load Error State (e.g., publication not found, network error)
   if (error && !publicationData) {
-    // Show only if data couldn't be loaded at all
+    /* ... (page load error - no change) ... */
     return (
       <div className="container mx-auto p-4 sm:p-6 lg:p-8">
+        {" "}
         <ErrorMessage
           title="Error Loading Publication"
           message={error}
-          onClose={() => navigate("/publications")} // Option to go back
-        />
+          onClose={() => navigate("/publications")}
+        />{" "}
       </div>
     );
   }
 
-  // 3. Data Loaded, Render Form
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50 py-8 sm:py-12">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Fixed Notification Area */}
         <div className="fixed top-5 right-5 z-50 w-auto max-w-sm">
-          <Notification
+          <Notification /* ... (notification component - no change) ... */
             message={notification.message}
             type={notification.type}
             show={notification.show}
@@ -312,41 +324,46 @@ const EditPublicationPage = () => {
           />
         </div>
         <div className="max-w-3xl mx-auto">
-          {/* Header */}
           <div className="mb-8 text-center sm:text-left">
+            {" "}
+            {/* ... (header - no change) ... */}
             <h1 className="text-3xl sm:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-700 mb-1">
-              Edit Publication
+              {" "}
+              Edit Publication{" "}
             </h1>
             {publicationData?.title && (
               <p className="text-lg text-gray-600">
+                {" "}
                 Editing:{" "}
-                <span className="font-medium">{publicationData.title}</span>
+                <span className="font-medium">
+                  {publicationData.title}
+                </span>{" "}
               </p>
             )}
           </div>
-          {/* Display general save errors here if needed */}
           {error &&
-            publicationData && ( // Show save errors separately if form is visible
+            publicationData /* ... (save error display - no change) ... */ && (
               <div className="mb-6">
+                {" "}
                 <ErrorMessage
                   title="Update Error"
                   message={error}
                   onClose={() => setError(null)}
-                />
+                />{" "}
               </div>
             )}
-          {/* Form Card */}
           <form
             onSubmit={handleSave}
-            noValidate // Disable browser default validation, rely on ours
+            noValidate
             className="space-y-6 bg-white/90 backdrop-blur-sm p-6 sm:p-8 rounded-xl shadow-lg border border-gray-200/80"
           >
-            {/* --- Form Fields --- */}
-
-            {/* Title */}
+            {/* --- CORE FIELDS --- */}
             <div>
+              {" "}
+              {/* Title */}
               <label htmlFor="edit-title" className={baseLabelClass}>
-                <FaUser className="text-gray-400" /> Title
+                {" "}
+                <FaUser className="text-gray-400" /> Title{" "}
               </label>
               <input
                 type="text"
@@ -367,15 +384,17 @@ const EditPublicationPage = () => {
                   id="title-error"
                   className="mt-1.5 text-xs text-red-600 flex items-center gap-1"
                 >
-                  <FaExclamationCircle /> {formErrors.title}
+                  {" "}
+                  <FaExclamationCircle /> {formErrors.title}{" "}
                 </p>
               )}
             </div>
-
-            {/* Summary */}
             <div>
+              {" "}
+              {/* Summary */}
               <label htmlFor="edit-summary" className={baseLabelClass}>
-                <FaInfoCircle className="text-gray-400" /> Summary
+                {" "}
+                <FaInfoCircle className="text-gray-400" /> Summary{" "}
               </label>
               <textarea
                 id="edit-summary"
@@ -398,15 +417,17 @@ const EditPublicationPage = () => {
                   id="summary-error"
                   className="mt-1.5 text-xs text-red-600 flex items-center gap-1"
                 >
-                  <FaExclamationCircle /> {formErrors.summary}
+                  {" "}
+                  <FaExclamationCircle /> {formErrors.summary}{" "}
                 </p>
               )}
             </div>
-
-            {/* Author */}
             <div>
+              {" "}
+              {/* Author */}
               <label htmlFor="edit-author" className={baseLabelClass}>
-                <FaUser className="text-gray-400" /> Author(s)
+                {" "}
+                <FaUser className="text-gray-400" /> Author(s){" "}
               </label>
               <input
                 type="text"
@@ -429,15 +450,17 @@ const EditPublicationPage = () => {
                   id="author-error"
                   className="mt-1.5 text-xs text-red-600 flex items-center gap-1"
                 >
-                  <FaExclamationCircle /> {formErrors.author}
+                  {" "}
+                  <FaExclamationCircle /> {formErrors.author}{" "}
                 </p>
               )}
             </div>
-
-            {/* Tags */}
             <div>
+              {" "}
+              {/* Tags */}
               <label htmlFor="edit-tags" className={baseLabelClass}>
-                <FaTag className="text-gray-400" /> Tags
+                {" "}
+                <FaTag className="text-gray-400" /> Tags{" "}
               </label>
               <input
                 type="text"
@@ -454,14 +477,16 @@ const EditPublicationPage = () => {
                 id="tags-hint"
                 className="mt-1.5 text-xs text-gray-500 flex items-center gap-1"
               >
-                <FaInfoCircle /> Separate tags with commas.
+                {" "}
+                <FaInfoCircle /> Separate tags with commas.{" "}
               </p>
             </div>
-
-            {/* Research Area */}
             <div>
+              {" "}
+              {/* Research Area */}
               <label htmlFor="edit-area" className={baseLabelClass}>
-                <FaFlask className="text-gray-400" /> Research Area
+                {" "}
+                <FaFlask className="text-gray-400" /> Research Area{" "}
               </label>
               <input
                 type="text"
@@ -483,19 +508,21 @@ const EditPublicationPage = () => {
                   id="area-error"
                   className="mt-1.5 text-xs text-red-600 flex items-center gap-1"
                 >
-                  <FaExclamationCircle /> {formErrors.area}
+                  {" "}
+                  <FaExclamationCircle /> {formErrors.area}{" "}
                 </p>
               )}
             </div>
-
-            {/* Publication Date */}
             <div>
+              {" "}
+              {/* Publication Date */}
               <label htmlFor="edit-publicationDate" className={baseLabelClass}>
+                {" "}
                 <FaCalendarAlt className="text-gray-400" /> Publication Date
-                (Optional)
+                (Optional){" "}
               </label>
               <input
-                type="date" // Use HTML5 date picker
+                type="date"
                 id="edit-publicationDate"
                 name="publicationDate"
                 value={formData.publicationDate}
@@ -508,34 +535,35 @@ const EditPublicationPage = () => {
                 className={`${baseInputClass} ${
                   formErrors.publicationDate ? errorInputClass : ""
                 }`}
-                // Optional: Set max date to today if future dates aren't allowed
-                // max={new Date().toISOString().split("T")[0]}
               />
               {formErrors.publicationDate ? (
                 <p
                   id="date-error"
                   className="mt-1.5 text-xs text-red-600 flex items-center gap-1"
                 >
-                  <FaExclamationCircle /> {formErrors.publicationDate}
+                  {" "}
+                  <FaExclamationCircle /> {formErrors.publicationDate}{" "}
                 </p>
               ) : (
                 <p
                   id="date-hint"
                   className="mt-1.5 text-xs text-gray-500 flex items-center gap-1"
                 >
+                  {" "}
                   <FaInfoCircle /> Select the date the publication was
-                  officially released.
+                  officially released.{" "}
                 </p>
               )}
             </div>
-
-            {/* Document Link */}
             <div>
+              {" "}
+              {/* Document Link */}
               <label htmlFor="edit-document_link" className={baseLabelClass}>
-                <FaLink className="text-gray-400" /> Document Link (Optional)
+                {" "}
+                <FaLink className="text-gray-400" /> Document Link (Optional){" "}
               </label>
               <input
-                type="url" // Use URL type for basic browser validation hints
+                type="url"
                 id="edit-document_link"
                 name="document_link"
                 value={formData.document_link}
@@ -555,47 +583,248 @@ const EditPublicationPage = () => {
                   id="link-error"
                   className="mt-1.5 text-xs text-red-600 flex items-center gap-1"
                 >
-                  <FaExclamationCircle /> {formErrors.document_link}
+                  {" "}
+                  <FaExclamationCircle /> {formErrors.document_link}{" "}
                 </p>
               ) : (
                 <p
                   id="link-hint"
                   className="mt-1.5 text-xs text-gray-500 flex items-center gap-1"
                 >
+                  {" "}
                   <FaInfoCircle /> Link to the full text, DOI, or project page
-                  (must start with http/https).
+                  (must start with http/https).{" "}
+                </p>
+              )}
+            </div>
+            <div>
+              {" "}
+              {/* Journal */}
+              <label htmlFor="edit-journal" className={baseLabelClass}>
+                {" "}
+                <FaBookOpen className="text-gray-400" /> Journal/Conference
+                (Optional){" "}
+              </label>
+              <input
+                type="text"
+                id="edit-journal"
+                name="journal"
+                value={formData.journal}
+                onChange={handleInputChange}
+                disabled={isSaving}
+                className={baseInputClass}
+                placeholder="e.g., Nature, NeurIPS 2024"
+              />
+            </div>
+            <div>
+              {" "}
+              {/* DOI */}
+              <label htmlFor="edit-doi" className={baseLabelClass}>
+                {" "}
+                <FaExternalLinkAlt className="text-gray-400" /> DOI (Optional){" "}
+              </label>
+              <input
+                type="text"
+                id="edit-doi"
+                name="doi"
+                value={formData.doi}
+                onChange={handleInputChange}
+                disabled={isSaving}
+                className={baseInputClass}
+                placeholder="e.g., 10.1000/xyz123"
+              />
+            </div>
+            <div>
+              {" "}
+              {/* Thumbnail URL */}
+              <label htmlFor="edit-thumbnail" className={baseLabelClass}>
+                {" "}
+                <FaImage className="text-gray-400" /> Thumbnail URL (Optional){" "}
+              </label>
+              <input
+                type="url"
+                id="edit-thumbnail"
+                name="thumbnail"
+                value={formData.thumbnail}
+                onChange={handleInputChange}
+                disabled={isSaving}
+                aria-invalid={!!formErrors.thumbnail}
+                aria-describedby={
+                  formErrors.thumbnail ? "thumbnail-error" : "thumbnail-hint"
+                }
+                className={`${baseInputClass} ${
+                  formErrors.thumbnail ? errorInputClass : ""
+                }`}
+                placeholder="https://example.com/image.png"
+              />
+              {formErrors.thumbnail ? (
+                <p
+                  id="thumbnail-error"
+                  className="mt-1.5 text-xs text-red-600 flex items-center gap-1"
+                >
+                  <FaExclamationCircle /> {formErrors.thumbnail}
+                </p>
+              ) : (
+                <p
+                  id="thumbnail-hint"
+                  className="mt-1.5 text-xs text-gray-500 flex items-center gap-1"
+                >
+                  <FaInfoCircle /> Link to an image for the publication card.
                 </p>
               )}
             </div>
 
-            {/* Collaboration Status */}
-            <div>
-              <label htmlFor="edit-collabStatus" className={baseLabelClass}>
-                <FaUsers className="text-gray-400" /> Collaboration Status
-              </label>
-              <select
-                id="edit-collabStatus"
-                name="collaborationStatus"
-                value={formData.collaborationStatus}
-                onChange={handleInputChange}
-                disabled={isSaving}
-                className={`${baseInputClass} appearance-none pr-8`} // Add appearance-none for custom arrow styling (needs more setup usually)
-              >
+            {/* REMOVED: Collaboration Status Field */}
+            {/* <div>
+              <label htmlFor="edit-collabStatus" className={baseLabelClass}> <FaUsers className="text-gray-400" /> Collaboration Status </label>
+              <select id="edit-collabStatus" name="collaborationStatus" value={formData.collaborationStatus} onChange={handleInputChange} disabled={isSaving} className={`${baseInputClass} appearance-none pr-8`} >
                 <option value="open">Open to Collaboration</option>
                 <option value="in_progress">Collaboration In Progress</option>
                 <option value="closed">Not Seeking Collaboration</option>
               </select>
-              {/* You might add a custom dropdown arrow here if needed */}
+            </div> */}
+
+            {/* --- 🆕 NEW FIELDS --- */}
+            <div className="pt-6 mt-6 border-t border-gray-200/80 space-y-6">
+              <h3 className="text-lg font-medium text-gray-800">
+                Additional Details
+              </h3>
+              <div>
+                {" "}
+                {/* Language */}
+                <label htmlFor="edit-language" className={baseLabelClass}>
+                  {" "}
+                  <FaGlobe className="text-gray-400" /> Language{" "}
+                </label>
+                <input
+                  type="text"
+                  id="edit-language"
+                  name="language"
+                  value={formData.language}
+                  onChange={handleInputChange}
+                  disabled={isSaving}
+                  className={baseInputClass}
+                  placeholder="e.g., English, Spanish"
+                />
+              </div>
+              <div>
+                {" "}
+                {/* Version */}
+                <label htmlFor="edit-version" className={baseLabelClass}>
+                  {" "}
+                  <FaCodeBranch className="text-gray-400" /> Version{" "}
+                </label>
+                <input
+                  type="text"
+                  id="edit-version"
+                  name="version"
+                  value={formData.version}
+                  onChange={handleInputChange}
+                  disabled={isSaving}
+                  className={baseInputClass}
+                  placeholder="e.g., v1.0, Preprint"
+                />
+              </div>
+              <div className="flex items-center">
+                {" "}
+                {/* isPeerReviewed */}
+                <input
+                  type="checkbox"
+                  id="edit-isPeerReviewed"
+                  name="isPeerReviewed"
+                  checked={formData.isPeerReviewed}
+                  onChange={handleInputChange}
+                  disabled={isSaving}
+                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mr-2"
+                />
+                <label
+                  htmlFor="edit-isPeerReviewed"
+                  className="text-sm font-medium text-gray-700"
+                >
+                  {" "}
+                  <FaCheckCircle className="text-gray-400 inline mr-1.5" /> Is
+                  Peer Reviewed?{" "}
+                </label>
+              </div>
+              <div>
+                {" "}
+                {/* License */}
+                <label htmlFor="edit-license" className={baseLabelClass}>
+                  {" "}
+                  <FaBalanceScale className="text-gray-400" /> License
+                  (Optional){" "}
+                </label>
+                <input
+                  type="text"
+                  id="edit-license"
+                  name="license"
+                  value={formData.license}
+                  onChange={handleInputChange}
+                  disabled={isSaving}
+                  className={baseInputClass}
+                  placeholder="e.g., MIT, CC BY-SA 4.0"
+                />
+              </div>
+              <div>
+                {" "}
+                {/* Last Reviewed At */}
+                <label htmlFor="edit-lastReviewedAt" className={baseLabelClass}>
+                  {" "}
+                  <FaHistory className="text-gray-400" /> Last Reviewed Date
+                  (Optional){" "}
+                </label>
+                <input
+                  type="date"
+                  id="edit-lastReviewedAt"
+                  name="lastReviewedAt"
+                  value={formData.lastReviewedAt}
+                  onChange={handleInputChange}
+                  disabled={isSaving}
+                  aria-invalid={!!formErrors.lastReviewedAt}
+                  aria-describedby={
+                    formErrors.lastReviewedAt
+                      ? "lastReviewedAt-error"
+                      : "lastReviewedAt-hint"
+                  }
+                  className={`${baseInputClass} ${
+                    formErrors.lastReviewedAt ? errorInputClass : ""
+                  }`}
+                />
+                {formErrors.lastReviewedAt ? (
+                  <p
+                    id="lastReviewedAt-error"
+                    className="mt-1.5 text-xs text-red-600 flex items-center gap-1"
+                  >
+                    {" "}
+                    <FaExclamationCircle /> {formErrors.lastReviewedAt}{" "}
+                  </p>
+                ) : (
+                  <p
+                    id="lastReviewedAt-hint"
+                    className="mt-1.5 text-xs text-gray-500 flex items-center gap-1"
+                  >
+                    {" "}
+                    <FaInfoCircle /> Date of the last significant review or
+                    update.{" "}
+                  </p>
+                )}
+              </div>
+              {/* Note: Rating and Download Count are typically not editable directly in this form.
+                    They are often derived from user interactions or system events.
+                    If you need to edit them, add input fields similar to the above.
+                */}
             </div>
 
             {/* --- Action Buttons --- */}
             <div className="flex flex-col sm:flex-row justify-end gap-3 pt-6 border-t border-gray-200/80 mt-8">
               <button
                 type="button"
-                onClick={() => navigate("/publications")} // Go back to the list
+                onClick={() => navigate(-1)}
                 disabled={isSaving}
                 className={secondaryButtonClass}
               >
+                {" "}
+                {/* Changed to navigate(-1) for better UX */}
                 <FaTimes /> Cancel
               </button>
               <button
@@ -605,23 +834,22 @@ const EditPublicationPage = () => {
               >
                 {isSaving ? (
                   <>
-                    <FaSpinner className="animate-spin -ml-1 mr-2 h-4 w-4" />
-                    Saving...
+                    {" "}
+                    <FaSpinner className="animate-spin -ml-1 mr-2 h-4 w-4" />{" "}
+                    Saving...{" "}
                   </>
                 ) : (
                   <>
-                    <FaSave /> Save Changes
+                    {" "}
+                    <FaSave /> Save Changes{" "}
                   </>
                 )}
               </button>
             </div>
-          </form>{" "}
-          {/* --- END FORM --- */}
-        </div>{" "}
-        {/* End Max Width Container */}
-      </div>{" "}
-      {/* End Page Container */}
-    </div> /* End Page Wrapper */
+          </form>
+        </div>
+      </div>
+    </div>
   );
 };
 

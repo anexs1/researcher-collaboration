@@ -1,13 +1,41 @@
 // backend/controllers/publicationController.js
 
-import db from "../models/index.js"; // Import the database object
-const { Publication, User, UserBookmark, Comment } = db; // Destructure ALL needed models
+import db from "../models/index.js";
+const { Publication, User, UserBookmark, Comment } = db;
 import { Op } from "sequelize";
-import asyncHandler from "express-async-handler"; // Use if you prefer asyncHandler for error handling
+import asyncHandler from "express-async-handler";
 
 // =============================================
 //        REGULAR USER CONTROLLERS
 // =============================================
+
+// --- Helper for common publication attributes ---
+const COMMON_PUBLICATION_ATTRIBUTES = [
+  "id",
+  "title",
+  "summary",
+  "author",
+  "ownerId",
+  "document_link",
+  "tags",
+  "area",
+  "publicationDate",
+  "journal",
+  "doi",
+  "thumbnail",
+  "views",
+  "citations",
+  "createdAt",
+  "updatedAt",
+  // 🆕 Add new fields
+  "language",
+  "version",
+  "isPeerReviewed",
+  "license",
+  "lastReviewedAt",
+  "rating",
+  "downloadCount",
+];
 
 /**
  * @desc    Create a new publication
@@ -23,11 +51,16 @@ export const createPublication = asyncHandler(async (req, res) => {
     area,
     publicationDate,
     document_link,
-    collaborationStatus = "open", // Default if not provided
     journal,
     doi,
     thumbnail,
-    citations, // Allow setting initial citations? Usually not.
+    citations,
+    // 🆕 New fields from request body
+    language,
+    version,
+    isPeerReviewed,
+    license,
+    // lastReviewedAt, // Typically not set on creation by user
   } = req.body;
   const ownerId = req.user?.id;
 
@@ -55,17 +88,21 @@ export const createPublication = asyncHandler(async (req, res) => {
     area: area || null,
     publicationDate: publicationDate || null,
     document_link: document_link || null,
-    collaborationStatus: ["open", "in_progress", "closed"].includes(
-      collaborationStatus
-    )
-      ? collaborationStatus
-      : "open", // Validate status
     journal: journal || null,
     doi: doi || null,
     thumbnail: thumbnail || null,
-    citations: parseInt(citations, 10) || 0, // Ensure integer, default 0
-    views: 0, // Views start at 0
+    citations: parseInt(citations, 10) || 0,
+    views: 0, // Default
     ownerId: ownerId,
+    // 🆕 Assign new fields, relying on model defaults if not provided
+    language: language, // Model default: "English"
+    version: version, // Model default: "v1.0"
+    isPeerReviewed:
+      typeof isPeerReviewed === "boolean" ? isPeerReviewed : undefined, // Model default: false
+    license: license || null,
+    // lastReviewedAt: (model default: null)
+    // rating: (model default: 0.0)
+    // downloadCount: (model default: 0)
   });
 
   res.status(201).json({ success: true, data: newPublication });
@@ -82,9 +119,18 @@ export const getMyPublications = asyncHandler(async (req, res) => {
     res.status(401);
     throw new Error("Authentication required.");
   }
+
   const publications = await Publication.findAll({
     where: { ownerId: ownerId },
+    attributes: COMMON_PUBLICATION_ATTRIBUTES,
     order: [["createdAt", "DESC"]],
+    include: [
+      {
+        model: User,
+        as: "owner",
+        attributes: ["id", "username", "profilePictureUrl"],
+      },
+    ],
   });
   res.status(200).json({ success: true, data: publications });
 });
@@ -96,45 +142,28 @@ export const getMyPublications = asyncHandler(async (req, res) => {
  */
 export const getPublicationById = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const loggedInUserId = req.user?.id; // Get user ID if logged in (for bookmark status)
+  const loggedInUserId = req.user?.id;
 
   if (!id || isNaN(parseInt(id, 10))) {
     res.status(400);
     throw new Error("Invalid Publication ID.");
   }
 
-  // Increment views (can be refined to avoid counting owner, bots, etc.)
   try {
-    await Publication.increment("views", { where: { id: id } });
-  } catch (viewError) {
-    console.error(
-      `Failed to increment views for publication ${id}:`,
-      viewError
-    );
-    // Continue even if view increment fails
+    // Increment views before fetching, but don't let it block the main fetch
+    Publication.increment("views", { where: { id: id } }).catch((viewError) => {
+      console.error(
+        `Non-critical: Failed to increment views for publication ${id}:`,
+        viewError
+      );
+    });
+  } catch (e) {
+    /* Safety net, though increment().catch() should handle */
   }
 
   const publication = await Publication.findByPk(id, {
     attributes: [
-      // Specify all needed fields
-      "id",
-      "title",
-      "summary",
-      "author",
-      "ownerId",
-      "document_link",
-      "tags",
-      "area",
-      "publicationDate",
-      "collaborationStatus",
-      "journal",
-      "doi",
-      "thumbnail",
-      "views", // Include views
-      "citations",
-      "createdAt",
-      "updatedAt",
-      // --- Add bookmark status if user is logged in (MySQL/MariaDB compatible syntax) ---
+      ...COMMON_PUBLICATION_ATTRIBUTES,
       loggedInUserId
         ? [
             db.sequelize.literal(`(
@@ -145,18 +174,17 @@ export const getPublicationById = asyncHandler(async (req, res) => {
                         ub.publicationId = Publication.id AND
                         ub.userId = ${loggedInUserId}
                 )
-            )`), // <<< CORRECTED SYNTAX (No quotes/backticks needed for simple names)
-            "isBookmarked", // Alias for the result
+            )`),
+            "isBookmarked",
           ]
-        : db.sequelize.literal("false AS isBookmarked"), // Default to false if not logged in
-      // --- Add comment count (MySQL/MariaDB compatible syntax) ---
+        : db.sequelize.literal("false AS isBookmarked"),
       [
         db.sequelize.literal(`(
                 SELECT COUNT(*)
                 FROM comments AS c
                 WHERE c.publicationId = Publication.id
-            )`), // <<< CORRECTED SYNTAX
-        "commentCount", // Alias for the count
+            )`),
+        "commentCount",
       ],
     ],
     include: [
@@ -165,22 +193,12 @@ export const getPublicationById = asyncHandler(async (req, res) => {
         as: "owner",
         attributes: ["id", "username", "profilePictureUrl"],
       },
-      // Optionally include comments directly if needed on detail page load
-      // {
-      //   model: Comment,
-      //   as: 'comments',
-      //   limit: 5, // Example: limit initial comments
-      //   order: [['createdAt', 'DESC']],
-      //   include: [{ model: User, as: 'author', attributes: ['id', 'username'] }]
-      // }
     ],
   });
 
   if (publication) {
-    // Convert to plain JSON, manually handle boolean conversion for isBookmarked if needed
     const plainPublication = publication.toJSON();
-    plainPublication.isBookmarked = !!plainPublication.isBookmarked; // Ensure boolean true/false
-
+    plainPublication.isBookmarked = !!plainPublication.isBookmarked;
     res.status(200).json({ success: true, data: plainPublication });
   } else {
     res.status(404);
@@ -204,11 +222,15 @@ export const updatePublication = asyncHandler(async (req, res) => {
     area,
     publicationDate,
     document_link,
-    collaborationStatus,
     journal,
     doi,
     thumbnail,
-    // citations, // Usually not updated manually by user
+    // 🆕 New fields from request body for update
+    language,
+    version,
+    isPeerReviewed,
+    license,
+    lastReviewedAt,
   } = req.body;
 
   if (!ownerId) {
@@ -220,7 +242,8 @@ export const updatePublication = asyncHandler(async (req, res) => {
     throw new Error("Invalid Publication ID.");
   }
 
-  const publication = await Publication.findByPk(id);
+  const publication = await Publication.findByPk(id); // Fetches all fields by default
+
   if (!publication) {
     res.status(404);
     throw new Error("Publication not found");
@@ -242,7 +265,7 @@ export const updatePublication = asyncHandler(async (req, res) => {
           .split(",")
           .map((t) => t.trim())
           .filter(Boolean)
-      : publication.tags; // Keep existing if undefined
+      : publication.tags;
   if (area !== undefined) updateData.area = area;
   if (publicationDate !== undefined)
     updateData.publicationDate = publicationDate || null;
@@ -251,27 +274,34 @@ export const updatePublication = asyncHandler(async (req, res) => {
   if (journal !== undefined) updateData.journal = journal || null;
   if (doi !== undefined) updateData.doi = doi || null;
   if (thumbnail !== undefined) updateData.thumbnail = thumbnail || null;
-  if (
-    collaborationStatus !== undefined &&
-    ["open", "in_progress", "closed"].includes(collaborationStatus)
-  ) {
-    updateData.collaborationStatus = collaborationStatus;
+
+  // 🆕 Add new fields to updateData if provided
+  if (language !== undefined) updateData.language = language;
+  if (version !== undefined) updateData.version = version;
+  if (isPeerReviewed !== undefined && typeof isPeerReviewed === "boolean") {
+    updateData.isPeerReviewed = isPeerReviewed;
   }
+  if (license !== undefined) updateData.license = license; // Allow setting to null
+  if (lastReviewedAt !== undefined)
+    updateData.lastReviewedAt = lastReviewedAt || null;
 
   if (Object.keys(updateData).length === 0) {
     return res.status(200).json({
       success: true,
       message: "No update data provided.",
-      data: publication, // Return current data
+      data: publication,
     });
   }
 
-  await publication.update(updateData); // Update the instance
+  await publication.update(updateData);
+  const updatedPublication = await Publication.findByPk(id, {
+    attributes: COMMON_PUBLICATION_ATTRIBUTES,
+  }); // Re-fetch with all attributes
 
   res.status(200).json({
     success: true,
     message: "Publication updated successfully.",
-    data: publication, // Return updated instance
+    data: updatedPublication,
   });
 });
 
@@ -281,6 +311,7 @@ export const updatePublication = asyncHandler(async (req, res) => {
  * @access  Private
  */
 export const deletePublication = asyncHandler(async (req, res) => {
+  // ... (deletePublication - no changes needed for these new fields, it only needs id/ownerId)
   const { id } = req.params;
   const ownerId = req.user?.id;
 
@@ -295,14 +326,14 @@ export const deletePublication = asyncHandler(async (req, res) => {
 
   const publication = await Publication.findOne({
     where: { id: id, ownerId: ownerId },
+    attributes: ["id", "ownerId"],
   });
   if (!publication) {
     res.status(404);
     throw new Error("Publication not found or you cannot delete it.");
   }
 
-  await publication.destroy(); // Cascade should handle comments, bookmarks
-
+  await publication.destroy();
   console.log(`User ${ownerId} deleted publication ID ${id}`);
   res
     .status(200)
@@ -312,137 +343,103 @@ export const deletePublication = asyncHandler(async (req, res) => {
 /**
  * @desc    Get publications for public exploration (search, filter, sort)
  * @route   GET /api/publications/explore
- * @access  Public (but includes user-specific bookmark status if logged in)
+ * @access  Public
  */
 export const getExplorePublications = asyncHandler(async (req, res) => {
-  // --- Destructure and Validate Query Params ---
   const {
     search,
-    area,
-    sortBy = "date_desc", // Updated default sort key
+    area: areaFilter,
+    sortBy = "date_desc",
     page = 1,
     limit = 12,
   } = req.query;
-  const loggedInUserId = req.user?.id; // Get ID if user is logged in
+  const loggedInUserId = req.user?.id;
   const pageNum = parseInt(page, 10);
   const limitNum = parseInt(limit, 10);
-  const sortOrderParam = (req.query.sortOrder || "DESC").toUpperCase(); // Default sort order
 
   if (
     isNaN(pageNum) ||
     isNaN(limitNum) ||
     pageNum < 1 ||
     limitNum < 1 ||
-    limitNum > 100 // Sensible limit
+    limitNum > 100
   ) {
     res.status(400);
     throw new Error("Invalid pagination parameters.");
   }
-  // SortOrder validation happens when assigning orderClause
 
   const offset = (pageNum - 1) * limitNum;
-
-  // --- Build Query ---
-  let whereClause = {}; // Start with empty where, filter as needed
+  let whereClause = {};
   let orderClause = [];
-  let includeClause = [
-    { model: User, as: "owner", attributes: ["id", "username"] }, // Include basic owner info
-  ];
 
-  // Filtering
   if (search) {
     const searchPattern = `%${search}%`;
-    // Add FULLTEXT search if configured on DB, otherwise use LIKE
     whereClause[Op.or] = [
       { title: { [Op.like]: searchPattern } },
       { summary: { [Op.like]: searchPattern } },
       { author: { [Op.like]: searchPattern } },
       { area: { [Op.like]: searchPattern } },
-      { tags: { [Op.like]: searchPattern } }, // Basic tag search (less efficient than JSON operators)
-      // { '$owner.username$': { [Op.like]: searchPattern } } // Requires subQuery: false if used
+      { tags: { [Op.like]: searchPattern } },
+      { language: { [Op.like]: searchPattern } },
+      { license: { [Op.like]: searchPattern } },
     ];
   }
-  if (area && area !== "All") {
-    // Allow filtering by area
-    whereClause.area = area;
+  if (areaFilter && areaFilter !== "All") {
+    whereClause.area = areaFilter;
   }
 
-  // Add specific filters if needed, e.g., only 'open' status for explore?
-  // whereClause.collaborationStatus = 'open';
-
-  // Sorting
-  // Define allowed sort columns to prevent arbitrary column sorting
   const allowedSortColumns = {
     date_desc: ["createdAt", "DESC"],
     date_asc: ["createdAt", "ASC"],
     title_asc: ["title", "ASC"],
     title_desc: ["title", "DESC"],
-    views_desc: ["views", "DESC"], // Make sure 'views' is in attributes if sorting by it
-    // Add more as needed: 'author_asc', 'area_asc', etc.
+    views_desc: ["views", "DESC"],
+    rating_desc: ["rating", "DESC"],
+    rating_asc: ["rating", "ASC"],
+    downloadCount_desc: ["downloadCount", "DESC"],
+    downloadCount_asc: ["downloadCount", "ASC"],
+    lastReviewedAt_desc: ["lastReviewedAt", "DESC"],
+    lastReviewedAt_asc: ["lastReviewedAt", "ASC"],
   };
-
-  orderClause = allowedSortColumns[sortBy] || allowedSortColumns["date_desc"]; // Default to newest first
-  // Validate the derived sort order direction (ASC/DESC)
+  orderClause = allowedSortColumns[sortBy] || allowedSortColumns["date_desc"];
   if (!["ASC", "DESC"].includes(orderClause[1])) {
-    console.warn(
-      `Invalid sort order detected for sortBy key '${sortBy}', defaulting direction to DESC.`
-    );
-    orderClause[1] = "DESC"; // Fallback direction
+    orderClause[1] = "DESC";
   }
 
-  // --- Base Attributes to Select ---
-  const attributes = [
-    "id",
-    "title",
-    "summary",
-    "author",
-    "ownerId",
-    "tags",
-    "area",
-    "publicationDate",
-    "collaborationStatus",
-    "thumbnail",
-    "views",
-    "citations",
-    "doi",
-    "createdAt",
-    "updatedAt",
-    // Add isBookmarked status dynamically (MySQL/MariaDB compatible syntax)
+  const attributesToSelect = [
+    ...COMMON_PUBLICATION_ATTRIBUTES,
     loggedInUserId
       ? [
-          db.sequelize.literal(`(
-                EXISTS (
-                    SELECT 1 FROM user_bookmarks AS ub
-                    WHERE ub.publicationId = Publication.id AND ub.userId = ${loggedInUserId}
-                )
-            )`), // <<< CORRECTED SYNTAX
+          db.sequelize.literal(
+            `(EXISTS (SELECT 1 FROM user_bookmarks AS ub WHERE ub.publicationId = Publication.id AND ub.userId = ${loggedInUserId}))`
+          ),
           "isBookmarked",
         ]
       : db.sequelize.literal("false AS isBookmarked"),
-    // Add comment count dynamically (MySQL/MariaDB compatible syntax)
     [
-      db.sequelize.literal(`(
-              SELECT COUNT(*) FROM comments AS c
-              WHERE c.publicationId = Publication.id
-          )`), // <<< CORRECTED SYNTAX
+      db.sequelize.literal(
+        `(SELECT COUNT(*) FROM comments AS c WHERE c.publicationId = Publication.id)`
+      ),
       "commentCount",
     ],
   ];
 
-  // --- Database Query ---
   const { count, rows } = await Publication.findAndCountAll({
-    attributes: attributes,
+    attributes: attributesToSelect,
     where: whereClause,
-    include: includeClause,
-    order: [orderClause], // Order expects an array of arrays e.g., [['createdAt', 'DESC']]
+    include: [
+      {
+        model: User,
+        as: "owner",
+        attributes: ["id", "username", "profilePictureUrl"],
+      },
+    ],
+    order: [orderClause],
     limit: limitNum,
     offset: offset,
-    distinct: true, // Important when using includes
-    // subQuery: false, // Only set true if filtering/ordering by included model fields like '$owner.username$'
+    distinct: true,
   });
 
-  // --- Format Response ---
-  // Ensure isBookmarked is boolean
   const formattedPublications = rows.map((pub) => {
     const plainPub = pub.toJSON();
     plainPub.isBookmarked = !!plainPub.isBookmarked;
@@ -464,18 +461,11 @@ export const getExplorePublications = asyncHandler(async (req, res) => {
 // =============================================
 //        BOOKMARK CONTROLLER
 // =============================================
-
-/**
- * @desc    Toggle bookmark status for a publication for the logged-in user
- * @route   PATCH /api/publications/:id/bookmark
- * @access  Private (Requires login)
- */
 export const toggleBookmark = asyncHandler(async (req, res) => {
-  const publicationId = parseInt(req.params.id, 10); // Get publication ID from URL
-  const userId = req.user?.id; // Get user ID from authentication middleware
-  const { bookmark } = req.body; // Get desired state (true/false) from request body
-
-  // --- Validations ---
+  // ... (toggleBookmark - no changes needed for these new fields)
+  const publicationId = parseInt(req.params.id, 10);
+  const userId = req.user?.id;
+  const { bookmark } = req.body;
   if (!userId) {
     res.status(401);
     throw new Error("Authentication required to bookmark.");
@@ -490,77 +480,113 @@ export const toggleBookmark = asyncHandler(async (req, res) => {
       "Invalid 'bookmark' value provided. Must be true or false."
     );
   }
-
-  // Check if the publication actually exists
   const publicationExists = await Publication.findByPk(publicationId, {
     attributes: ["id"],
-  }); // Lightweight check
+  });
   if (!publicationExists) {
     res.status(404);
     throw new Error("Publication not found.");
   }
-
-  // --- Perform Action ---
   try {
     if (bookmark === true) {
-      // Add bookmark: Use findOrCreate to handle potential duplicates gracefully
-      const [userBookmark, created] = await UserBookmark.findOrCreate({
+      const [, created] = await UserBookmark.findOrCreate({
         where: { userId: userId, publicationId: publicationId },
-        // No defaults needed if table only has FKs and timestamps
       });
       if (created) {
-        console.log(
-          `Bookmark CREATED for userId: ${userId}, publicationId: ${publicationId}`
-        );
         res
           .status(201)
-          .json({ message: "Publication bookmarked successfully" }); // 201 Created
+          .json({ message: "Publication bookmarked successfully" });
       } else {
-        console.log(
-          `Bookmark already exists for userId: ${userId}, publicationId: ${publicationId}`
-        );
-        res.status(200).json({ message: "Publication was already bookmarked" }); // 200 OK
+        res.status(200).json({ message: "Publication was already bookmarked" });
       }
     } else {
-      // Remove bookmark
       const deletedCount = await UserBookmark.destroy({
         where: { userId: userId, publicationId: publicationId },
       });
-
       if (deletedCount > 0) {
-        console.log(
-          `Bookmark DELETED for userId: ${userId}, publicationId: ${publicationId}`
-        );
         res.status(200).json({ message: "Bookmark removed successfully" });
       } else {
-        console.log(
-          `Attempted to delete non-existent bookmark for userId: ${userId}, publicationId: ${publicationId}`
-        );
-        // It's okay if it didn't exist, the desired state is achieved
         res.status(200).json({ message: "Bookmark was not found to remove" });
       }
     }
   } catch (error) {
     console.error("Bookmark toggle database error:", error);
-    res.status(500); // Internal Server Error
+    res.status(500);
     throw new Error("Failed to update bookmark status due to a server error.");
   }
 });
 
-// =============================================
-//        ADMIN PUBLICATION CONTROLLERS (Example Stubs - Move if needed)
-// =============================================
+// 🆕 --- Additional Actions for New Fields ---
 
 /**
- * @desc    Get ALL publications with filtering/sorting (Admin only)
- * @route   GET /api/admin/publications (Example route - define in adminRoutes.js)
- * @access  Private/Admin
+ * @desc    Increment download count for a publication
+ * @route   PATCH /api/publications/:id/download
+ * @access  Public (or Private if tracking downloads per user is needed)
  */
-// export const adminGetAllPublications = asyncHandler(async (req, res) => { ... });
+export const incrementDownloadCount = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  if (!id || isNaN(parseInt(id, 10))) {
+    res.status(400);
+    throw new Error("Invalid Publication ID.");
+  }
+  try {
+    // The increment method returns an array [affectedRows, metadata] or [affectedRows]
+    // We only care about affectedRows to confirm if the publication was found and updated.
+    const result = await Publication.increment("downloadCount", {
+      where: { id: id },
+    });
+    const affectedRows = Array.isArray(result)
+      ? result[0]
+      : typeof result === "number"
+      ? result
+      : 0;
 
-/**
- * @desc    Delete ANY publication by ID (Admin only)
- * @route   DELETE /api/admin/publications/:id (Example route - define in adminRoutes.js)
- * @access  Private/Admin
- */
-// export const adminDeletePublication = asyncHandler(async (req, res) => { ... });
+    // For some databases/Sequelize versions, result might be [[Publication, boolean]]
+    // A more robust check might be to see if result[0] is an array and then check its first element.
+    let updatedCount = 0;
+    if (
+      Array.isArray(result) &&
+      Array.isArray(result[0]) &&
+      result[0].length > 0 &&
+      result[0][0] instanceof Publication
+    ) {
+      updatedCount = result[0][0].downloadCount;
+    } else if (
+      affectedRows === 0 &&
+      !(
+        Array.isArray(result) &&
+        Array.isArray(result[0]) &&
+        result[0].length > 0
+      )
+    ) {
+      // If no rows were affected and it wasn't the instance update case
+      res.status(404);
+      throw new Error(
+        "Publication not found or download count could not be incremented."
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Download count incremented.",
+      downloadCount: updatedCount,
+    }); // Optionally return new count
+  } catch (error) {
+    console.error(
+      `Failed to increment download count for publication ${id}:`,
+      error
+    );
+    if (!res.headersSent) {
+      res.status(error.statusCode || 500);
+    }
+    // Re-throw for asyncHandler's global error handler
+    if (error instanceof Error) {
+      throw error;
+    } else {
+      throw new Error(String(error));
+    }
+  }
+});
+
+// Placeholder for ratePublication - complex, requires separate rating model usually
+// export const ratePublication = asyncHandler(async (req, res) => { ... });

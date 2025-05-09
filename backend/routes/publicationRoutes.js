@@ -1,54 +1,40 @@
+// backend/routes/publicationRoutes.js
 import express from "express";
-import { protect } from "../middleware/authMiddleware.js"; // Import your authentication middleware
+import { protect } from "../middleware/authMiddleware.js";
 import {
   createPublication,
   getMyPublications,
   getPublicationById,
   updatePublication,
   deletePublication,
-  getExplorePublications, // Public explore endpoint
-  toggleBookmark, // <<< IMPORT the new bookmark handler
-  // clonePublication, // Import if/when implemented
-  // Admin functions - Keep separate if using admin routes
-  // adminGetAllPublications,
-  // adminDeletePublication,
+  getExplorePublications,
+  toggleBookmark,
+  incrementDownloadCount, // 🆕 Import new controller function
+  // ratePublication, // Import if you implement it
 } from "../controllers/publicationController.js";
 
-// *** Import comment controller functions ***
 import {
   getCommentsForPublication,
   createComment,
-} from "../controllers/commentController.js"; // Assuming this exists
-
-// Optional: Import admin-specific middleware if needed
-// import { adminOnly } from '../middleware/authMiddleware.js';
+} from "../controllers/commentController.js";
 
 const router = express.Router();
 
 // --- Public Routes ---
-// These generally do not need the 'protect' middleware
-router.get("/explore", getExplorePublications); // GET /api/publications/explore
-router.get("/:id", getPublicationById); // GET /api/publications/:id
+router.get("/explore", getExplorePublications);
+router.get("/:id", getPublicationById);
+router.patch("/:id/download", incrementDownloadCount); // 🆕 Route for incrementing download count
 
-// --- ** NESTED COMMENT ROUTES for a specific Publication ** ---
-// GET /api/publications/:publicationId/comments (Fetch comments for a publication)
-// This can be public or protected depending on your needs
+// --- Nested Comment Routes ---
 router.get("/:publicationId/comments", getCommentsForPublication);
 
-// --- Protected Routes (Require Authentication via 'protect' middleware) ---
-
-router.post("/", protect, createPublication); // POST /api/publications
-router.get("/my-publications", protect, getMyPublications); // GET /api/publications/my-publications
-router.put("/:id", protect, updatePublication); // PUT /api/publications/:id
-router.delete("/:id", protect, deletePublication); // DELETE /api/publications/:id
-
-// POST /api/publications/:publicationId/comments (Requires login to post)
+// --- Protected Routes ---
+router.post("/", protect, createPublication);
+router.get("/my-publications", protect, getMyPublications);
+router.put("/:id", protect, updatePublication);
+router.delete("/:id", protect, deletePublication);
 router.post("/:publicationId/comments", protect, createComment);
-
-// --- Bookmark Route ---
-router.patch("/:id/bookmark", protect, toggleBookmark); // <<< ADDED/ENABLED THIS ROUTE
-
-// --- Optional Clone Route (Requires Implementation) ---
-// router.post('/:id/clone', protect, clonePublication);       // POST /api/publications/:id/clone
+router.patch("/:id/bookmark", protect, toggleBookmark);
+// router.patch("/:id/rate", protect, ratePublication); // 🆕 Example route for rating (if implemented)
 
 export default router;
