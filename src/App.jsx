@@ -124,8 +124,10 @@ import AdminReportsPage from "./Page/Admin/AdminReportsPage";
 import AdminPendingUsersPage from "./Page/Admin/AdminPendingUsersPage";
 import AdminChatPage from "./Page/Admin/AdminChatPage";
 import AdminPublicationManagementPage from "./Page/Admin/AdminPublicationManagementPage";
-import AdminSinglePublicationDetailPage from "./Page/Admin/AdminSinglePublicationDetailPage"; // <<<=== IMPORT THIS
+import AdminSinglePublicationDetailPage from "./Page/Admin/AdminSinglePublicationDetailPage";
+import AdminProjectListPage from "./Page/Admin/AdminProjectListPage";
 import ProjectDetailPage from "./Page/ProjectDetailPage";
+// REMOVED: import DocumentPageComponent from "./Page/DocumentPageComponent";
 
 // --- Helper Components ---
 const LoadingScreen = ({ message = "Loading..." }) => (
@@ -361,7 +363,7 @@ const DocumentEditorComponent = ({ documentId, currentUser }) => {
   );
 };
 
-// +++ DOCUMENT PAGE COMPONENT (Copied from your provided structure, renamed to avoid conflict) +++
+// +++ DOCUMENT PAGE COMPONENT (Copied from your provided structure, named DocumentPageWrapper as it's inline) +++
 const DocumentPageWrapper = ({ currentUser }) => {
   const [currentDocumentId, setCurrentDocumentId] = useState(null);
   const [newDocTitle, setNewDocTitle] = useState("");
@@ -622,15 +624,14 @@ function App() {
   useEffect(() => {
     setLoadingAuth(true);
     const userIsPresent = !!token && !!currentUser?.id;
-    const userIsAdminResult = userIsPresent && currentUser?.role === "admin"; // Store result
+    const userIsAdminResult = userIsPresent && currentUser?.role === "admin";
     setIsLoggedIn(userIsPresent);
-    setIsAdmin(userIsAdminResult); // Use stored result
+    setIsAdmin(userIsAdminResult);
     setLoadingAuth(false);
-    // console.log(`Auth state: isLoggedIn=${userIsPresent}, isAdmin=${userIsAdminResult}, User:`, currentUser?.username);
   }, [token, currentUser]);
 
   const handleLogout = () => {
-    logout(); /* navigate('/login'); */
+    logout();
   };
 
   if (loadingAuth) {
@@ -837,7 +838,7 @@ function App() {
                 path="/documents"
                 element={<DocumentPageWrapper currentUser={currentUser} />}
               />{" "}
-              {/* Using the wrapper */}
+              {/* Using the inline wrapper */}
             </Route>
           </Route>
 
@@ -860,11 +861,15 @@ function App() {
                 path="/admin/publications"
                 element={<AdminPublicationManagementPage />}
               />
-              {/* ✅ THIS IS THE CORRECTED/ADDED ROUTE FOR ADMIN SINGLE PUBLICATION VIEW */}
               <Route
                 path="/admin/publications/:id/view"
                 element={<AdminSinglePublicationDetailPage />}
               />
+              <Route
+                path="/admin/projects"
+                element={<AdminProjectListPage />}
+              />{" "}
+              {/* ✅ Corrected here */}
               <Route path="/admin/settings" element={<AdminSettingsPage />} />
             </Route>
           </Route>
