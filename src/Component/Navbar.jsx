@@ -87,7 +87,7 @@ const Navbar = ({
                 >
                   Publications
                 </NavLink>
-                {/* +++ ADDED DOCUMENTS LINK (Desktop - only if logged in) +++ */}
+                {/* +++ ADDED DOCUMENTS LINK (Desktop - only if logged in) +++
                 {isLoggedIn && (
                   <NavLink
                     to="/documents" // Route defined in App.jsx
@@ -103,7 +103,7 @@ const Navbar = ({
                     />
                     Documents
                   </NavLink>
-                )}
+                )} */}
                 {/* +++ END +++ */}
                 <NavLink
                   to="/aboutus"
