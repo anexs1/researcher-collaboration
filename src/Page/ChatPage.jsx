@@ -1,3 +1,4 @@
+// src/Page/ChatPage.jsx
 import React, {
   useState,
   useEffect,
@@ -5,9 +6,9 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import axios, { AxiosError } from "axios";
-import { io, Socket } from "socket.io-client";
+import { io } from "socket.io-client";
 import {
   FaPaperPlane,
   FaSpinner,
@@ -33,13 +34,12 @@ import MemberListModal from "../Component/chat/MemberListModal";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
-const SOCKET_TIMEOUT = 15000;
+const SOCKET_TIMEOUT = 15000; // ms for socket emit with ack
 const MAX_FILE_SIZE_MB = 10;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
-const TYPING_TIMEOUT_DURATION = 3000;
+const TYPING_TIMEOUT_DURATION = 3000; // ms
 
 const getRoomName = (projectId) => (projectId ? `project-${projectId}` : null);
-
 const formatMessageTime = (isoString) => {
   if (!isoString) return "";
   try {
@@ -48,7 +48,6 @@ const formatMessageTime = (isoString) => {
     return "Invalid Date";
   }
 };
-
 const formatDateSeparator = (isoString) => {
   if (!isoString) return null;
   try {
@@ -60,16 +59,14 @@ const formatDateSeparator = (isoString) => {
     return null;
   }
 };
-
 const getAuthToken = () => localStorage.getItem("authToken");
-
-const createAxiosInstance = (token) => {
-  return axios.create({
+const createAxiosInstance = (token) =>
+  axios.create({
     baseURL: API_BASE_URL,
     headers: { Authorization: `Bearer ${token}` },
   });
-};
 
+// --- useChatData Hook ---
 function useChatData(projectId, currentUser, scrollToBottom) {
   const [projectDetails, setProjectDetails] = useState(null);
   const [initialMessages, setInitialMessages] = useState([]);
@@ -84,7 +81,6 @@ function useChatData(projectId, currentUser, scrollToBottom) {
     setProjectDetails(null);
     setInitialMessages([]);
     setCanAttemptConnect(false);
-
     if (!currentUserId || !projectId) {
       setFetchError(
         !currentUserId ? "Authentication Error" : "Invalid Project ID"
@@ -92,14 +88,12 @@ function useChatData(projectId, currentUser, scrollToBottom) {
       setIsLoading(false);
       return;
     }
-
     const token = getAuthToken();
     if (!token) {
       setFetchError("Authentication token not found. Please log in.");
       setIsLoading(false);
       return;
     }
-
     const apiClient = createAxiosInstance(token);
     let fetchedDetails = null;
     let fetchedMsgs = [];
@@ -112,10 +106,11 @@ function useChatData(projectId, currentUser, scrollToBottom) {
         apiClient.get(`/api/projects/${projectId}`),
       ]);
 
-      if (projectInfoResponse.status === "fulfilled") {
-        const projectData =
-          projectInfoResponse.value.data?.data ||
-          projectInfoResponse.value.data?.project;
+      if (
+        projectInfoResponse.status === "fulfilled" &&
+        projectInfoResponse.value.data?.success
+      ) {
+        const projectData = projectInfoResponse.value.data.data;
         if (projectData?.id && projectData?.title) {
           fetchedDetails = { id: projectData.id, name: projectData.title };
           allowConnection = true;
@@ -126,22 +121,20 @@ function useChatData(projectId, currentUser, scrollToBottom) {
         fetchedDetails = { id: projectId, name: `Project ${projectId}` };
       }
 
-      if (historyResponse.status === "fulfilled") {
-        if (
-          historyResponse.value.data?.success &&
-          Array.isArray(historyResponse.value.data.data)
-        ) {
+      if (
+        historyResponse.status === "fulfilled" &&
+        historyResponse.value.data?.success
+      ) {
+        if (Array.isArray(historyResponse.value.data.data)) {
           fetchedMsgs = historyResponse.value.data.data;
           allowConnection = true;
         } else {
           fetchedMsgs = [];
-          if (!allowConnection) {
+          if (!allowConnection)
             errorMsg =
-              historyResponse.value.data?.message ||
-              "Failed to load message history.";
-          }
+              historyResponse.value.data?.message || "Invalid history data.";
         }
-      } else {
+      } else if (historyResponse.status === "rejected") {
         const err = historyResponse.reason;
         allowConnection = false;
         if (err.response) {
@@ -156,14 +149,13 @@ function useChatData(projectId, currentUser, scrollToBottom) {
         } else if (err.request) {
           errorMsg = "Network Error: Could not reach server for history.";
         } else {
-          errorMsg =
-            err.message || "An unknown error occurred fetching history.";
+          errorMsg = err.message || "Unknown error fetching history.";
         }
         fetchedMsgs = [];
       }
     } catch (err) {
       allowConnection = false;
-      errorMsg = err.message || "An unexpected error occurred during setup.";
+      errorMsg = err.message || "Unexpected error during setup.";
       fetchedDetails = fetchedDetails || {
         id: projectId,
         name: `Project ${projectId}`,
@@ -184,7 +176,6 @@ function useChatData(projectId, currentUser, scrollToBottom) {
   useEffect(() => {
     fetchInitialData();
   }, [fetchInitialData]);
-
   return {
     projectDetails,
     initialMessages,
@@ -195,6 +186,7 @@ function useChatData(projectId, currentUser, scrollToBottom) {
   };
 }
 
+// --- useChatSocket Hook ---
 function useChatSocket(
   canAttemptConnect,
   currentUserId,
@@ -217,18 +209,12 @@ function useChatSocket(
       }
       return;
     }
-
     const token = getAuthToken();
     if (!token) {
-      setSocketError("Authentication token missing for socket connection.");
+      setSocketError("Auth token missing for socket.");
       return;
     }
-
-    if (socketRef.current?.connected) {
-      if (!isConnected) setIsConnected(true);
-      return;
-    }
-
+    if (socketRef.current?.connected && isConnected) return;
     if (socketRef.current) {
       socketRef.current.disconnect();
       socketRef.current = null;
@@ -248,33 +234,21 @@ function useChatSocket(
       setIsConnected(true);
       setSocketError(null);
       newSocket.emit("joinChatRoom", { roomName }, (ack) => {
-        if (!ack?.success) {
+        if (!ack?.success)
           setSocketError(`Join Error: ${ack?.error || "Server rejected join"}`);
-        }
       });
     });
-
     newSocket.on("disconnect", (reason) => {
       setIsConnected(false);
-      if (reason !== "io client disconnect") {
-        setSocketError("Connection lost. Attempting to reconnect...");
-      }
+      if (reason !== "io client disconnect") setSocketError("Connection lost.");
       setTypingUsers(new Map());
-      if (socketRef.current?.id === newSocket.id) {
-        socketRef.current = null;
-      }
+      if (socketRef.current?.id === newSocket.id) socketRef.current = null;
     });
-
     newSocket.on("connect_error", (err) => {
       setIsConnected(false);
-      setSocketError(
-        `Connection Failed: ${err.message}. Check network or server status.`
-      );
-      if (socketRef.current?.id === newSocket.id) {
-        socketRef.current = null;
-      }
+      setSocketError(`Connection Failed: ${err.message}.`);
+      if (socketRef.current?.id === newSocket.id) socketRef.current = null;
     });
-
     newSocket.on("newMessage", (message) => {
       if (!message || !message.projectId || !message.id) return;
       if (message.projectId?.toString() === projectId?.toString()) {
@@ -288,29 +262,22 @@ function useChatSocket(
         onNewMessageCallback(msgWithSender);
       }
     });
-
     newSocket.on("userTyping", ({ userId, username }) => {
       if (!userId || userId.toString() === currentUserId?.toString()) return;
       setTypingUsers((prevMap) => {
         const newMap = new Map(prevMap);
-        if (newMap.has(userId)) {
-          clearTimeout(newMap.get(userId).timerId);
-        }
+        if (newMap.has(userId)) clearTimeout(newMap.get(userId).timerId);
         const timerId = setTimeout(() => {
           setTypingUsers((currentMap) => {
             const updatedMap = new Map(currentMap);
-            if (updatedMap.has(userId)) {
-              updatedMap.delete(userId);
-            }
+            if (updatedMap.has(userId)) updatedMap.delete(userId);
             return updatedMap;
           });
         }, TYPING_TIMEOUT_DURATION);
-
         newMap.set(userId, { username: username || `User ${userId}`, timerId });
         return newMap;
       });
     });
-
     newSocket.on("userStopTyping", ({ userId }) => {
       if (!userId || userId.toString() === currentUserId?.toString()) return;
       setTypingUsers((prevMap) => {
@@ -325,23 +292,17 @@ function useChatSocket(
     });
 
     return () => {
-      const socketInstanceToClean = newSocket;
-      socketInstanceToClean.off("connect");
-      socketInstanceToClean.off("disconnect");
-      socketInstanceToClean.off("connect_error");
-      socketInstanceToClean.off("newMessage");
-      socketInstanceToClean.off("userTyping");
-      socketInstanceToClean.off("userStopTyping");
-
+      const s = newSocket;
+      s.off("connect");
+      s.off("disconnect");
+      s.off("connect_error");
+      s.off("newMessage");
+      s.off("userTyping");
+      s.off("userStopTyping");
       clearTimeout(typingTimeoutRef.current);
-
-      if (socketInstanceToClean.connected) {
-        socketInstanceToClean.emit("leaveChatRoom", { roomName });
-      }
-
-      socketInstanceToClean.disconnect();
-
-      if (socketRef.current?.id === socketInstanceToClean.id) {
+      if (s.connected) s.emit("leaveChatRoom", { roomName });
+      s.disconnect();
+      if (socketRef.current?.id === s.id) {
         socketRef.current = null;
         setIsConnected(false);
       }
@@ -356,40 +317,44 @@ function useChatSocket(
 
   const sendMessage = useCallback((messageData) => {
     return new Promise((resolve, reject) => {
-      const currentSocket = socketRef.current;
+      const currentSocket = socketRef.current; // Use the ref's current value
       if (!currentSocket?.connected) {
-        setSocketError("Cannot send message: Not connected.");
-        return reject(new Error("Socket not connected"));
+        const errMsg = "Cannot send message: Not connected.";
+        setSocketError(errMsg);
+        return reject(new Error(errMsg));
       }
       currentSocket
         .timeout(SOCKET_TIMEOUT)
         .emit("sendMessage", messageData, (err, ack) => {
           if (err) {
-            setSocketError("Error: Message send timed out.");
-            reject(err);
+            const errMsg = "Error: Message send timed out.";
+            setSocketError(errMsg);
+            reject(new Error(errMsg));
           } else if (ack?.success) {
             setSocketError(null);
-            resolve(true);
-          } else {
-            setSocketError(`Send failed: ${ack?.error || "Server error"}`);
-            reject(new Error(ack?.error || "Server rejected message"));
+            resolve(ack);
+          } // Resolve with ack for potential use
+          else {
+            const errMsg = `Send failed: ${ack?.error || "Server error"}`;
+            setSocketError(errMsg);
+            reject(new Error(errMsg));
           }
         });
     });
-  }, []);
+  }, []); // No dependencies that change frequently, setSocketError is stable
 
   const sendTyping = useCallback(() => {
-    const currentSocket = socketRef.current;
-    if (!currentSocket?.connected || !roomName) return;
-    currentSocket.emit("typing", { roomName });
+    const s = socketRef.current;
+    if (!s?.connected || !roomName) return;
+    s.emit("typing", { roomName });
   }, [roomName]);
-
   const sendStopTyping = useCallback(() => {
-    const currentSocket = socketRef.current;
-    if (!currentSocket?.connected || !roomName) return;
-    currentSocket.emit("stopTyping", { roomName });
+    const s = socketRef.current;
+    if (!s?.connected || !roomName) return;
+    s.emit("stopTyping", { roomName });
   }, [roomName]);
 
+  // Expose the socket instance itself (socketRef.current)
   return {
     socket: socketRef.current,
     isConnected,
@@ -401,59 +366,49 @@ function useChatSocket(
   };
 }
 
+// --- useFileUpload Hook ---
 function useFileUpload(projectId) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
   const fileInputRef = useRef(null);
-
   const handleFileSelect = useCallback((event) => {
     const file = event.target.files?.[0];
     if (!file) {
       setSelectedFile(null);
       return;
     }
-
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      setUploadError(`File size exceeds the ${MAX_FILE_SIZE_MB}MB limit.`);
+      setUploadError(`File size exceeds ${MAX_FILE_SIZE_MB}MB.`);
       setSelectedFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
-
     setSelectedFile(file);
     setUploadError(null);
   }, []);
-
   const clearSelectedFile = useCallback(() => {
     setSelectedFile(null);
     setUploadError(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
   }, []);
-
   const triggerFileInput = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
-
   const uploadFile = useCallback(async () => {
     if (!selectedFile || !projectId) {
-      setUploadError("Cannot upload: File or Project ID missing.");
+      setUploadError("No file selected or project ID missing.");
       return null;
     }
-
     const token = getAuthToken();
     if (!token) {
-      setUploadError("Authentication required for upload.");
+      setUploadError("Authentication required.");
       return null;
     }
-
     setIsUploading(true);
     setUploadError(null);
     const formData = new FormData();
     formData.append("file", selectedFile);
-
     try {
       const apiClient = createAxiosInstance(token);
       const response = await apiClient.post(
@@ -461,7 +416,6 @@ function useFileUpload(projectId) {
         formData,
         { headers: { "Content-Type": "multipart/form-data" } }
       );
-
       if (response.data?.success && response.data.data) {
         return response.data.data;
       } else {
@@ -486,7 +440,6 @@ function useFileUpload(projectId) {
       setIsUploading(false);
     }
   }, [selectedFile, projectId]);
-
   return {
     selectedFile,
     isUploading,
@@ -499,32 +452,28 @@ function useFileUpload(projectId) {
   };
 }
 
+// --- useProjectMembers Hook ---
 function useProjectMembers(projectId) {
   const [memberList, setMemberList] = useState([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [membersError, setMembersError] = useState(null);
-
   const fetchMembers = useCallback(async () => {
     if (!projectId) return;
     setLoadingMembers(true);
     setMembersError(null);
     const token = getAuthToken();
     if (!token) {
-      setMembersError("Authentication token not found.");
+      setMembersError("Auth token missing.");
       setLoadingMembers(false);
       return;
     }
-
     try {
       const apiClient = createAxiosInstance(token);
       const res = await apiClient.get(`/api/projects/${projectId}/members`);
-
       if (res.data?.success && Array.isArray(res.data.data)) {
         setMemberList(res.data.data);
       } else {
-        throw new Error(
-          res.data?.message || "Failed to process member list from server."
-        );
+        throw new Error(res.data?.message || "Failed to process member list.");
       }
     } catch (err) {
       let msg = "Could not load members.";
@@ -543,10 +492,10 @@ function useProjectMembers(projectId) {
       setLoadingMembers(false);
     }
   }, [projectId]);
-
   return { memberList, loadingMembers, membersError, fetchMembers };
 }
 
+// --- Main ChatPage Component ---
 function ChatPage({ currentUser }) {
   const { projectId: projectIdParam } = useParams();
   const navigate = useNavigate();
@@ -577,9 +526,7 @@ function ChatPage({ currentUser }) {
     isLoading: isLoadingData,
     fetchError,
     canAttemptConnect,
-    fetchInitialData,
   } = useChatData(projectId, currentUser, scrollToBottom);
-
   const {
     selectedFile,
     isUploading,
@@ -591,20 +538,27 @@ function ChatPage({ currentUser }) {
     fileInputRef,
   } = useFileUpload(projectId);
 
-  const handleNewMessage = useCallback(
-    (newMessage) => {
-      setMessages((prevMessages) => {
-        if (prevMessages.some((m) => m.id === newMessage.id)) {
-          return prevMessages;
-        }
-        return [...prevMessages, newMessage];
-      });
-      scrollToBottom("smooth");
-    },
-    [scrollToBottom]
-  );
+  const handleNewMessageFromSocket = useCallback((newMessage) => {
+    setMessages((prevMessages) => {
+      if (
+        prevMessages.some(
+          (m) => m.id === newMessage.id && m.createdAt === newMessage.createdAt
+        )
+      ) {
+        return prevMessages;
+      }
+      // Add and sort to maintain chronological order, useful if messages arrive slightly out of order
+      const updatedMessages = [...prevMessages, newMessage];
+      updatedMessages.sort(
+        (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+      );
+      return updatedMessages;
+    });
+    // scrollToBottom("smooth"); // Let the messages.length effect handle this
+  }, []);
 
   const {
+    socket, // This IS socketRef.current from the hook
     isConnected,
     socketError: socketConnectionError,
     typingUsers,
@@ -616,44 +570,49 @@ function ChatPage({ currentUser }) {
     currentUserId,
     projectId,
     roomName,
-    handleNewMessage
+    handleNewMessageFromSocket
   );
 
   const { memberList, loadingMembers, membersError, fetchMembers } =
     useProjectMembers(projectId);
 
   useEffect(() => {
-    setMessages(initialMessages);
+    setMessages(
+      initialMessages.sort(
+        (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+      )
+    );
   }, [initialMessages]);
-
   useEffect(() => {
-    if (
-      messages.length > initialMessages.length ||
-      (messages.length > 0 && initialMessages.length === 0)
-    ) {
-      scrollToBottom("smooth");
-    }
-  }, [messages, initialMessages.length, scrollToBottom]);
+    if (messages.length > 0) scrollToBottom("auto");
+  }, [messages.length, scrollToBottom]);
 
-  const isSendingOrUploading = isSendingText || isUploading;
+  const isProcessingSomething = isSendingText || isUploading;
 
   const handleOpenMembersModal = useCallback(() => {
     setShowMembersModal(true);
-    if (memberList.length === 0 && !loadingMembers && !membersError) {
+    if (memberList.length === 0 && !loadingMembers && !membersError)
       fetchMembers();
-    }
   }, [memberList.length, loadingMembers, membersError, fetchMembers]);
 
   const handleSendMessage = useCallback(
     async (event) => {
       event?.preventDefault();
-
-      if (!isConnected || !projectId || !currentUserId) return;
-      if (isSendingOrUploading) return;
+      // Use isConnected state primarily, but also check direct socket connection for immediate emit attempts
+      if (
+        !isConnected ||
+        !socket?.connected ||
+        !projectId ||
+        !currentUserId ||
+        isProcessingSomething
+      ) {
+        if (!isConnected || !socket?.connected)
+          console.warn("SendMessage: Socket not connected. Aborting.");
+        return;
+      }
 
       if (selectedFile) {
         const uploadedFileData = await uploadFile();
-
         if (uploadedFileData) {
           const fileMessageData = {
             senderId: currentUserId,
@@ -667,16 +626,34 @@ function ChatPage({ currentUser }) {
             content: `File: ${uploadedFileData.fileName}`,
           };
           try {
-            await emitSendMessageViaSocket(fileMessageData);
+            // Double check connection again before critical emit
+            if (!socket?.connected && !isConnected) {
+              console.error(
+                "Socket disconnected just before emitting file message."
+              );
+              // Potentially set a specific error state for the user here
+              return;
+            }
+            const ack = await emitSendMessageViaSocket(fileMessageData); // emitSendMessageViaSocket now returns the ack
+            console.log("File message socket emit successful, ack:", ack);
             clearSelectedFile();
-          } catch (error) {
-            console.error("Failed to emit file message via socket:", error);
+          } catch (socketEmitError) {
+            console.error(
+              "Failed to emit file message via socket (error from promise):",
+              socketEmitError
+            );
+            // Error state is set within useChatSocket's sendMessage
           }
+        } else {
+          console.error(
+            "HTTP File upload failed, not emitting socket message. Upload error:",
+            uploadError
+          );
+          // uploadError state from useFileUpload will be displayed
         }
       } else {
         const contentToSend = newMessageInput.trim();
         if (!contentToSend) return;
-
         setIsSendingText(true);
         const textMessageData = {
           senderId: currentUserId,
@@ -685,13 +662,22 @@ function ChatPage({ currentUser }) {
           roomName,
           messageType: "text",
         };
-
         try {
+          if (!socket?.connected && !isConnected) {
+            console.error(
+              "Socket disconnected just before emitting text message."
+            );
+            setIsSendingText(false);
+            return;
+          }
           await emitSendMessageViaSocket(textMessageData);
           setNewMessageInput("");
           emitStopTypingViaSocket();
-        } catch (error) {
-          console.error("Failed to emit text message via socket:", error);
+        } catch (socketEmitError) {
+          console.error(
+            "Failed to emit text message via socket (error from promise):",
+            socketEmitError
+          );
         } finally {
           setIsSendingText(false);
         }
@@ -699,9 +685,10 @@ function ChatPage({ currentUser }) {
     },
     [
       isConnected,
+      socket,
       projectId,
       currentUserId,
-      isSendingOrUploading,
+      isProcessingSomething,
       selectedFile,
       newMessageInput,
       uploadFile,
@@ -709,29 +696,26 @@ function ChatPage({ currentUser }) {
       clearSelectedFile,
       roomName,
       emitStopTypingViaSocket,
+      uploadError,
     ]
   );
 
   const handleTyping = useCallback(() => {
-    if (!selectedFile) {
-      emitTypingViaSocket();
-    }
+    if (!selectedFile) emitTypingViaSocket();
   }, [selectedFile, emitTypingViaSocket]);
-
   const handleStopTyping = useCallback(() => {
-    if (!selectedFile) {
-      emitStopTypingViaSocket();
-    }
+    if (!selectedFile) emitStopTypingViaSocket();
   }, [selectedFile, emitStopTypingViaSocket]);
 
+  // Render logic
   if (isLoadingData) {
     return (
       <div className="flex justify-center items-center h-[calc(100vh-5rem)] p-4">
-        <LoadingSpinner size="xl" message="Loading Chat..." />
+        {" "}
+        <LoadingSpinner size="xl" message="Loading Chat..." />{" "}
       </div>
     );
   }
-
   const isFatalError =
     fetchError &&
     (fetchError.includes("Access Denied") ||
@@ -739,28 +723,31 @@ function ChatPage({ currentUser }) {
       fetchError.includes("Invalid Project ID") ||
       fetchError.includes("Authentication Error") ||
       fetchError.includes("Authentication token"));
-
   if (isFatalError) {
     const isAuthError = fetchError.includes("Authentication");
     const isForbidden = fetchError.includes("Access Denied");
     const isNotFound =
       fetchError.includes("Not Found") ||
       fetchError.includes("Invalid Project ID");
-
     return (
       <div className="p-4 max-w-2xl mx-auto text-center">
+        {" "}
         <Link
           to={isAuthError ? "/login" : "/messages"}
           className="text-sm text-indigo-600 hover:underline mb-6 inline-flex items-center gap-1.5"
         >
-          <FaArrowLeft /> {isAuthError ? "Back to Login" : "Back to Messages"}
-        </Link>
+          {" "}
+          <FaArrowLeft /> {isAuthError
+            ? "Back to Login"
+            : "Back to Messages"}{" "}
+        </Link>{" "}
         <div className="mt-4 p-6 bg-white rounded-lg shadow border border-red-200">
+          {" "}
           {isForbidden || isAuthError ? (
             <FaLock className="text-red-500 h-12 w-12 mx-auto mb-4" />
           ) : (
             <FaExclamationCircle className="text-red-500 h-12 w-12 mx-auto mb-4" />
-          )}
+          )}{" "}
           <ErrorMessage
             title={
               isAuthError
@@ -772,8 +759,8 @@ function ChatPage({ currentUser }) {
                 : "Error Loading Chat"
             }
             message={fetchError}
-          />
-        </div>
+          />{" "}
+        </div>{" "}
       </div>
     );
   }
@@ -791,34 +778,41 @@ function ChatPage({ currentUser }) {
             className="text-gray-500 hover:text-indigo-600 mr-4 p-2 rounded-full hover:bg-gray-200 transition-colors"
             aria-label="Back to Messages"
           >
-            <FaArrowLeft size="1.1em" />
+            {" "}
+            <FaArrowLeft size="1.1em" />{" "}
           </Link>
           {projectDetails ? (
             <>
+              {" "}
               <div className="flex-shrink-0 mr-3 h-10 w-10 bg-indigo-100 border border-indigo-200 rounded-xl flex items-center justify-center shadow-inner">
-                <FaProjectDiagram className="w-5 h-5 text-indigo-600" />
-              </div>
+                {" "}
+                <FaProjectDiagram className="w-5 h-5 text-indigo-600" />{" "}
+              </div>{" "}
               <div className="flex-grow min-w-0">
+                {" "}
                 <h2
                   className="font-semibold text-gray-800 truncate text-lg"
                   title={projectDetails.name}
                 >
-                  {projectDetails.name || `Project ${projectId}`}
-                </h2>
-                <p className="text-xs text-gray-500">Group Chat</p>
-              </div>
+                  {" "}
+                  {projectDetails.name || `Project ${projectId}`}{" "}
+                </h2>{" "}
+                <p className="text-xs text-gray-500">Group Chat</p>{" "}
+              </div>{" "}
               <button
                 onClick={handleOpenMembersModal}
                 className="ml-auto mr-3 flex-shrink-0 p-2 text-gray-500 hover:text-indigo-600 rounded-full hover:bg-gray-200 transition-colors"
                 title="View Project Members"
                 aria-label="View Project Members"
               >
-                <FaUsers size="1.2em" />
-              </button>
+                {" "}
+                <FaUsers size="1.2em" />{" "}
+              </button>{" "}
             </>
           ) : (
             <h2 className="font-semibold text-gray-800 text-lg">
-              Loading Chat...
+              {" "}
+              Loading Chat...{" "}
             </h2>
           )}
           <div
@@ -827,16 +821,13 @@ function ChatPage({ currentUser }) {
                 ? "bg-green-100 text-green-800 border border-green-200"
                 : "bg-yellow-100 text-yellow-800 border border-yellow-200 animate-pulse"
             }`}
-            title={
-              isConnected
-                ? "Connected to real-time server"
-                : "Connecting to real-time server..."
-            }
+            title={isConnected ? "Connected" : "Connecting..."}
           >
+            {" "}
             <FaWifi
               className={`w-3 h-3 ${isConnected ? "" : "animate-pulse"}`}
-            />
-            {isConnected ? "Online" : "Connecting"}
+            />{" "}
+            {isConnected ? "Online" : "Connecting"}{" "}
           </div>
         </header>
 
@@ -852,23 +843,25 @@ function ChatPage({ currentUser }) {
           {socketConnectionError && (
             <ErrorMessage
               message={socketConnectionError}
-              isDismissible={false}
-              type="warning"
-              className="mb-3"
+              isDismissible={true}
+              type="error"
+              className="mb-3 sticky top-2 z-10 shadow-lg"
+              onClose={() => setSocketError(null)}
             />
-          )}
-
+          )}{" "}
+          {/* Made dismissible and more prominent */}
           {!isLoadingData && messages.length === 0 && !fetchError && (
             <div className="flex flex-col items-center justify-center h-full text-center py-10 px-6 text-gray-500">
-              <FaComments className="h-16 w-16 text-gray-300 mb-5" />
-              <p className="text-lg font-medium">It's quiet in here...</p>
+              {" "}
+              <FaComments className="h-16 w-16 text-gray-300 mb-5" />{" "}
+              <p className="text-lg font-medium">It's quiet in here...</p>{" "}
               <p className="text-sm mt-1">
                 Be the first to send a message or share a file!
-              </p>
+              </p>{" "}
             </div>
           )}
-
           <ul className="space-y-1 pb-2">
+            {" "}
             {messages.map((msg, index) => {
               const isCurrentUserSender =
                 msg.senderId?.toString() === currentUserId?.toString();
@@ -881,9 +874,9 @@ function ChatPage({ currentUser }) {
                 currentDateSeparator &&
                 currentDateSeparator !== prevDateSeparator;
               const isFileMessage = msg.messageType === "file";
-
               return (
                 <React.Fragment key={msg.id || `msg-fallback-${index}`}>
+                  {" "}
                   {showDateSeparator && (
                     <motion.div
                       initial={{ opacity: 0, scale: 0.9 }}
@@ -891,13 +884,14 @@ function ChatPage({ currentUser }) {
                       transition={{ duration: 0.2 }}
                       className="flex justify-center items-center my-5"
                     >
+                      {" "}
                       <span className="px-3 py-1 bg-white text-gray-500 text-xs font-semibold rounded-full shadow-sm border border-gray-200 flex items-center gap-1.5">
-                        <FaCalendarAlt className="w-3 h-3" />
-                        {currentDateSeparator}
-                      </span>
+                        {" "}
+                        <FaCalendarAlt className="w-3 h-3" />{" "}
+                        {currentDateSeparator}{" "}
+                      </span>{" "}
                     </motion.div>
-                  )}
-
+                  )}{" "}
                   <motion.li
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -906,11 +900,13 @@ function ChatPage({ currentUser }) {
                       isCurrentUserSender ? "justify-end" : "justify-start"
                     }`}
                   >
+                    {" "}
                     {!isCurrentUserSender && (
                       <div
                         className="flex-shrink-0 self-start relative mt-1 group"
                         title={msg.sender?.username || `User ${msg.senderId}`}
                       >
+                        {" "}
                         {msg.sender?.profilePictureUrl ? (
                           <img
                             src={msg.sender.profilePictureUrl}
@@ -925,10 +921,9 @@ function ChatPage({ currentUser }) {
                           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-sm font-semibold text-white shadow border-2 border-white uppercase">
                             {(msg.sender?.username || "?").charAt(0)}
                           </div>
-                        )}
+                        )}{" "}
                       </div>
-                    )}
-
+                    )}{" "}
                     <div
                       className={`max-w-[75%] px-3.5 py-2 rounded-xl text-sm ${
                         isCurrentUserSender
@@ -936,12 +931,12 @@ function ChatPage({ currentUser }) {
                           : "bg-white text-gray-800 border border-gray-200 rounded-r-xl shadow-sm"
                       }`}
                     >
+                      {" "}
                       {!isCurrentUserSender && (
                         <p className="text-xs font-bold mb-1 text-indigo-700">
                           {msg.sender?.username || `User ${msg.senderId}`}
                         </p>
-                      )}
-
+                      )}{" "}
                       {isFileMessage ? (
                         <a
                           href={msg.fileUrl}
@@ -954,17 +949,17 @@ function ChatPage({ currentUser }) {
                           }`}
                           title={`Download ${msg.fileName || "file"}`}
                         >
-                          <FaFileAlt className="w-4 h-4 flex-shrink-0" />
+                          {" "}
+                          <FaFileAlt className="w-4 h-4 flex-shrink-0" />{" "}
                           <span className="truncate max-w-[180px]">
                             {msg.fileName || "Attached File"}
-                          </span>
+                          </span>{" "}
                         </a>
                       ) : (
                         <p className="whitespace-pre-wrap break-words">
                           {msg.content}
                         </p>
-                      )}
-
+                      )}{" "}
                       <p
                         className={`text-xs mt-1.5 opacity-80 ${
                           isCurrentUserSender
@@ -977,15 +972,16 @@ function ChatPage({ currentUser }) {
                             : "Sending..."
                         }
                       >
-                        {formatMessageTime(msg.createdAt) || "..."}
-                      </p>
-                    </div>
-
+                        {" "}
+                        {formatMessageTime(msg.createdAt) || "..."}{" "}
+                      </p>{" "}
+                    </div>{" "}
                     {isCurrentUserSender && (
                       <div
                         className="flex-shrink-0 self-start relative mt-1 group"
                         title={currentUser?.username || "You"}
                       >
+                        {" "}
                         {currentUser?.profilePictureUrl ? (
                           <img
                             src={currentUser.profilePictureUrl}
@@ -1000,14 +996,15 @@ function ChatPage({ currentUser }) {
                           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-sm font-semibold text-white shadow border-2 border-white uppercase">
                             {(currentUser?.username || "?").charAt(0)}
                           </div>
-                        )}
+                        )}{" "}
                       </div>
-                    )}
-                  </motion.li>
+                    )}{" "}
+                  </motion.li>{" "}
                 </React.Fragment>
               );
-            })}
+            })}{" "}
             <AnimatePresence>
+              {" "}
               {otherTypingUsernames.length > 0 && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -1015,35 +1012,42 @@ function ChatPage({ currentUser }) {
                   exit={{ opacity: 0 }}
                   className="text-left pl-12 pr-4 pt-1 pb-2"
                 >
+                  {" "}
                   <span className="text-xs italic text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full shadow-sm border border-gray-200">
-                    {otherTypingUsernames.join(", ")}
+                    {" "}
+                    {otherTypingUsernames.join(", ")}{" "}
                     {otherTypingUsernames.length === 1 ? " is" : " are"}{" "}
-                    typing...
-                  </span>
+                    typing...{" "}
+                  </span>{" "}
                 </motion.div>
-              )}
-            </AnimatePresence>
-            <div ref={messagesEndRef} style={{ height: "1px" }} />
+              )}{" "}
+            </AnimatePresence>{" "}
+            <div ref={messagesEndRef} style={{ height: "1px" }} />{" "}
           </ul>
         </main>
 
         <footer className="p-3 border-t border-gray-200 bg-white flex-shrink-0">
           {(selectedFile || uploadError) && (
             <div className="mb-2 px-2 py-1.5">
+              {" "}
               {selectedFile && (
                 <div className="flex items-center justify-between text-sm p-2 bg-indigo-50 border border-indigo-200 rounded-md">
+                  {" "}
                   <div className="flex items-center gap-2 overflow-hidden min-w-0">
-                    <FaPaperclip className="text-indigo-600 flex-shrink-0 h-4 w-4" />
+                    {" "}
+                    <FaPaperclip className="text-indigo-600 flex-shrink-0 h-4 w-4" />{" "}
                     <span
                       className="text-indigo-800 truncate font-medium"
                       title={selectedFile.name}
                     >
-                      {selectedFile.name}
-                    </span>
+                      {" "}
+                      {selectedFile.name}{" "}
+                    </span>{" "}
                     <span className="text-xs text-gray-500 whitespace-nowrap">
-                      ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
-                    </span>
-                  </div>
+                      {" "}
+                      ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB){" "}
+                    </span>{" "}
+                  </div>{" "}
                   <button
                     onClick={clearSelectedFile}
                     disabled={isUploading}
@@ -1051,23 +1055,25 @@ function ChatPage({ currentUser }) {
                     title="Clear selected file"
                     aria-label="Clear selected file"
                   >
-                    <FaTimesCircle />
-                  </button>
+                    {" "}
+                    <FaTimesCircle />{" "}
+                  </button>{" "}
                 </div>
-              )}
+              )}{" "}
               {uploadError && (
                 <div className="mt-1">
+                  {" "}
                   <ErrorMessage
                     message={uploadError}
                     type="error"
-                    isDismissible={false}
+                    isDismissible={true}
+                    onClose={() => setUploadError(null)}
                     className="text-xs"
-                  />
+                  />{" "}
                 </div>
-              )}
+              )}{" "}
             </div>
           )}
-
           <form
             onSubmit={handleSendMessage}
             className="flex items-center gap-2"
@@ -1077,21 +1083,21 @@ function ChatPage({ currentUser }) {
               ref={fileInputRef}
               onChange={handleFileSelect}
               className="hidden"
-              disabled={!isConnected || isSendingOrUploading}
+              disabled={!isConnected || isProcessingSomething}
               accept="image/*,application/pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,.zip,.rar,.mp3,.wav"
               aria-hidden="true"
             />
             <button
               type="button"
               onClick={triggerFileInput}
-              disabled={!isConnected || isSendingOrUploading}
+              disabled={!isConnected || isProcessingSomething}
               className="flex-shrink-0 p-2.5 text-gray-500 hover:text-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-full hover:bg-gray-100 transition-colors"
               title="Attach file"
               aria-label="Attach file"
             >
-              <FaPaperclip className="h-5 w-5" />
+              {" "}
+              <FaPaperclip className="h-5 w-5" />{" "}
             </button>
-
             <input
               type="text"
               value={newMessageInput}
@@ -1110,33 +1116,32 @@ function ChatPage({ currentUser }) {
                   : "Type a message..."
               }
               className="flex-grow px-4 py-2.5 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors"
-              disabled={!isConnected || isSendingOrUploading || !!selectedFile}
+              disabled={!isConnected || isProcessingSomething || !!selectedFile}
               autoComplete="off"
               aria-label="Message input"
             />
-
             <button
               type="submit"
               disabled={
                 !isConnected ||
-                isSendingOrUploading ||
+                isProcessingSomething ||
                 (!selectedFile && !newMessageInput.trim())
               }
               className="flex-shrink-0 bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-full p-3 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all flex items-center justify-center shadow hover:shadow-lg active:shadow-inner"
               aria-label={
-                isSendingOrUploading ? "Sending" : "Send message or file"
+                isProcessingSomething ? "Sending" : "Send message or file"
               }
             >
-              {isSendingOrUploading ? (
+              {" "}
+              {isProcessingSomething ? (
                 <FaSpinner className="animate-spin h-5 w-5" />
               ) : (
                 <FaPaperPlane className="h-5 w-5" />
-              )}
+              )}{" "}
             </button>
           </form>
         </footer>
       </div>
-
       <MemberListModal
         isOpen={showMembersModal}
         onClose={() => setShowMembersModal(false)}

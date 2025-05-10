@@ -1,24 +1,21 @@
+// backend/config/socketSetup.js
 import { Server as SocketIOServer } from "socket.io";
 import jwt from "jsonwebtoken";
 import db from "../models/index.js"; // Adjust path if necessary
 
-const { User } = db;
+const { User, Message, Project, Member } = db; // Ensure Message, Project, Member are correctly loaded from db
 
 const userSockets = new Map(); // Stores mapping: userIdString -> Set<socketId>
-let io = null;
+let io = null; // Will hold the Socket.IO server instance
 
-// --- Helper to log map contents (optional, can be verbose) ---
 const logUserSockets = (context) => {
-  // Convert map to a more readable format for logging
   const mapEntries = Array.from(userSockets.entries()).map(
-    ([userId, socketSet]) => {
-      return `User ${userId}: ${Array.from(socketSet).join(", ")}`;
-    }
+    ([userId, socketSet]) =>
+      `User ${userId}: ${Array.from(socketSet).join(", ")}`
   );
-  // Limit log length if map gets very large
   const logString = `{ ${mapEntries.join("; ")} }`;
   console.log(
-    `[${context}] Current userSockets Map (${
+    `[${context}] UserSockets (${
       userSockets.size
     } users): ${logString.substring(0, 500)}${
       logString.length > 500 ? "..." : ""
@@ -28,20 +25,27 @@ const logUserSockets = (context) => {
 
 export const initSocketIO = (httpServer) => {
   const jwtSecret = process.env.JWT_SECRET;
-  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173"; // Ensure this matches your frontend
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
 
   if (!jwtSecret)
     throw new Error("FATAL ERROR: JWT_SECRET Environment variable is Missing.");
   if (!httpServer)
     throw new Error("FATAL ERROR: Valid httpServer instance was not provided.");
-  if (!User)
-    throw new Error("FATAL ERROR: User model is not loaded correctly.");
+  if (!User || !Message || !Project || !Member) {
+    // Added Message, Project, Member check
+    throw new Error(
+      "FATAL ERROR: One or more required models (User, Message, Project, Member) are not loaded correctly."
+    );
+  }
 
   console.log(`Configuring Socket.IO for origin: ${frontendUrl}`);
-
   try {
     io = new SocketIOServer(httpServer, {
-      cors: { origin: frontendUrl, methods: ["GET", "POST"] },
+      cors: {
+        origin: frontendUrl,
+        methods: ["GET", "POST"],
+        credentials: true,
+      }, // Added credentials: true
     });
     if (!io)
       throw new Error(
@@ -58,60 +62,41 @@ export const initSocketIO = (httpServer) => {
     );
   }
 
-  // Socket Authentication Middleware
   io.use(async (socket, next) => {
     const token = socket.handshake.auth.token;
     console.log(
-      `[Socket Middleware] Incoming connection attempt: Socket ${socket.id}. Checking token...`
-    ); // Log attempt
-    if (!token) {
-      console.warn(`[Socket Auth Fail] No Token: Socket ${socket.id}`);
-      return next(new Error("Authentication error: No token provided.")); // Reject connection
-    }
+      `[Socket Middleware] Attempt: Socket ${
+        socket.id
+      }. Token present: ${!!token}`
+    );
+    if (!token)
+      return next(new Error("Authentication error: No token provided."));
     try {
       const decoded = jwt.verify(token, jwtSecret);
-      console.log(
-        `[Socket Middleware] Token decoded for User ID: ${decoded.id}. Fetching user... Socket: ${socket.id}`
-      ); // Log decoded ID
       const user = await User.findByPk(decoded.id, {
-        attributes: ["id", "username"],
-      });
-      if (!user) {
-        console.warn(
-          `[Socket Auth Fail] User Not Found in DB: Decoded ID ${decoded.id}, Socket ${socket.id}`
-        ); // Log user not found
-        // Explicitly pass an error indicating user not found associated with token
+        attributes: ["id", "username", "profilePictureUrl", "role"],
+      }); // Added profilePictureUrl, role
+      if (!user)
         return next(
           new Error(`Authentication error: User ${decoded.id} not found.`)
         );
-      }
 
-      // --- Assign User Info and Map Socket ---
-      socket.userId = user.id.toString(); // Store user ID as string
-      socket.username = user.username;
+      socket.user = user.toJSON(); // Store full user object (or selected fields)
+      socket.userId = user.id.toString(); // For consistency with previous logic if still used elsewhere
+      socket.username = user.username; // For logging
 
-      console.log(
-        `[Socket Middleware] Adding User ${socket.userId} -> Socket ${socket.id} to map.`
-      );
-      if (!userSockets.has(socket.userId)) {
+      if (!userSockets.has(socket.userId))
         userSockets.set(socket.userId, new Set());
-        console.log(
-          `[Socket Middleware] Created new Set in map for User ${socket.userId}.`
-        );
-      }
       userSockets.get(socket.userId).add(socket.id);
-      logUserSockets("Socket Middleware - After Add"); // Log map state
-
+      logUserSockets("Socket Middleware - Add");
       console.log(
-        `[Socket Auth OK] Socket ${socket.id} authenticated as User ${socket.userId} (${socket.username})`
+        `[Socket Auth OK] Socket ${socket.id} -> User ${socket.userId} (${socket.username})`
       );
-      next(); // Grant connection
+      next();
     } catch (err) {
-      // Handle JWT errors (expired, invalid signature) or other unexpected errors
       console.error(
-        `[Socket Auth Fail] JWT/Other Error: Socket ${socket.id}, Message: ${err.message}`
+        `[Socket Auth Fail] Socket ${socket.id}, Err: ${err.message}`
       );
-      // Pass a generic auth error to the client
       next(
         new Error(
           `Authentication error: ${
@@ -120,129 +105,292 @@ export const initSocketIO = (httpServer) => {
         )
       );
     }
-  }); // End io.use() Middleware
+  });
 
-  // Main Connection Handler (runs only AFTER middleware calls next())
   io.on("connection", (socket) => {
-    const userId = socket.userId;
-    const username = socket.username;
+    const userId = socket.user.id.toString(); // Ensure string
+    const username = socket.user.username;
 
-    // Should always have userId here due to middleware success
     if (!userId) {
       console.error(
-        `[Connection Handler] CRITICAL: Socket ${socket.id} connected BUT MISSING userId after auth middleware succeeded. Disconnecting.`
+        `[Connection Handler CRITICAL] Socket ${socket.id} connected w/o userId! Disconnecting.`
       );
-      socket.disconnect(true); // Force disconnect
+      socket.disconnect(true);
       return;
     }
     console.log(
-      `✅ [Connection Handler] Client Connected and Authenticated: Socket ID ${socket.id}, User ID: ${userId} (${username})`
+      `✅ [Socket Connected] User: ${username} (ID: ${userId}), Socket ID: ${socket.id}`
     );
-    logUserSockets("Connection Handler - On Connect"); // Log map state upon successful connect
+    logUserSockets("Socket Connected - Map State");
 
-    // --- Handle Socket Disconnection ---
-    socket.on("disconnect", (reason) => {
-      console.log(
-        `🔌 [Disconnect Handler] Client Disconnected: Socket ID ${socket.id}, User ID: ${userId}, Reason: ${reason}`
-      );
-      logUserSockets(
-        `Disconnect Handler - Before Cleanup for User ${userId}, Socket ${socket.id}`
-      ); // Log map state before cleanup
-
-      if (userSockets.has(userId)) {
-        const userSocketSet = userSockets.get(userId);
-        const deleted = userSocketSet.delete(socket.id); // Remove this specific socket ID from the user's set
-        console.log(
-          `[Disconnect Handler] Attempted to delete Socket ${socket.id} from User ${userId}'s Set. Deleted: ${deleted}. Set size now: ${userSocketSet.size}`
-        );
-        if (userSocketSet.size === 0) {
-          // If this was the user's last socket, remove the user entry from the map
-          userSockets.delete(userId);
-          console.log(
-            `[Disconnect Handler] User ${userId} (${username}) has no more sockets. Removed User entry from map.`
-          );
-          logUserSockets(`Disconnect Handler - After User ${userId} Removed`); // Log map state after user removal
-        } else {
-          // User still has other sockets connected
-          logUserSockets(
-            `Disconnect Handler - After Socket ${socket.id} Removed for User ${userId}`
-          ); // Log map state after just socket removal
-        }
-      } else {
-        // This might happen if disconnect fires before connection mapping completes fully, or if map state is somehow wrong
-        console.warn(
-          `[Disconnect Handler] User ${userId} NOT found in map upon disconnect of Socket ${socket.id}. Map might be inconsistent or disconnect happened before full connect.`
-        );
-        logUserSockets(`Disconnect Handler - User ${userId} Not Found`);
+    socket.on("joinChatRoom", async ({ roomName }, callback) => {
+      if (!roomName || !roomName.startsWith("project-")) {
+        if (typeof callback === "function")
+          callback({ success: false, error: "Invalid room name." });
+        return;
       }
-    }); // End socket.on("disconnect")
+      const projectId = parseInt(roomName.split("-")[1], 10);
+      if (isNaN(projectId)) {
+        if (typeof callback === "function")
+          callback({
+            success: false,
+            error: "Invalid project ID in room name.",
+          });
+        return;
+      }
 
-    // --- Handle Socket Connection Errors (Post-Connection) ---
-    socket.on("connect_error", (err) => {
-      // This usually indicates issues happening after the initial successful handshake/authentication
-      console.error(
-        `[Socket connect_error Event] Post-connection error for Socket ${socket.id} (User ${userId}): ${err.message}`
-      );
+      try {
+        // Authorization: Check if user is member or owner of the project
+        const project = await Project.findByPk(projectId);
+        if (!project) {
+          if (typeof callback === "function")
+            callback({ success: false, error: "Project not found." });
+          return;
+        }
+        const isOwner = project.ownerId === parseInt(userId, 10);
+        const isMember = await Member.findOne({
+          where: { projectId, userId: parseInt(userId, 10), status: "active" },
+        });
+
+        if (!isOwner && !isMember) {
+          if (typeof callback === "function")
+            callback({
+              success: false,
+              error: "Access denied to project room.",
+            });
+          return;
+        }
+
+        socket.join(roomName);
+        console.log(
+          `[Socket Event: joinChatRoom] User ${userId} (${username}) joined room: ${roomName}`
+        );
+        if (typeof callback === "function")
+          callback({ success: true, message: `Joined room ${roomName}` });
+      } catch (error) {
+        console.error(
+          `[Socket Event: joinChatRoom] Error for User ${userId} joining ${roomName}:`,
+          error
+        );
+        if (typeof callback === "function")
+          callback({ success: false, error: "Server error joining room." });
+      }
     });
 
-    // --- Add other specific event listeners here if needed ---
-    // Example: socket.on('join_room', (room) => socket.join(room));
-  }); // End io.on("connection")
+    socket.on("leaveChatRoom", ({ roomName }) => {
+      if (roomName) {
+        socket.leave(roomName);
+        console.log(
+          `[Socket Event: leaveChatRoom] User ${userId} (${username}) left room: ${roomName}`
+        );
+      }
+    });
+
+    socket.on("typing", ({ roomName }) => {
+      if (roomName) {
+        socket.to(roomName).emit("userTyping", { userId, username });
+      }
+    });
+
+    socket.on("stopTyping", ({ roomName }) => {
+      if (roomName) {
+        socket.to(roomName).emit("userStopTyping", { userId });
+      }
+    });
+
+    // --- ⭐ THIS IS THE CRUCIAL HANDLER THAT WAS MISSING/INCOMPLETE ⭐ ---
+    socket.on("sendMessage", async (data, callback) => {
+      console.log(
+        `[Socket Event: sendMessage] Received from User ID ${userId} (${username}):`,
+        JSON.stringify(data).substring(0, 200)
+      );
+      try {
+        const {
+          projectId,
+          content,
+          roomName, // Should match `project-${projectId}`
+          messageType = "text",
+          fileName,
+          fileUrl,
+          mimeType,
+          fileSize,
+        } = data;
+
+        if (!projectId || !roomName) {
+          console.error(
+            "[Socket sendMessage] Error: Missing projectId or roomName."
+          );
+          if (typeof callback === "function")
+            callback({
+              success: false,
+              error: "Missing project/room identifier",
+            });
+          return;
+        }
+        if (!content && messageType === "text") {
+          // For text messages, content is required
+          console.error(
+            "[Socket sendMessage] Error: Missing content for text message."
+          );
+          if (typeof callback === "function")
+            callback({
+              success: false,
+              error: "Message content cannot be empty.",
+            });
+          return;
+        }
+
+        // Optional: Re-verify user's permission to send to this project/room
+        // (Can be skipped if joinChatRoom authorization is deemed sufficient for the session)
+
+        let newMessageData = {
+          projectId: parseInt(projectId, 10),
+          senderId: parseInt(userId, 10), // Ensure senderId is an integer if DB expects it
+          content: content,
+          messageType: messageType,
+        };
+
+        if (messageType === "file") {
+          if (!fileName || !fileUrl || !mimeType || fileSize === undefined) {
+            // fileSize can be 0
+            console.error(
+              "[Socket sendMessage] Error: Missing required file metadata for file message type."
+            );
+            if (typeof callback === "function")
+              callback({ success: false, error: "Incomplete file metadata." });
+            return;
+          }
+          newMessageData.fileName = fileName;
+          newMessageData.fileUrl = fileUrl;
+          newMessageData.mimeType = mimeType;
+          newMessageData.fileSize = fileSize;
+        }
+
+        const newMessage = await Message.create(newMessageData);
+
+        // Use socket.user which was populated by the auth middleware
+        const senderDetails = {
+          id: socket.user.id,
+          username: socket.user.username,
+          profilePictureUrl: socket.user.profilePictureUrl, // Make sure this is fetched in auth middleware
+        };
+
+        const messageToSendToClients = {
+          ...newMessage.toJSON(),
+          sender: senderDetails,
+        };
+
+        io.to(roomName).emit("newMessage", messageToSendToClients);
+        console.log(
+          `[Socket Event: newMessage] Broadcasted to room ${roomName}.`
+        );
+
+        // Send acknowledgment back to the client
+        if (typeof callback === "function") {
+          console.log(
+            "[Socket sendMessage] Sending SUCCESS acknowledgment to client."
+          );
+          callback({
+            success: true,
+            message: "Message processed and broadcasted by server.",
+            sentMessage: messageToSendToClients, // Send the confirmed message back
+          });
+        }
+      } catch (error) {
+        console.error(
+          `[Socket Event: sendMessage] Error processing message from User ID ${userId}:`,
+          error
+        );
+        if (typeof callback === "function") {
+          console.log(
+            "[Socket sendMessage] Sending FAILURE acknowledgment to client."
+          );
+          callback({
+            success: false,
+            error: "Server failed to process message. Please try again.",
+          });
+        }
+      }
+    });
+    // --- ⭐ END OF sendMessage HANDLER ⭐ ---
+
+    socket.on("disconnect", (reason) => {
+      console.log(
+        `🔌 [Socket Disconnected] User: ${username} (ID: ${userId}), Socket ID: ${socket.id}, Reason: ${reason}`
+      );
+      logUserSockets(`Disconnect - Before User ${userId}, Socket ${socket.id}`);
+      if (userSockets.has(userId)) {
+        const userSocketSet = userSockets.get(userId);
+        const deleted = userSocketSet.delete(socket.id);
+        console.log(
+          `[Disconnect] Deleted Socket ${socket.id} from User ${userId} Set: ${deleted}. Set size: ${userSocketSet.size}`
+        );
+        if (userSocketSet.size === 0) {
+          userSockets.delete(userId);
+          console.log(
+            `[Disconnect] User ${userId} (${username}) removed from map.`
+          );
+          logUserSockets(`Disconnect - After User ${userId} Removed`);
+        } else {
+          logUserSockets(
+            `Disconnect - After Socket ${socket.id} Removed for User ${userId}`
+          );
+        }
+      } else {
+        console.warn(
+          `[Disconnect] User ${userId} NOT in map (Socket ${socket.id}).`
+        );
+        logUserSockets(`Disconnect - User ${userId} Not Found`);
+      }
+    });
+
+    socket.on("connect_error", (err) => {
+      console.error(
+        `[Socket connect_error] Socket ${socket.id} (User ${
+          userId || "N/A"
+        }): ${err.message}`
+      );
+    });
+  });
 
   console.log("💬 WebSocket server initialization completed successfully.");
   return io;
-}; // End initSocketIO
+};
 
-// --- Function to Emit Event to Specific User(s) ---
 export const emitToUser = (targetUserId, eventName, data) => {
-  // Log the emit attempt and target user ID
   console.log(
-    `[emitToUser] Prepare to emit '${eventName}' to User ${targetUserId}. Data preview:`,
-    JSON.stringify(data).substring(0, 150) + "..."
+    `[emitToUser] Prep: '${eventName}' to User ${targetUserId}. Data: ${JSON.stringify(
+      data
+    ).substring(0, 100)}...`
   );
-
-  // --- Check io instance ---
   if (!io) {
-    console.error(
-      "[emitToUser] Socket.IO WARN: emitToUser called before Socket.IO instance ('io') is initialized."
-    );
+    console.error("[emitToUser] WARN: Socket.IO 'io' not initialized.");
     return false;
   }
-  // --- Check targetUserId ---
   if (!targetUserId) {
-    console.warn(
-      `[emitToUser] WARNING: No targetUserId provided for event '${eventName}'. Cannot emit.`
-    );
+    console.warn(`[emitToUser] WARN: No targetUserId for '${eventName}'.`);
     return false;
   }
-  const userIdStr = targetUserId.toString(); // Ensure string key for map lookup
-
-  // --- LOG MAP STATE BEFORE CHECKING ---
-  logUserSockets(`emitToUser - Checking map for User ${userIdStr}`);
-
-  const userSocketIds = userSockets.get(userIdStr); // Get the Set of socket IDs for the user
-
-  // --- LOG RESULT OF MAP LOOKUP ---
+  const userIdStr = targetUserId.toString();
+  logUserSockets(`emitToUser - Check map for User ${userIdStr}`);
+  const userSocketIds = userSockets.get(userIdStr);
   console.log(
-    `[emitToUser] Lookup result for User ${userIdStr} in map:`,
-    userSocketIds ? `Found Set(${userSocketIds.size})` : "Not Found (undefined)"
+    `[emitToUser] Lookup for User ${userIdStr}:`,
+    userSocketIds ? `Found Set(${userSocketIds.size})` : "Not Found"
   );
-
-  // --- Check if user exists in map AND has active sockets ---
   if (userSocketIds && userSocketIds.size > 0) {
-    const socketIdArray = Array.from(userSocketIds); // Convert Set to Array for io.to()
+    const socketIdArray = Array.from(userSocketIds);
     console.log(
       `[emitToUser] Emitting '${eventName}' to User ${userIdStr} via Sockets: [${socketIdArray.join(
         ", "
       )}]`
     );
-    io.to(socketIdArray).emit(eventName, data); // Emit event only to this user's sockets
-    return true; // Indicate successful emission attempt
+    io.to(socketIdArray).emit(eventName, data);
+    return true;
   } else {
-    // Log clearly why emit didn't happen
     console.log(
-      `[emitToUser] Emit Notice: User ${userIdStr} not found in map OR has empty socket Set. Cannot emit '${eventName}' real-time.`
+      `[emitToUser] Notice: User ${userIdStr} not connected for '${eventName}'.`
     );
-    return false; // Indicate user wasn't connected for real-time push
+    return false;
   }
-}; // End emitToUser
+};
