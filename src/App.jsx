@@ -17,7 +17,7 @@ import {
 } from "react-router-dom";
 import { io } from "socket.io-client";
 import { motion, AnimatePresence } from "framer-motion";
-import "./index.css";
+import "./index.css"; // This should contain your Tailwind directives
 
 // --- Slate.js Imports (for DocumentEditor) ---
 import { createEditor } from "slate";
@@ -27,62 +27,8 @@ import axios from "axios";
 // --- Context Imports ---
 import { useNotifications } from "./context/NotificationContext";
 
-// --- Auth Hook (Using your provided structure) ---
-const useAuth = () => {
-  const [user, setUser] = useState(() => {
-    try {
-      const storedUser = localStorage.getItem("user");
-      return storedUser ? JSON.parse(storedUser) : null;
-    } catch (e) {
-      console.error("Failed to parse user from localStorage on init", e);
-      localStorage.removeItem("user");
-      return null;
-    }
-  });
-  const [token, setToken] = useState(() => localStorage.getItem("authToken"));
-
-  const login = useCallback((userData, authToken) => {
-    localStorage.setItem("authToken", authToken);
-    localStorage.setItem("user", JSON.stringify(userData));
-    setToken(authToken);
-    setUser(userData);
-    window.dispatchEvent(new Event("authChange"));
-  }, []);
-
-  const logout = useCallback(() => {
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("user");
-    setToken(null);
-    setUser(null);
-    window.dispatchEvent(new Event("authChange"));
-  }, []);
-
-  useEffect(() => {
-    const syncAuth = () => {
-      const currentToken = localStorage.getItem("authToken");
-      const currentUserJson = localStorage.getItem("user");
-      let currentUserData = null;
-      try {
-        currentUserData = currentUserJson ? JSON.parse(currentUserJson) : null;
-      } catch (e) {
-        console.error("Failed to parse user from localStorage during sync", e);
-        localStorage.removeItem("user");
-      }
-      if (token !== currentToken) setToken(currentToken);
-      if (JSON.stringify(user) !== JSON.stringify(currentUserData))
-        setUser(currentUserData);
-    };
-    syncAuth();
-    window.addEventListener("storage", syncAuth);
-    window.addEventListener("authChange", syncAuth);
-    return () => {
-      window.removeEventListener("storage", syncAuth);
-      window.removeEventListener("authChange", syncAuth);
-    };
-  }, [token, user]);
-  return { user, token, login, logout };
-};
-// --- END Auth Hook ---
+// --- REMOVED LOCAL useAuth DEFINITION ---
+// The local const useAuth = () => { ... }; block has been deleted.
 
 // --- Layout Imports ---
 import AdminLayout from "./Layout/AdminLayout";
@@ -98,6 +44,7 @@ import NotResearcherSignupForm from "./Component/NotResearcherSignupForm";
 import UserActivityPage from "./Component/Profile/UserActivityPage";
 import Notification from "./Component/Common/Notification";
 import LoadingSpinner from "./Component/Common/LoadingSpinner";
+import useAuth from "./hooks/useAuth"; // <<<--- THIS IS THE CORRECT IMPORT
 
 // --- Page Imports ---
 import Home from "./Page/Home";
@@ -117,6 +64,7 @@ import PostPublicationPage from "./Page/PostPublicationPage";
 import AccountSettingsPage from "./Page/Settings/AccountSettingsPage";
 import NotFoundPage from "./Page/NotFoundPage";
 import AboutUs from "./Page/AboutUs";
+import HelpCenterPage from "./Page/HelpCenterPage.jsx";
 import AdminDashboardPage from "./Page/Admin/AdminDashboardPage";
 import AdminUsersPage from "./Page/Admin/AdminUsersPage";
 import AdminSettingsPage from "./Page/Admin/AdminSettingsPage";
@@ -127,15 +75,15 @@ import AdminPublicationManagementPage from "./Page/Admin/AdminPublicationManagem
 import AdminSinglePublicationDetailPage from "./Page/Admin/AdminSinglePublicationDetailPage";
 import AdminProjectListPage from "./Page/Admin/AdminProjectListPage";
 import ProjectDetailPage from "./Page/ProjectDetailPage";
-// REMOVED: import DocumentPageComponent from "./Page/DocumentPageComponent";
+import AdminContactSubmissionsPage from "./Page/Admin/AdminContactSubmissionsPage";
 
 // --- Helper Components ---
 const LoadingScreen = ({ message = "Loading..." }) => (
   <div className="flex flex-col justify-center items-center h-screen text-lg font-medium text-gray-700 bg-gray-100">
-    {" "}
-    <LoadingSpinner size="lg" /> <p className="mt-4">{message}</p>{" "}
+    <LoadingSpinner size="lg" /> <p className="mt-4">{message}</p>
   </div>
 );
+
 const ProtectedUserRoutes = ({ isLoggedIn, isAdmin }) => {
   const location = useLocation();
   if (isLoggedIn === null || isAdmin === null)
@@ -145,6 +93,7 @@ const ProtectedUserRoutes = ({ isLoggedIn, isAdmin }) => {
   if (isAdmin) return <Navigate to="/admin" replace />;
   return <Outlet />;
 };
+
 const ProtectedAdminRoutes = ({ isLoggedIn, isAdmin }) => {
   const location = useLocation();
   if (isLoggedIn === null || isAdmin === null)
@@ -160,6 +109,7 @@ const SocketManager = ({ token, API_BASE }) => {
   const { addNewNotification, fetchInitialNotifications } = useNotifications();
   const socketRef = useRef(null);
   const hasFetchedInitialRef = useRef(false);
+
   useEffect(() => {
     if (
       token &&
@@ -174,8 +124,10 @@ const SocketManager = ({ token, API_BASE }) => {
     }
     const cleanupSocket = () => {
       if (socketRef.current) {
-        console.log(`🔌 Socket Disconnecting: ${socketRef.current.id}`);
-        socketRef.current.off();
+        socketRef.current.off("connect");
+        socketRef.current.off("disconnect");
+        socketRef.current.off("connect_error");
+        socketRef.current.off("notification");
         socketRef.current.disconnect();
         socketRef.current = null;
       }
@@ -188,7 +140,6 @@ const SocketManager = ({ token, API_BASE }) => {
       if (socketRef.current) {
         cleanupSocket();
       }
-      console.log("Attempting to connect socket...");
       const newSocket = io(API_BASE, {
         auth: { token },
         transports: ["websocket"],
@@ -202,8 +153,8 @@ const SocketManager = ({ token, API_BASE }) => {
         console.log(
           `🔌 Socket Disconnected: ${newSocket.id}, Reason: ${reason}`
         );
-        if (socketRef.current?.id === newSocket.id) {
-          socketRef.current = null;
+        if (socketRef.current && socketRef.current.id === newSocket.id) {
+          // socketRef.current = null;
         }
       });
       newSocket.on("connect_error", (error) =>
@@ -214,7 +165,6 @@ const SocketManager = ({ token, API_BASE }) => {
         )
       );
       newSocket.on("notification", (data) => {
-        console.log("Received notification event:", data);
         if (data?.notification && typeof addNewNotification === "function") {
           addNewNotification(data.notification);
         }
@@ -225,9 +175,10 @@ const SocketManager = ({ token, API_BASE }) => {
   return null;
 };
 
-// +++ DOCUMENT EDITOR COMPONENT (Copied from your provided structure) +++
+// +++ DOCUMENT EDITOR COMPONENT +++
 const API_BASE_URL_DOCS =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+
 function debounce(func, delay) {
   let timeoutId;
   return function (...args) {
@@ -236,6 +187,7 @@ function debounce(func, delay) {
     timeoutId = setTimeout(() => func.apply(context, args), delay);
   };
 }
+
 const DocumentEditorComponent = ({ documentId, currentUser }) => {
   const editor = useMemo(() => withReact(createEditor()), []);
   const initialSlateValue = useMemo(
@@ -246,14 +198,13 @@ const DocumentEditorComponent = ({ documentId, currentUser }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [docTitle, setDocTitle] = useState("No Document Selected");
-  const apiClient = useMemo(() => {
+
+  useEffect(() => {
     const currentToken = localStorage.getItem("authToken");
-    return axios.create({
+    const localApiClient = axios.create({
       baseURL: API_BASE_URL_DOCS,
       headers: currentToken ? { Authorization: `Bearer ${currentToken}` } : {},
     });
-  }, [localStorage.getItem("authToken")]);
-  useEffect(() => {
     if (!documentId) {
       setDocTitle("No Document Selected");
       setCurrentDocContent(initialSlateValue);
@@ -262,7 +213,7 @@ const DocumentEditorComponent = ({ documentId, currentUser }) => {
       return;
     }
     if (!currentUser?.id) {
-      setError("User not authenticated.");
+      setError("User not authenticated to view document.");
       setDocTitle("Authentication Required");
       setCurrentDocContent(initialSlateValue);
       setLoading(false);
@@ -271,7 +222,7 @@ const DocumentEditorComponent = ({ documentId, currentUser }) => {
     setLoading(true);
     setError("");
     setDocTitle(`Loading ${documentId}...`);
-    apiClient
+    localApiClient
       .get(`/api/documents/${documentId}`)
       .then((response) => {
         if (response.data.success && response.data.data) {
@@ -292,7 +243,8 @@ const DocumentEditorComponent = ({ documentId, currentUser }) => {
         setCurrentDocContent(initialSlateValue);
       })
       .finally(() => setLoading(false));
-  }, [documentId, apiClient, initialSlateValue, currentUser]);
+  }, [documentId, initialSlateValue, currentUser]);
+
   const debouncedSave = useCallback(
     debounce((newValueToSave) => {
       if (!documentId || !currentUser?.id) return;
@@ -317,7 +269,9 @@ const DocumentEditorComponent = ({ documentId, currentUser }) => {
     }, 2000),
     [documentId, currentUser?.id]
   );
+
   const handleEditorChange = (newValue) => {
+    setCurrentDocContent(newValue);
     const isAstChange = editor.operations.some(
       (op) => op.type !== "set_selection"
     );
@@ -327,49 +281,46 @@ const DocumentEditorComponent = ({ documentId, currentUser }) => {
   };
   return (
     <div className="bg-white p-4 md:p-6 rounded-lg shadow">
-      {" "}
-      <h2 className="text-2xl font-semibold mb-4 text-gray-800">
-        {docTitle}
-      </h2>{" "}
+      <h2 className="text-2xl font-semibold mb-4 text-gray-800">{docTitle}</h2>
       {error && (
         <p className="text-red-600 bg-red-100 p-3 rounded mb-4 border border-red-300">
           {error}
         </p>
-      )}{" "}
+      )}
       {loading && documentId && (
         <div className="flex items-center justify-center p-10">
-          <LoadingSpinner size="md" />{" "}
+          <LoadingSpinner size="md" />
           <span className="ml-3 text-gray-600">Loading document...</span>
         </div>
-      )}{" "}
+      )}
       {!loading && (
         <Slate
           editor={editor}
-          initialValue={currentDocContent}
+          value={currentDocContent}
           key={documentId || "editor-no-doc"}
           onChange={handleEditorChange}
         >
-          {" "}
           <Editable
             placeholder="Start typing..."
             className="prose max-w-none p-3 border border-gray-300 rounded-md min-h-[300px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             spellCheck
             autoFocus={!!documentId}
             readOnly={!documentId || loading || !currentUser?.id}
-          />{" "}
+          />
         </Slate>
-      )}{" "}
+      )}
     </div>
   );
 };
 
-// +++ DOCUMENT PAGE COMPONENT (Copied from your provided structure, named DocumentPageWrapper as it's inline) +++
+// +++ DOCUMENT PAGE WRAPPER +++
 const DocumentPageWrapper = ({ currentUser }) => {
   const [currentDocumentId, setCurrentDocumentId] = useState(null);
   const [newDocTitle, setNewDocTitle] = useState("");
   const [docsList, setDocsList] = useState([]);
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
   const [errorDocs, setErrorDocs] = useState("");
+
   const getApiClient = useCallback(() => {
     const token = localStorage.getItem("authToken");
     return axios.create({
@@ -377,9 +328,10 @@ const DocumentPageWrapper = ({ currentUser }) => {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
   }, []);
+
   const fetchUserDocuments = useCallback(() => {
     if (!currentUser?.id) {
-      setErrorDocs("Please log in.");
+      setErrorDocs("Please log in to view documents.");
       setDocsList([]);
       setIsLoadingDocs(false);
       return;
@@ -392,26 +344,30 @@ const DocumentPageWrapper = ({ currentUser }) => {
         if (res.data.success && Array.isArray(res.data.data)) {
           setDocsList(res.data.data);
         } else {
-          setErrorDocs(res.data.message || "Failed to fetch.");
+          setErrorDocs(res.data.message || "Failed to fetch documents.");
           setDocsList([]);
         }
       })
       .catch((err) => {
-        setErrorDocs(err.response?.data?.message || "Error fetching.");
+        setErrorDocs(
+          err.response?.data?.message || "Error fetching documents."
+        );
         setDocsList([]);
       })
       .finally(() => setIsLoadingDocs(false));
   }, [currentUser, getApiClient]);
+
   useEffect(() => {
     fetchUserDocuments();
   }, [fetchUserDocuments]);
+
   const handleCreateDocument = async () => {
     if (!newDocTitle.trim()) {
-      alert("Enter title.");
+      alert("Please enter a document title.");
       return;
     }
     if (!currentUser?.id) {
-      alert("Log in.");
+      alert("Please log in to create a document.");
       return;
     }
     try {
@@ -420,23 +376,29 @@ const DocumentPageWrapper = ({ currentUser }) => {
       });
       if (response.data.success && response.data.data) {
         const newDoc = response.data.data;
-        alert(`Doc "${newDoc.title}" created!`);
+        alert(`Document "${newDoc.title}" created successfully!`);
         fetchUserDocuments();
         setCurrentDocumentId(newDoc.id);
         setNewDocTitle("");
       } else {
-        alert(`Failed: ${response.data.message || "Unknown error"}`);
+        alert(
+          `Failed to create document: ${
+            response.data.message || "Unknown error"
+          }`
+        );
       }
     } catch (error) {
-      alert(`Error: ${error.response?.data?.message || error.message}`);
+      alert(
+        `Error creating document: ${
+          error.response?.data?.message || error.message
+        }`
+      );
     }
   };
   if (!currentUser) {
     return (
       <div className="container mx-auto p-8 text-center">
-        {" "}
         <p className="text-xl text-gray-700">
-          {" "}
           Please{" "}
           <Link
             to="/login"
@@ -444,61 +406,56 @@ const DocumentPageWrapper = ({ currentUser }) => {
           >
             log in
           </Link>{" "}
-          to access documents.{" "}
-        </p>{" "}
+          to access your documents.
+        </p>
       </div>
     );
   }
   return (
     <div className="container mx-auto p-4 md:p-8">
-      {" "}
       <div className="bg-white p-6 rounded-lg shadow mb-8">
-        {" "}
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">
-          My Documents
-        </h1>{" "}
-        <p className="text-gray-600">Create, manage, and collaborate.</p>{" "}
+        <h1 className="text-3xl font-bold text-gray-800 mb-2">My Documents</h1>
+        <p className="text-gray-600">
+          Create, manage, and collaborate on your research documents.
+        </p>
         <div className="mt-6 flex flex-col sm:flex-row gap-3 items-center">
-          {" "}
           <input
             type="text"
             value={newDocTitle}
             onChange={(e) => setNewDocTitle(e.target.value)}
             placeholder="New document title..."
             className="flex-grow px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-          />{" "}
+          />
           <button
             onClick={handleCreateDocument}
             className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-2 rounded-md transition-colors duration-150 ease-in-out shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
           >
-            {" "}
-            Create Document{" "}
-          </button>{" "}
-        </div>{" "}
-      </div>{" "}
+            Create Document
+          </button>
+        </div>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {" "}
         <div className="md:col-span-1 bg-white p-4 md:p-6 rounded-lg shadow">
-          {" "}
           <h3 className="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">
             Document List
-          </h3>{" "}
+          </h3>
           {isLoadingDocs && (
             <div className="flex items-center text-gray-500 py-2">
-              <LoadingSpinner size="sm" />{" "}
-              <span className="ml-2">Loading...</span>
+              <LoadingSpinner size="sm" />
+              <span className="ml-2">Loading documents...</span>
             </div>
-          )}{" "}
+          )}
           {errorDocs && (
             <p className="text-red-500 bg-red-50 p-2 rounded border border-red-200">
               {errorDocs}
             </p>
-          )}{" "}
+          )}
           {!isLoadingDocs && docsList.length === 0 && !errorDocs && (
-            <p className="text-gray-500 italic py-2">No documents yet.</p>
-          )}{" "}
+            <p className="text-gray-500 italic py-2">
+              You have no documents yet. Create one to get started!
+            </p>
+          )}
           <ul className="space-y-1 max-h-96 overflow-y-auto">
-            {" "}
             {docsList.map((doc) => (
               <li
                 key={doc.id}
@@ -509,10 +466,9 @@ const DocumentPageWrapper = ({ currentUser }) => {
                 }`}
                 onClick={() => setCurrentDocumentId(doc.id)}
               >
-                {" "}
                 <span className="font-medium block truncate">
-                  {doc.title || "Untitled"}
-                </span>{" "}
+                  {doc.title || "Untitled Document"}
+                </span>
                 <span
                   className={`text-xs block ${
                     currentDocumentId === doc.id
@@ -520,15 +476,16 @@ const DocumentPageWrapper = ({ currentUser }) => {
                       : "text-gray-400"
                   }`}
                 >
-                  ID: {doc.id} | Updated:{" "}
-                  {new Date(doc.updatedAt).toLocaleDateString()}
-                </span>{" "}
+                  Updated:{" "}
+                  {new Date(
+                    doc.updatedAt || doc.createdAt
+                  ).toLocaleDateString()}
+                </span>
               </li>
-            ))}{" "}
-          </ul>{" "}
-        </div>{" "}
+            ))}
+          </ul>
+        </div>
         <div className="md:col-span-2">
-          {" "}
           {currentDocumentId ? (
             <DocumentEditorComponent
               documentId={currentDocumentId}
@@ -537,9 +494,8 @@ const DocumentPageWrapper = ({ currentUser }) => {
           ) : (
             !isLoadingDocs &&
             !errorDocs &&
-            docsList.length > 0 && (
+            (docsList.length > 0 ? (
               <div className="bg-white p-10 rounded-lg shadow text-center text-gray-600">
-                {" "}
                 <svg
                   className="mx-auto h-12 w-12 text-gray-400"
                   fill="none"
@@ -547,30 +503,23 @@ const DocumentPageWrapper = ({ currentUser }) => {
                   stroke="currentColor"
                   aria-hidden="true"
                 >
-                  {" "}
                   <path
                     vectorEffect="non-scaling-stroke"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth="2"
                     d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />{" "}
-                </svg>{" "}
+                  />
+                </svg>
                 <h3 className="mt-2 text-lg font-medium text-gray-900">
                   Select a document
-                </h3>{" "}
+                </h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  Choose from the list to view or edit.
-                </p>{" "}
+                  Choose a document from the list to view or edit its content.
+                </p>
               </div>
-            )
-          )}{" "}
-          {!isLoadingDocs &&
-            !errorDocs &&
-            docsList.length === 0 &&
-            !currentDocumentId && (
+            ) : (
               <div className="bg-white p-10 rounded-lg shadow text-center text-gray-600">
-                {" "}
                 <svg
                   className="mx-auto h-12 w-12 text-gray-400"
                   fill="none"
@@ -578,31 +527,31 @@ const DocumentPageWrapper = ({ currentUser }) => {
                   stroke="currentColor"
                   aria-hidden="true"
                 >
-                  {" "}
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
                     d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />{" "}
-                </svg>{" "}
+                  />
+                </svg>
                 <h3 className="mt-2 text-lg font-medium text-gray-900">
                   No documents available
-                </h3>{" "}
+                </h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  Create your first document.
-                </p>{" "}
+                  Create your first document to start collaborating.
+                </p>
               </div>
-            )}{" "}
-        </div>{" "}
-      </div>{" "}
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 };
 
 // --- Main App Component ---
 function App() {
-  const { user: currentUser, token, login, logout } = useAuth();
+  const { user: currentUser, token, login, logout } = useAuth(); // This now correctly uses the imported hook
   const [isAdmin, setIsAdmin] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
@@ -632,6 +581,7 @@ function App() {
 
   const handleLogout = () => {
     logout();
+    showPopupNotification("You have been logged out.", "info");
   };
 
   if (loadingAuth) {
@@ -694,6 +644,7 @@ function App() {
             path="/projects/:projectId"
             element={<ProjectDetailPage currentUser={currentUser} />}
           />
+          <Route path="/help-center" element={<HelpCenterPage />} />
 
           {/* --- Auth Routes --- */}
           <Route
@@ -706,7 +657,7 @@ function App() {
                       ? "/admin"
                       : currentUser?.id
                       ? `/profile/${currentUser.id}`
-                      : "/profile"
+                      : "/explore"
                   }
                   replace
                 />
@@ -728,7 +679,7 @@ function App() {
                       ? "/admin"
                       : currentUser?.id
                       ? `/profile/${currentUser.id}`
-                      : "/profile"
+                      : "/explore"
                   }
                   replace
                 />
@@ -740,27 +691,43 @@ function App() {
           <Route
             path="/signup/academic"
             element={
-              <AcademicSignupForm showNotification={showPopupNotification} />
+              isLoggedIn ? (
+                <Navigate to="/explore" replace />
+              ) : (
+                <AcademicSignupForm showNotification={showPopupNotification} />
+              )
             }
           />
           <Route
             path="/signup/corporate"
             element={
-              <CorporateSignupForm showNotification={showPopupNotification} />
+              isLoggedIn ? (
+                <Navigate to="/explore" replace />
+              ) : (
+                <CorporateSignupForm showNotification={showPopupNotification} />
+              )
             }
           />
           <Route
             path="/signup/medical"
             element={
-              <MedicalSignupForm showNotification={showPopupNotification} />
+              isLoggedIn ? (
+                <Navigate to="/explore" replace />
+              ) : (
+                <MedicalSignupForm showNotification={showPopupNotification} />
+              )
             }
           />
           <Route
             path="/signup/not-researcher"
             element={
-              <NotResearcherSignupForm
-                showNotification={showPopupNotification}
-              />
+              isLoggedIn ? (
+                <Navigate to="/explore" replace />
+              ) : (
+                <NotResearcherSignupForm
+                  showNotification={showPopupNotification}
+                />
+              )
             }
           />
 
@@ -781,7 +748,13 @@ function App() {
             >
               <Route
                 path="/profile"
-                element={<Profile currentUser={currentUser} />}
+                element={
+                  currentUser?.id ? (
+                    <Navigate to={`/profile/${currentUser.id}`} replace />
+                  ) : (
+                    <Navigate to="/explore" replace />
+                  )
+                }
               />
               <Route
                 path="/profile/:userId"
@@ -820,11 +793,21 @@ function App() {
               />
               <Route
                 path="/publications/new"
-                element={<PostPublicationPage currentUser={currentUser} />}
+                element={
+                  <PostPublicationPage
+                    currentUser={currentUser}
+                    showNotification={showPopupNotification}
+                  />
+                }
               />
               <Route
                 path="/publications/edit/:id"
-                element={<EditPublicationPage currentUser={currentUser} />}
+                element={
+                  <EditPublicationPage
+                    currentUser={currentUser}
+                    showNotification={showPopupNotification}
+                  />
+                }
               />
               <Route
                 path="/messages"
@@ -837,8 +820,7 @@ function App() {
               <Route
                 path="/documents"
                 element={<DocumentPageWrapper currentUser={currentUser} />}
-              />{" "}
-              {/* Using the inline wrapper */}
+              />
             </Route>
           </Route>
 
@@ -848,7 +830,14 @@ function App() {
               <ProtectedAdminRoutes isLoggedIn={isLoggedIn} isAdmin={isAdmin} />
             }
           >
-            <Route element={<AdminLayout currentUser={currentUser} />}>
+            <Route
+              element={
+                <AdminLayout
+                  currentUser={currentUser}
+                  onLogout={handleLogout} // Pass onLogout here
+                />
+              }
+            >
               <Route path="/admin" element={<AdminDashboardPage />} />
               <Route path="/admin/users" element={<AdminUsersPage />} />
               <Route
@@ -868,8 +857,11 @@ function App() {
               <Route
                 path="/admin/projects"
                 element={<AdminProjectListPage />}
-              />{" "}
-              {/* ✅ Corrected here */}
+              />
+              <Route
+                path="/admin/contact-submissions" // Corrected placement
+                element={<AdminContactSubmissionsPage />}
+              />
               <Route path="/admin/settings" element={<AdminSettingsPage />} />
             </Route>
           </Route>
@@ -886,6 +878,7 @@ function App() {
 const ConditionalNavbar = ({ isLoggedIn, currentUser, onLogout }) => {
   const location = useLocation();
   const isAdminPath = location.pathname.startsWith("/admin");
+
   if (isAdminPath && isLoggedIn && currentUser?.role === "admin") {
     return null;
   }
