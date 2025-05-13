@@ -19,9 +19,6 @@ import { io } from "socket.io-client";
 import { motion, AnimatePresence } from "framer-motion";
 import "./index.css"; // This should contain your Tailwind directives
 
-// --- Slate.js Imports (for DocumentEditor) ---
-import { createEditor } from "slate";
-import { Slate, Editable, withReact } from "slate-react";
 import axios from "axios";
 
 // --- Context Imports ---
