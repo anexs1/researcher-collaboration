@@ -4,7 +4,7 @@ import { Sequelize, DataTypes } from "sequelize";
 import sequelize from "../config/db.js"; // Your configured sequelize instance
 
 // Import all model definition functions
-import UserModel from "./User.js";
+import UserModel from "./user.js";
 import PublicationModel from "./publication.js";
 import CollaborationRequestModel from "./CollaborationRequest.js";
 import MemberModel from "./Member.js";
