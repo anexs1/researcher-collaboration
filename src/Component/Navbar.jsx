@@ -79,7 +79,7 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
           label: "Your Profile",
           type: "link",
         },
-        { path: "/documents", label: "My Documents", type: "link" },
+        // { path: "/documents", label: "My Documents", type: "link" }, // REMOVED THIS LINE
         { path: "/settings/account", label: "Settings", type: "link" },
         { type: "divider" },
         {
