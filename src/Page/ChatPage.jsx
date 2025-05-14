@@ -1,4 +1,3 @@
-// src/Page/ChatPage.jsx
 import React, {
   useState,
   useEffect,
@@ -22,8 +21,15 @@ import {
   FaUsers,
   FaPaperclip,
   FaTimesCircle,
-  FaFileAlt,
-} from "react-icons/fa";
+  FaFileAlt, // Kept for potential use elsewhere
+  FaRegFileAlt, // Using a slightly different icon for attachment link
+  FaRegFilePdf,
+  FaRegFileImage,
+  FaRegFileWord,
+  FaRegFileArchive,
+  FaRegFileAudio,
+  FaEye, // Icon for view action
+} from "react-icons/fa"; // Added more specific file icons and FaEye
 import { AnimatePresence, motion } from "framer-motion";
 import { format, isToday, isYesterday, parseISO } from "date-fns";
 
@@ -31,6 +37,7 @@ import { format, isToday, isYesterday, parseISO } from "date-fns";
 import LoadingSpinner from "../Component/Common/LoadingSpinner";
 import ErrorMessage from "../Component/Common/ErrorMessage";
 import MemberListModal from "../Component/chat/MemberListModal";
+import AttachmentViewer from "../Component/Common/AttachmentViewer"; // <--- NEW IMPORT
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
@@ -66,7 +73,7 @@ const createAxiosInstance = (token) =>
     headers: { Authorization: `Bearer ${token}` },
   });
 
-// --- useChatData Hook ---
+// --- useChatData Hook (No changes needed in this hook for attachment viewing) ---
 function useChatData(projectId, currentUser, scrollToBottom) {
   const [projectDetails, setProjectDetails] = useState(null);
   const [initialMessages, setInitialMessages] = useState([]);
@@ -127,34 +134,44 @@ function useChatData(projectId, currentUser, scrollToBottom) {
       ) {
         if (Array.isArray(historyResponse.value.data.data)) {
           fetchedMsgs = historyResponse.value.data.data;
-          allowConnection = true;
+          allowConnection = true; // Keep true if messages are successfully fetched
         } else {
           fetchedMsgs = [];
           if (!allowConnection)
+            // Only set error if project info also failed or if this is the primary failure
             errorMsg =
               historyResponse.value.data?.message || "Invalid history data.";
         }
       } else if (historyResponse.status === "rejected") {
         const err = historyResponse.reason;
-        allowConnection = false;
+        // Only set allowConnection to false if history fails AND project info failed or was not sufficient
+        // If project info succeeded, we might still want to allow connection to an empty chat
+        // However, for a chat history failure that's critical (like 403), definitely disallow.
+
         if (err.response) {
           errorMsg =
             err.response.data?.message || `Error ${err.response.status}`;
-          if (err.response.status === 403)
+          if (err.response.status === 403) {
             errorMsg = "Access Denied to this project chat.";
-          else if (err.response.status === 404)
+            allowConnection = false; // Critical failure
+          } else if (err.response.status === 404) {
             errorMsg = "Project chat not found.";
-          else if (err.response.status === 401)
+            // allowConnection might still be true if project info was found, implying an empty chat.
+          } else if (err.response.status === 401) {
             errorMsg = "Authentication expired. Please log in.";
+            allowConnection = false; // Critical failure
+          }
         } else if (err.request) {
           errorMsg = "Network Error: Could not reach server for history.";
+          allowConnection = false; // Critical failure
         } else {
           errorMsg = err.message || "Unknown error fetching history.";
+          allowConnection = false;
         }
         fetchedMsgs = [];
       }
     } catch (err) {
-      allowConnection = false;
+      allowConnection = false; // General catch implies critical failure
       errorMsg = err.message || "Unexpected error during setup.";
       fetchedDetails = fetchedDetails || {
         id: projectId,
@@ -165,9 +182,10 @@ function useChatData(projectId, currentUser, scrollToBottom) {
       setProjectDetails(fetchedDetails);
       setInitialMessages(fetchedMsgs);
       setFetchError(errorMsg);
-      setCanAttemptConnect(allowConnection);
+      setCanAttemptConnect(allowConnection); // Based on whether crucial data was fetched
       setIsLoading(false);
       if (fetchedMsgs.length > 0 && allowConnection && !errorMsg) {
+        // Only scroll if data is good
         scrollToBottom("auto");
       }
     }
@@ -182,11 +200,11 @@ function useChatData(projectId, currentUser, scrollToBottom) {
     isLoading,
     fetchError,
     canAttemptConnect,
-    fetchInitialData,
+    fetchInitialData, // Expose for potential manual refetch if needed
   };
 }
 
-// --- useChatSocket Hook ---
+// --- useChatSocket Hook (No changes needed in this hook for attachment viewing) ---
 function useChatSocket(
   canAttemptConnect,
   currentUserId,
@@ -317,7 +335,7 @@ function useChatSocket(
 
   const sendMessage = useCallback((messageData) => {
     return new Promise((resolve, reject) => {
-      const currentSocket = socketRef.current; // Use the ref's current value
+      const currentSocket = socketRef.current;
       if (!currentSocket?.connected) {
         const errMsg = "Cannot send message: Not connected.";
         setSocketError(errMsg);
@@ -333,15 +351,14 @@ function useChatSocket(
           } else if (ack?.success) {
             setSocketError(null);
             resolve(ack);
-          } // Resolve with ack for potential use
-          else {
+          } else {
             const errMsg = `Send failed: ${ack?.error || "Server error"}`;
             setSocketError(errMsg);
             reject(new Error(errMsg));
           }
         });
     });
-  }, []); // No dependencies that change frequently, setSocketError is stable
+  }, []);
 
   const sendTyping = useCallback(() => {
     const s = socketRef.current;
@@ -354,7 +371,6 @@ function useChatSocket(
     s.emit("stopTyping", { roomName });
   }, [roomName]);
 
-  // Expose the socket instance itself (socketRef.current)
   return {
     socket: socketRef.current,
     isConnected,
@@ -366,7 +382,7 @@ function useChatSocket(
   };
 }
 
-// --- useFileUpload Hook ---
+// --- useFileUpload Hook (No changes needed in this hook) ---
 function useFileUpload(projectId) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -417,7 +433,7 @@ function useFileUpload(projectId) {
         { headers: { "Content-Type": "multipart/form-data" } }
       );
       if (response.data?.success && response.data.data) {
-        return response.data.data;
+        return response.data.data; // Should include fileUrl, fileName, mimeType, fileSize
       } else {
         throw new Error(
           response.data?.message || "File upload failed on server."
@@ -452,7 +468,7 @@ function useFileUpload(projectId) {
   };
 }
 
-// --- useProjectMembers Hook ---
+// --- useProjectMembers Hook (No changes needed) ---
 function useProjectMembers(projectId) {
   const [memberList, setMemberList] = useState([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
@@ -495,6 +511,38 @@ function useProjectMembers(projectId) {
   return { memberList, loadingMembers, membersError, fetchMembers };
 }
 
+// Helper to get file type from mimeType or fileName
+const getFileTypeFromMimeOrName = (mimeType, fileName) => {
+  if (mimeType) {
+    if (mimeType.startsWith("image/")) return mimeType.split("/")[1]; // jpg, png, gif
+    if (mimeType === "application/pdf") return "pdf";
+    if (mimeType === "text/plain") return "txt";
+    if (mimeType === "text/markdown") return "md";
+    // Add more mime type checks
+  }
+  if (fileName) {
+    const ext = fileName.split(".").pop()?.toLowerCase();
+    if (ext) return ext;
+  }
+  return "unknown"; // Default if type cannot be determined
+};
+
+// Helper to select an icon based on file type
+const FileTypeIcon = ({ fileType, className = "w-4 h-4 flex-shrink-0" }) => {
+  const type = fileType?.toLowerCase();
+  if (type === "pdf")
+    return <FaRegFilePdf className={`${className} text-red-500`} />;
+  if (["jpg", "jpeg", "png", "gif", "webp"].includes(type))
+    return <FaRegFileImage className={`${className} text-teal-500`} />;
+  if (["doc", "docx"].includes(type))
+    return <FaRegFileWord className={`${className} text-blue-500`} />;
+  if (["zip", "rar", "tar", "gz"].includes(type))
+    return <FaRegFileArchive className={`${className} text-yellow-500`} />;
+  if (["mp3", "wav", "ogg"].includes(type))
+    return <FaRegFileAudio className={`${className} text-purple-500`} />;
+  return <FaRegFileAlt className={`${className} text-gray-500`} />; // Default icon
+};
+
 // --- Main ChatPage Component ---
 function ChatPage({ currentUser }) {
   const { projectId: projectIdParam } = useParams();
@@ -511,6 +559,8 @@ function ChatPage({ currentUser }) {
   const [newMessageInput, setNewMessageInput] = useState("");
   const [isSendingText, setIsSendingText] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
+
+  const [viewingAttachment, setViewingAttachment] = useState(null); // <--- STATE FOR ATTACHMENT VIEWER
 
   const messagesEndRef = useRef(null);
 
@@ -547,18 +597,16 @@ function ChatPage({ currentUser }) {
       ) {
         return prevMessages;
       }
-      // Add and sort to maintain chronological order, useful if messages arrive slightly out of order
       const updatedMessages = [...prevMessages, newMessage];
       updatedMessages.sort(
         (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
       );
       return updatedMessages;
     });
-    // scrollToBottom("smooth"); // Let the messages.length effect handle this
   }, []);
 
   const {
-    socket, // This IS socketRef.current from the hook
+    socket,
     isConnected,
     socketError: socketConnectionError,
     typingUsers,
@@ -598,7 +646,6 @@ function ChatPage({ currentUser }) {
   const handleSendMessage = useCallback(
     async (event) => {
       event?.preventDefault();
-      // Use isConnected state primarily, but also check direct socket connection for immediate emit attempts
       if (
         !isConnected ||
         !socket?.connected ||
@@ -606,50 +653,46 @@ function ChatPage({ currentUser }) {
         !currentUserId ||
         isProcessingSomething
       ) {
-        if (!isConnected || !socket?.connected)
-          console.warn("SendMessage: Socket not connected. Aborting.");
         return;
       }
 
       if (selectedFile) {
-        const uploadedFileData = await uploadFile();
+        const uploadedFileData = await uploadFile(); // This now returns { fileUrl, fileName, mimeType, fileSize }
         if (uploadedFileData) {
           const fileMessageData = {
             senderId: currentUserId,
             projectId,
             roomName,
             messageType: "file",
-            fileUrl: uploadedFileData.fileUrl,
+            fileUrl: uploadedFileData.fileUrl, // URL to access/download the file from backend
             fileName: uploadedFileData.fileName,
             mimeType: uploadedFileData.mimeType,
             fileSize: uploadedFileData.fileSize,
-            content: `File: ${uploadedFileData.fileName}`,
+            content: `File: ${uploadedFileData.fileName}`, // Fallback text content
           };
           try {
-            // Double check connection again before critical emit
             if (!socket?.connected && !isConnected) {
               console.error(
                 "Socket disconnected just before emitting file message."
               );
-              // Potentially set a specific error state for the user here
+              // Set an error for the user or attempt re-queue
               return;
             }
-            const ack = await emitSendMessageViaSocket(fileMessageData); // emitSendMessageViaSocket now returns the ack
-            console.log("File message socket emit successful, ack:", ack);
+            await emitSendMessageViaSocket(fileMessageData);
             clearSelectedFile();
           } catch (socketEmitError) {
+            // Error state should be set by emitSendMessageViaSocket
             console.error(
-              "Failed to emit file message via socket (error from promise):",
+              "Failed to emit file message via socket:",
               socketEmitError
             );
-            // Error state is set within useChatSocket's sendMessage
           }
         } else {
+          // uploadError state from useFileUpload will be displayed
           console.error(
             "HTTP File upload failed, not emitting socket message. Upload error:",
             uploadError
           );
-          // uploadError state from useFileUpload will be displayed
         }
       } else {
         const contentToSend = newMessageInput.trim();
@@ -675,7 +718,7 @@ function ChatPage({ currentUser }) {
           emitStopTypingViaSocket();
         } catch (socketEmitError) {
           console.error(
-            "Failed to emit text message via socket (error from promise):",
+            "Failed to emit text message via socket:",
             socketEmitError
           );
         } finally {
@@ -707,12 +750,35 @@ function ChatPage({ currentUser }) {
     if (!selectedFile) emitStopTypingViaSocket();
   }, [selectedFile, emitStopTypingViaSocket]);
 
-  // Render logic
+  // --- ATTACHMENT VIEWER HANDLERS ---
+  const openAttachmentViewer = (msg) => {
+    if (msg.messageType === "file" && msg.fileUrl && msg.fileName) {
+      // Ensure the URL is absolute if it's relative from the backend
+      const fullFileUrl = msg.fileUrl.startsWith("http")
+        ? msg.fileUrl
+        : `${API_BASE_URL}${msg.fileUrl}`;
+      // (Backend should ideally always return absolute URLs for attachments)
+
+      const fileType = getFileTypeFromMimeOrName(msg.mimeType, msg.fileName);
+      setViewingAttachment({
+        url: fullFileUrl,
+        name: msg.fileName,
+        type: fileType,
+      });
+    } else {
+      console.warn("Cannot view attachment, missing data:", msg);
+    }
+  };
+
+  const closeAttachmentViewer = () => {
+    setViewingAttachment(null);
+  };
+  // --- END ATTACHMENT VIEWER HANDLERS ---
+
   if (isLoadingData) {
     return (
       <div className="flex justify-center items-center h-[calc(100vh-5rem)] p-4">
-        {" "}
-        <LoadingSpinner size="xl" message="Loading Chat..." />{" "}
+        <LoadingSpinner size="xl" message="Loading Chat..." />
       </div>
     );
   }
@@ -731,23 +797,18 @@ function ChatPage({ currentUser }) {
       fetchError.includes("Invalid Project ID");
     return (
       <div className="p-4 max-w-2xl mx-auto text-center">
-        {" "}
         <Link
           to={isAuthError ? "/login" : "/messages"}
           className="text-sm text-indigo-600 hover:underline mb-6 inline-flex items-center gap-1.5"
         >
-          {" "}
-          <FaArrowLeft /> {isAuthError
-            ? "Back to Login"
-            : "Back to Messages"}{" "}
-        </Link>{" "}
+          <FaArrowLeft /> {isAuthError ? "Back to Login" : "Back to Messages"}
+        </Link>
         <div className="mt-4 p-6 bg-white rounded-lg shadow border border-red-200">
-          {" "}
           {isForbidden || isAuthError ? (
             <FaLock className="text-red-500 h-12 w-12 mx-auto mb-4" />
           ) : (
             <FaExclamationCircle className="text-red-500 h-12 w-12 mx-auto mb-4" />
-          )}{" "}
+          )}
           <ErrorMessage
             title={
               isAuthError
@@ -759,8 +820,8 @@ function ChatPage({ currentUser }) {
                 : "Error Loading Chat"
             }
             message={fetchError}
-          />{" "}
-        </div>{" "}
+          />
+        </div>
       </div>
     );
   }
@@ -778,41 +839,34 @@ function ChatPage({ currentUser }) {
             className="text-gray-500 hover:text-indigo-600 mr-4 p-2 rounded-full hover:bg-gray-200 transition-colors"
             aria-label="Back to Messages"
           >
-            {" "}
-            <FaArrowLeft size="1.1em" />{" "}
+            <FaArrowLeft size="1.1em" />
           </Link>
           {projectDetails ? (
             <>
-              {" "}
               <div className="flex-shrink-0 mr-3 h-10 w-10 bg-indigo-100 border border-indigo-200 rounded-xl flex items-center justify-center shadow-inner">
-                {" "}
-                <FaProjectDiagram className="w-5 h-5 text-indigo-600" />{" "}
-              </div>{" "}
+                <FaProjectDiagram className="w-5 h-5 text-indigo-600" />
+              </div>
               <div className="flex-grow min-w-0">
-                {" "}
                 <h2
                   className="font-semibold text-gray-800 truncate text-lg"
                   title={projectDetails.name}
                 >
-                  {" "}
-                  {projectDetails.name || `Project ${projectId}`}{" "}
-                </h2>{" "}
-                <p className="text-xs text-gray-500">Group Chat</p>{" "}
-              </div>{" "}
+                  {projectDetails.name || `Project ${projectId}`}
+                </h2>
+                <p className="text-xs text-gray-500">Group Chat</p>
+              </div>
               <button
                 onClick={handleOpenMembersModal}
                 className="ml-auto mr-3 flex-shrink-0 p-2 text-gray-500 hover:text-indigo-600 rounded-full hover:bg-gray-200 transition-colors"
                 title="View Project Members"
                 aria-label="View Project Members"
               >
-                {" "}
-                <FaUsers size="1.2em" />{" "}
-              </button>{" "}
+                <FaUsers size="1.2em" />
+              </button>
             </>
           ) : (
             <h2 className="font-semibold text-gray-800 text-lg">
-              {" "}
-              Loading Chat...{" "}
+              Loading Chat...
             </h2>
           )}
           <div
@@ -823,11 +877,10 @@ function ChatPage({ currentUser }) {
             }`}
             title={isConnected ? "Connected" : "Connecting..."}
           >
-            {" "}
             <FaWifi
               className={`w-3 h-3 ${isConnected ? "" : "animate-pulse"}`}
-            />{" "}
-            {isConnected ? "Online" : "Connecting"}{" "}
+            />
+            {isConnected ? "Online" : "Connecting"}
           </div>
         </header>
 
@@ -843,25 +896,22 @@ function ChatPage({ currentUser }) {
           {socketConnectionError && (
             <ErrorMessage
               message={socketConnectionError}
-              isDismissible={true}
+              isDismissible={true} // Allow dismissing socket errors
               type="error"
               className="mb-3 sticky top-2 z-10 shadow-lg"
-              onClose={() => setSocketError(null)}
+              onClose={() => setSocketError(null)} // Make sure setSocketError is available if this is used
             />
-          )}{" "}
-          {/* Made dismissible and more prominent */}
+          )}
           {!isLoadingData && messages.length === 0 && !fetchError && (
             <div className="flex flex-col items-center justify-center h-full text-center py-10 px-6 text-gray-500">
-              {" "}
-              <FaComments className="h-16 w-16 text-gray-300 mb-5" />{" "}
-              <p className="text-lg font-medium">It's quiet in here...</p>{" "}
+              <FaComments className="h-16 w-16 text-gray-300 mb-5" />
+              <p className="text-lg font-medium">It's quiet in here...</p>
               <p className="text-sm mt-1">
                 Be the first to send a message or share a file!
-              </p>{" "}
+              </p>
             </div>
           )}
           <ul className="space-y-1 pb-2">
-            {" "}
             {messages.map((msg, index) => {
               const isCurrentUserSender =
                 msg.senderId?.toString() === currentUserId?.toString();
@@ -874,9 +924,9 @@ function ChatPage({ currentUser }) {
                 currentDateSeparator &&
                 currentDateSeparator !== prevDateSeparator;
               const isFileMessage = msg.messageType === "file";
+
               return (
                 <React.Fragment key={msg.id || `msg-fallback-${index}`}>
-                  {" "}
                   {showDateSeparator && (
                     <motion.div
                       initial={{ opacity: 0, scale: 0.9 }}
@@ -884,14 +934,12 @@ function ChatPage({ currentUser }) {
                       transition={{ duration: 0.2 }}
                       className="flex justify-center items-center my-5"
                     >
-                      {" "}
                       <span className="px-3 py-1 bg-white text-gray-500 text-xs font-semibold rounded-full shadow-sm border border-gray-200 flex items-center gap-1.5">
-                        {" "}
-                        <FaCalendarAlt className="w-3 h-3" />{" "}
-                        {currentDateSeparator}{" "}
-                      </span>{" "}
+                        <FaCalendarAlt className="w-3 h-3" />
+                        {currentDateSeparator}
+                      </span>
                     </motion.div>
-                  )}{" "}
+                  )}
                   <motion.li
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -900,13 +948,11 @@ function ChatPage({ currentUser }) {
                       isCurrentUserSender ? "justify-end" : "justify-start"
                     }`}
                   >
-                    {" "}
                     {!isCurrentUserSender && (
                       <div
                         className="flex-shrink-0 self-start relative mt-1 group"
                         title={msg.sender?.username || `User ${msg.senderId}`}
                       >
-                        {" "}
                         {msg.sender?.profilePictureUrl ? (
                           <img
                             src={msg.sender.profilePictureUrl}
@@ -914,16 +960,16 @@ function ChatPage({ currentUser }) {
                             className="w-8 h-8 rounded-full object-cover border-2 border-white shadow"
                             onError={(e) => {
                               e.target.onerror = null;
-                              e.target.src = "/default-avatar.png";
+                              e.target.src = "/default-avatar.png"; // Fallback avatar
                             }}
                           />
                         ) : (
                           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-sm font-semibold text-white shadow border-2 border-white uppercase">
                             {(msg.sender?.username || "?").charAt(0)}
                           </div>
-                        )}{" "}
+                        )}
                       </div>
-                    )}{" "}
+                    )}
                     <div
                       className={`max-w-[75%] px-3.5 py-2 rounded-xl text-sm ${
                         isCurrentUserSender
@@ -931,35 +977,37 @@ function ChatPage({ currentUser }) {
                           : "bg-white text-gray-800 border border-gray-200 rounded-r-xl shadow-sm"
                       }`}
                     >
-                      {" "}
                       {!isCurrentUserSender && (
                         <p className="text-xs font-bold mb-1 text-indigo-700">
                           {msg.sender?.username || `User ${msg.senderId}`}
                         </p>
-                      )}{" "}
+                      )}
                       {isFileMessage ? (
-                        <a
-                          href={msg.fileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button // <--- CHANGED FROM <a> TO <button>
+                          onClick={() => openAttachmentViewer(msg)}
                           className={`inline-flex items-center gap-2 font-medium break-all ${
                             isCurrentUserSender
                               ? "text-indigo-100 hover:text-white hover:underline"
                               : "text-indigo-600 hover:text-indigo-800 hover:underline"
                           }`}
-                          title={`Download ${msg.fileName || "file"}`}
+                          title={`View ${msg.fileName || "file"}`}
                         >
-                          {" "}
-                          <FaFileAlt className="w-4 h-4 flex-shrink-0" />{" "}
-                          <span className="truncate max-w-[180px]">
+                          <FileTypeIcon
+                            fileType={getFileTypeFromMimeOrName(
+                              msg.mimeType,
+                              msg.fileName
+                            )}
+                          />
+                          <span className="truncate max-w-[180px] sm:max-w-[250px]">
                             {msg.fileName || "Attached File"}
-                          </span>{" "}
-                        </a>
+                          </span>
+                          <FaEye className="w-3.5 h-3.5 opacity-70 group-hover:opacity-100 ml-1" />
+                        </button>
                       ) : (
                         <p className="whitespace-pre-wrap break-words">
                           {msg.content}
                         </p>
-                      )}{" "}
+                      )}
                       <p
                         className={`text-xs mt-1.5 opacity-80 ${
                           isCurrentUserSender
@@ -972,16 +1020,14 @@ function ChatPage({ currentUser }) {
                             : "Sending..."
                         }
                       >
-                        {" "}
-                        {formatMessageTime(msg.createdAt) || "..."}{" "}
-                      </p>{" "}
-                    </div>{" "}
+                        {formatMessageTime(msg.createdAt) || "..."}
+                      </p>
+                    </div>
                     {isCurrentUserSender && (
                       <div
                         className="flex-shrink-0 self-start relative mt-1 group"
                         title={currentUser?.username || "You"}
                       >
-                        {" "}
                         {currentUser?.profilePictureUrl ? (
                           <img
                             src={currentUser.profilePictureUrl}
@@ -996,58 +1042,55 @@ function ChatPage({ currentUser }) {
                           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-sm font-semibold text-white shadow border-2 border-white uppercase">
                             {(currentUser?.username || "?").charAt(0)}
                           </div>
-                        )}{" "}
+                        )}
                       </div>
-                    )}{" "}
-                  </motion.li>{" "}
+                    )}
+                  </motion.li>
                 </React.Fragment>
               );
-            })}{" "}
+            })}
             <AnimatePresence>
-              {" "}
               {otherTypingUsernames.length > 0 && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
-                  className="text-left pl-12 pr-4 pt-1 pb-2"
+                  className="text-left pl-12 pr-4 pt-1 pb-2" // Adjusted padding to align with messages
                 >
-                  {" "}
                   <span className="text-xs italic text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full shadow-sm border border-gray-200">
-                    {" "}
-                    {otherTypingUsernames.join(", ")}{" "}
-                    {otherTypingUsernames.length === 1 ? " is" : " are"}{" "}
-                    typing...{" "}
-                  </span>{" "}
+                    {otherTypingUsernames.join(", ")}
+                    {otherTypingUsernames.length === 1 ? " is" : " are"}
+                    typing...
+                  </span>
                 </motion.div>
-              )}{" "}
-            </AnimatePresence>{" "}
-            <div ref={messagesEndRef} style={{ height: "1px" }} />{" "}
+              )}
+            </AnimatePresence>
+            <div ref={messagesEndRef} style={{ height: "1px" }} />
           </ul>
         </main>
 
         <footer className="p-3 border-t border-gray-200 bg-white flex-shrink-0">
           {(selectedFile || uploadError) && (
             <div className="mb-2 px-2 py-1.5">
-              {" "}
               {selectedFile && (
                 <div className="flex items-center justify-between text-sm p-2 bg-indigo-50 border border-indigo-200 rounded-md">
-                  {" "}
                   <div className="flex items-center gap-2 overflow-hidden min-w-0">
-                    {" "}
-                    <FaPaperclip className="text-indigo-600 flex-shrink-0 h-4 w-4" />{" "}
+                    <FileTypeIcon
+                      fileType={getFileTypeFromMimeOrName(
+                        selectedFile.type,
+                        selectedFile.name
+                      )}
+                    />
                     <span
                       className="text-indigo-800 truncate font-medium"
                       title={selectedFile.name}
                     >
-                      {" "}
-                      {selectedFile.name}{" "}
-                    </span>{" "}
+                      {selectedFile.name}
+                    </span>
                     <span className="text-xs text-gray-500 whitespace-nowrap">
-                      {" "}
-                      ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB){" "}
-                    </span>{" "}
-                  </div>{" "}
+                      ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+                    </span>
+                  </div>
                   <button
                     onClick={clearSelectedFile}
                     disabled={isUploading}
@@ -1055,23 +1098,21 @@ function ChatPage({ currentUser }) {
                     title="Clear selected file"
                     aria-label="Clear selected file"
                   >
-                    {" "}
-                    <FaTimesCircle />{" "}
-                  </button>{" "}
+                    <FaTimesCircle />
+                  </button>
                 </div>
-              )}{" "}
+              )}
               {uploadError && (
                 <div className="mt-1">
-                  {" "}
                   <ErrorMessage
                     message={uploadError}
                     type="error"
                     isDismissible={true}
-                    onClose={() => setUploadError(null)}
+                    onClose={() => setUploadError(null)} // Ensure setUploadError exists if this hook is used
                     className="text-xs"
-                  />{" "}
+                  />
                 </div>
-              )}{" "}
+              )}
             </div>
           )}
           <form
@@ -1084,7 +1125,7 @@ function ChatPage({ currentUser }) {
               onChange={handleFileSelect}
               className="hidden"
               disabled={!isConnected || isProcessingSomething}
-              accept="image/*,application/pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,.zip,.rar,.mp3,.wav"
+              accept="image/*,application/pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,.zip,.rar,.mp3,.wav,.md,.json,.log" // Added more common types
               aria-hidden="true"
             />
             <button
@@ -1095,8 +1136,7 @@ function ChatPage({ currentUser }) {
               title="Attach file"
               aria-label="Attach file"
             >
-              {" "}
-              <FaPaperclip className="h-5 w-5" />{" "}
+              <FaPaperclip className="h-5 w-5" />
             </button>
             <input
               type="text"
@@ -1132,12 +1172,11 @@ function ChatPage({ currentUser }) {
                 isProcessingSomething ? "Sending" : "Send message or file"
               }
             >
-              {" "}
               {isProcessingSomething ? (
                 <FaSpinner className="animate-spin h-5 w-5" />
               ) : (
                 <FaPaperPlane className="h-5 w-5" />
-              )}{" "}
+              )}
             </button>
           </form>
         </footer>
@@ -1152,6 +1191,19 @@ function ChatPage({ currentUser }) {
         onRetry={fetchMembers}
         currentUserId={currentUserId}
       />
+
+      {/* --- ATTACHMENT VIEWER MODAL --- */}
+      <AnimatePresence>
+        {viewingAttachment && (
+          <AttachmentViewer
+            fileUrl={viewingAttachment.url}
+            fileName={viewingAttachment.name}
+            fileType={viewingAttachment.type}
+            onClose={closeAttachmentViewer}
+          />
+        )}
+      </AnimatePresence>
+      {/* --- END ATTACHMENT VIEWER MODAL --- */}
     </>
   );
 }

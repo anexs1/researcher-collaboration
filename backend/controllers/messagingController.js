@@ -2,23 +2,57 @@
 import asyncHandler from "express-async-handler";
 import db from "../models/index.js";
 import { Op } from "sequelize";
-import path from "path"; // Needed for constructing URL potentially
+import fs from "fs"; // For file system operations like unlinking on error
+import path from "path"; // Often useful, though not strictly for fileUrl here
 
 const { User, Project, Member, Message } = db;
 
-// --- getProjectChatList function (keep as is) ---
+// --- Helper: Check if user is member of a project ---
+const isUserMemberOfProject = async (userId, projectId) => {
+  if (!userId || !projectId || !Project || !Member) {
+    console.error(
+      "[isUserMemberOfProject] Missing userId, projectId, or DB models."
+    );
+    return false;
+  }
+  try {
+    const project = await Project.findByPk(projectId, {
+      attributes: ["id", "ownerId"],
+    });
+    if (!project) return false;
+    if (project.ownerId === userId) return true;
+
+    const membership = await Member.findOne({
+      where: {
+        userId: userId,
+        projectId: projectId,
+        status: "active",
+      },
+      attributes: ["userId"],
+    });
+    return !!membership;
+  } catch (error) {
+    console.error(
+      `[isUserMemberOfProject] Error checking membership for user ${userId} in project ${projectId}:`,
+      error
+    );
+    return false;
+  }
+};
+
+// --- getProjectChatList function (Using your existing logic) ---
 export const getProjectChatList = asyncHandler(async (req, res) => {
-  // ... your existing code ...
   const currentUserId = req.user?.id;
-  console.log(`API: getProjectChatList invoked by user ${currentUserId}`);
   if (!currentUserId) {
     res.status(401);
     throw new Error("Authentication required.");
   }
   if (!Project || !Member) {
-    console.error("Server Config Error: Project/Member model not loaded.");
+    console.error(
+      "[MessagingController] Server Config Error: Project/Member model not loaded for getProjectChatList."
+    );
     res.status(500);
-    throw new Error("Server config error.");
+    throw new Error("Server configuration error regarding database models.");
   }
   try {
     const userMemberships = await Member.findAll({
@@ -27,52 +61,94 @@ export const getProjectChatList = asyncHandler(async (req, res) => {
       raw: true,
     });
     const memberProjectIds = userMemberships.map((m) => m.projectId);
+
     const ownedProjects = await Project.findAll({
       where: { ownerId: currentUserId },
       attributes: ["id"],
       raw: true,
     });
     const ownedProjectIds = ownedProjects.map((p) => p.id);
+
     const allRelevantProjectIds = [
       ...new Set([...memberProjectIds, ...ownedProjectIds]),
     ];
+
     if (allRelevantProjectIds.length === 0) {
       return res.status(200).json({ success: true, data: [] });
     }
-    const projects = await Project.findAll({
+
+    const projectsWithDetails = await Project.findAll({
       where: { id: { [Op.in]: allRelevantProjectIds } },
       attributes: ["id", "title"],
       order: [["title", "ASC"]],
     });
-    const projectChatList = projects.map((project) => ({
-      projectId: project.id,
-      projectName: project.title,
-    }));
-    console.log(
-      `Returning ${projectChatList.length} project chats for user ${currentUserId}.`
+
+    const projectChatList = await Promise.all(
+      projectsWithDetails.map(async (project) => {
+        const lastMessage = await Message.findOne({
+          where: { projectId: project.id },
+          order: [["createdAt", "DESC"]],
+          attributes: [
+            "content",
+            "createdAt",
+            "messageType",
+            "fileName",
+            "senderId",
+          ],
+          include: [{ model: User, as: "sender", attributes: ["username"] }],
+        });
+
+        let lastMessageSnippet = "No messages yet...";
+        if (lastMessage) {
+          if (lastMessage.messageType === "file") {
+            lastMessageSnippet = `File: ${
+              lastMessage.fileName || "attachment"
+            }`;
+          } else {
+            lastMessageSnippet = lastMessage.content;
+          }
+          if (lastMessage.senderId !== currentUserId && lastMessage.sender) {
+            lastMessageSnippet = `${lastMessage.sender.username}: ${lastMessageSnippet}`;
+          } else if (lastMessage.senderId === currentUserId) {
+            lastMessageSnippet = `You: ${lastMessageSnippet}`;
+          }
+        }
+
+        // TODO: Implement actual unread count logic. This is a placeholder.
+        const unreadCount = 0;
+
+        return {
+          projectId: project.id,
+          projectName: project.title,
+          lastMessageSnippet:
+            lastMessageSnippet.substring(0, 50) +
+            (lastMessageSnippet.length > 50 ? "..." : ""), // Truncate snippet
+          lastMessageAt: lastMessage ? lastMessage.createdAt : null,
+          unreadCount: unreadCount,
+        };
+      })
     );
+
     res.status(200).json({ success: true, data: projectChatList });
   } catch (error) {
     console.error(
-      `Error in getProjectChatList for user ${currentUserId}:`,
+      `[MessagingController] Error in getProjectChatList for user ${currentUserId}:`,
       error
     );
     const message =
       process.env.NODE_ENV === "development"
         ? error.message
         : "Server error fetching project chat list.";
-    res.status(500).json({ success: false, message: message });
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: message });
+    }
   }
 });
 
-// --- getProjectChatHistory function (keep as is) ---
+// --- getProjectChatHistory function (Using your existing logic) ---
 export const getProjectChatHistory = asyncHandler(async (req, res) => {
-  // ... your existing code ...
   const currentUserId = req.user?.id;
   const projectIdParam = req.params.projectId;
-  console.log(
-    `API: getProjectChatHistory invoked for project ${projectIdParam} by user ${currentUserId}`
-  );
   if (!currentUserId) {
     res.status(401);
     throw new Error("Authentication required.");
@@ -82,48 +158,30 @@ export const getProjectChatHistory = asyncHandler(async (req, res) => {
     res.status(400);
     throw new Error("Invalid project ID format.");
   }
-  if (!Message || !Member || !User || !Project) {
-    console.error("Server Config Error: Required models not loaded.");
+  if (!Message || !User || !Project) {
+    console.error(
+      "[MessagingController] Server Config Error: Required models (Message, User, Project) not loaded for getProjectChatHistory."
+    );
     res.status(500);
-    throw new Error("Server config error.");
+    throw new Error("Server configuration error regarding database models.");
   }
   try {
-    const project = await Project.findByPk(projectId, {
-      attributes: ["id", "ownerId"],
-    });
-    if (!project) {
-      res.status(404);
-      throw new Error("Project not found.");
-    }
-    const isOwner = project.ownerId === currentUserId;
-    let isMember = false;
-    if (!isOwner) {
-      const membership = await Member.findOne({
-        where: {
-          userId: currentUserId,
-          projectId: projectId,
-          status: "active",
-        },
-        attributes: ["userId"],
-      });
-      isMember = !!membership;
-    }
-    if (!isOwner && !isMember) {
-      console.warn(
-        `Auth Failed: User ${currentUserId} tried project ${projectId}`
-      );
+    const authorized = await isUserMemberOfProject(currentUserId, projectId);
+    if (!authorized) {
       res.status(403);
-      throw new Error("Access Denied.");
+      throw new Error(
+        "Access Denied: You are not authorized to view this project chat."
+      );
     }
-    console.log(
-      `Auth Passed: User ${currentUserId} for project ${projectId} (Owner: ${isOwner}, Member: ${isMember}).`
-    );
+
     const limit = parseInt(req.query.limit, 10) || 50;
     const offset = parseInt(req.query.offset, 10) || 0;
+
     if (limit <= 0 || offset < 0) {
       res.status(400);
-      throw new Error("Invalid pagination.");
+      throw new Error("Invalid pagination parameters (limit/offset).");
     }
+
     const messages = await Message.findAll({
       where: { projectId: projectId },
       include: [
@@ -137,13 +195,10 @@ export const getProjectChatHistory = asyncHandler(async (req, res) => {
       limit: limit,
       offset: offset,
     });
-    console.log(
-      `Found ${messages.length} messages for project ${projectId} (limit: ${limit}, offset: ${offset}).`
-    );
     res.status(200).json({ success: true, data: messages });
   } catch (error) {
     console.error(
-      `Error in getProjectChatHistory for project ${projectId}, user ${currentUserId}:`,
+      `[MessagingController] Error in getProjectChatHistory for project ${projectId}, user ${currentUserId}:`,
       error
     );
     const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
@@ -158,109 +213,99 @@ export const getProjectChatHistory = asyncHandler(async (req, res) => {
   }
 });
 
-// --- ** NEW File Upload Controller ** ---
-
-/**
- * @desc    Handle file upload for a project chat
- * @route   POST /api/messaging/upload/project/:projectId
- * @access  Private (User must be active member/owner)
- */
-export const uploadProjectFile = asyncHandler(async (req, res) => {
+// --- File Upload Controller ---
+export const uploadProjectFile = asyncHandler(async (req, res, next) => {
+  // Added next for cleaner error passing
   const currentUserId = req.user?.id;
   const projectIdParam = req.params.projectId;
 
-  console.log(
-    `API: uploadProjectFile invoked for project ${projectIdParam} by user ${currentUserId}`
-  );
-
-  // --- Basic Validations ---
   if (!currentUserId) {
-    res.status(401);
-    throw new Error("Authentication required.");
+    return next(
+      Object.assign(new Error("Authentication required."), { status: 401 })
+    );
   }
   const projectId = parseInt(projectIdParam, 10);
   if (isNaN(projectId) || projectId <= 0) {
-    res.status(400);
-    throw new Error("Invalid project ID format.");
-  }
-
-  // --- File Check (Multer puts file info in req.file) ---
-  if (!req.file) {
-    console.log("Upload Error: No file received in req.file.");
-    res.status(400);
-    throw new Error("No file uploaded or file rejected by filter.");
-  }
-
-  // --- Authorization Check (Same as fetching history) ---
-  try {
-    const project = await Project.findByPk(projectId, {
-      attributes: ["id", "ownerId"],
-    });
-    if (!project) {
-      res.status(404);
-      throw new Error("Project not found.");
+    if (req.file && req.file.path) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (e) {
+        console.error(
+          "[MessagingController] Failed to delete orphaned upload (invalid projectID):",
+          e
+        );
+      }
     }
-    const isOwner = project.ownerId === currentUserId;
-    let isMember = false;
-    if (!isOwner) {
-      const membership = await Member.findOne({
-        where: {
-          userId: currentUserId,
-          projectId: projectId,
-          status: "active",
-        },
-        attributes: ["userId"],
-      });
-      isMember = !!membership;
-    }
-    if (!isOwner && !isMember) {
-      console.warn(
-        `Auth Failed: User ${currentUserId} tried to upload to project ${projectId}`
-      );
-      res.status(403);
-      throw new Error("Access Denied: Not authorized for this project chat.");
-    }
-    console.log(
-      `Auth Passed: User ${currentUserId} can upload to project ${projectId}`
+    return next(
+      Object.assign(new Error("Invalid project ID format."), { status: 400 })
     );
-  } catch (authError) {
-    console.error("Auth check error during upload:", authError);
-    res.status(authError.statusCode || 500); // Use specific status if set
-    throw new Error(authError.message || "Failed to verify project access.");
   }
-  // --- End Authorization Check ---
 
-  // --- Process File ---
-  const file = req.file;
-  console.log("File received by controller:", {
-    filename: file.filename, // The unique name saved by multer
-    originalname: file.originalname,
-    mimetype: file.mimetype,
-    size: file.size,
-    path: file.path, // Full path on server where file is temporarily saved
-  });
+  if (!req.file) {
+    return next(
+      Object.assign(new Error("No file uploaded or file rejected by filter."), {
+        status: 400,
+      })
+    );
+  }
 
-  // --- Construct File URL ---
-  // IMPORTANT: This assumes your 'public/uploads/project_files' directory is served statically
-  // by your Express app. Adjust the base URL and path segment as needed.
-  // Example: If Express serves 'public' at '/', the URL is '/uploads/project_files/filename'
-  // If you upload to S3/Cloud Storage, use the URL returned from that service instead.
-  const fileUrl = `/uploads/project_files/${file.filename}`; // ** ADJUST THIS BASED ON YOUR STATIC SERVING **
+  try {
+    const authorized = await isUserMemberOfProject(currentUserId, projectId);
+    if (!authorized) {
+      if (req.file && req.file.path) {
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (e) {
+          console.error(
+            "[MessagingController] Failed to delete unauthorized upload:",
+            e
+          );
+        }
+      }
+      return next(
+        Object.assign(
+          new Error(
+            "Access Denied: Not authorized to upload to this project chat."
+          ),
+          { status: 403 }
+        )
+      );
+    }
 
-  // --- Respond to Frontend ---
-  // Send back the necessary details for the frontend to then send via socket
-  res.status(200).json({
-    success: true,
-    message: "File uploaded successfully.",
-    data: {
-      fileUrl: fileUrl,
-      fileName: file.originalname, // Send original name back
-      mimeType: file.mimetype,
-      fileSize: file.size,
-    },
-  });
+    const file = req.file;
+    const fileUrl = `/uploads/project_files/${file.filename}`;
 
-  // Note: We don't save the Message record here. The frontend receives the file details,
-  // THEN emits a 'sendMessage' socket event with messageType='file' and these details.
-  // The socket handler on the backend will save the Message record.
+    console.log(
+      `[MessagingController] File processed: ${file.originalname}, Saved as: ${file.filename}, URL: ${fileUrl} for project ${projectId}`
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "File processed successfully. Ready for message.",
+      data: {
+        fileUrl: fileUrl,
+        fileName: file.originalname,
+        mimeType: file.mimetype,
+        fileSize: file.size,
+      },
+    });
+  } catch (error) {
+    // Catch errors from isUserMemberOfProject or other async operations
+    console.error(
+      "[MessagingController] Error during uploadProjectFile processing:",
+      error
+    );
+    if (req.file && req.file.path) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (e) {
+        console.error(
+          "[MessagingController] Failed to delete orphaned upload during error handling:",
+          e
+        );
+      }
+    }
+    // Pass error to the global error handler
+    next(Object.assign(error, { status: error.status || 500 }));
+  }
 });

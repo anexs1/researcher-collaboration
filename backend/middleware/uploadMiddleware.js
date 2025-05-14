@@ -9,40 +9,87 @@ const allowedMimeTypes = [
   "image/jpeg",
   "image/png",
   "image/gif",
+  "image/webp",
+  "image/bmp",
+  "image/svg+xml",
   "application/pdf",
   "text/plain",
+  "text/markdown",
+  "application/json",
+  "text/csv",
+  "text/xml",
+  "text/html",
   "application/msword", // .doc
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
-  "text/csv", // .csv
   "application/vnd.ms-excel", // .xls
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+  "application/vnd.ms-powerpoint", // .ppt
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation", // .pptx
+  "application/zip",
+  "application/x-rar-compressed",
+  "application/x-7z-compressed",
+  "application/gzip",
+  "application/x-tar",
+  "audio/mpeg",
+  "audio/wav",
+  "audio/ogg",
+  "audio/aac",
+  "audio/webm",
+  "audio/m4a",
+  "video/mp4",
+  "video/webm",
+  "video/ogg",
+  "video/quicktime", // .mov
+  // Add more specific mime types if needed for your application
 ];
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 // Get __dirname equivalent in ES Modules
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = path.dirname(__filename); // This will be path/to/your/project/backend/middleware/
 
-// Define storage location (e.g., public/uploads/project_files relative to backend root)
-// Ensure this directory exists or create it
+// --- CORRECTED UPLOAD DIRECTORY ---
+// Define storage location to align with server.js static serving
+// server.js serves from `backend/uploads/` for URL `/uploads`
+// So we save into a subfolder `project_files` within `backend/uploads/`
 const uploadDir = path.join(
-  __dirname,
-  "..",
-  "public",
-  "uploads",
-  "project_files"
+  __dirname, // backend/middleware/
+  "..", // up to backend/
+  "uploads", // into backend/uploads/  <--- Base for static serving
+  "project_files" // into backend/uploads/project_files/  <--- Subfolder for these specific uploads
 );
+
+// Ensure the destination directory exists
 if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-  console.log(`Created upload directory: ${uploadDir}`);
+  try {
+    fs.mkdirSync(uploadDir, { recursive: true });
+    console.log(`[UploadMiddleware] Created upload directory: ${uploadDir}`);
+  } catch (err) {
+    console.error(
+      `[UploadMiddleware] CRITICAL ERROR: Could not create upload directory ${uploadDir}:`,
+      err
+    );
+    // If this fails, uploads will not work. Consider throwing an error to halt server startup
+    // or implementing a more robust retry/fallback.
+  }
 }
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
+    // Before calling cb, ensure uploadDir actually exists (could have failed creation)
+    if (!fs.existsSync(uploadDir)) {
+      const dirError = new Error(
+        `Upload destination directory does not exist or is not accessible: ${uploadDir}`
+      );
+      dirError.code = "UPLOAD_DIR_MISSING";
+      console.error("[UploadMiddleware] " + dirError.message);
+      return cb(dirError); // Pass error to multer
+    }
+    // console.log(`[UploadMiddleware] Multer destination: saving to ${uploadDir}`);
     cb(null, uploadDir); // Save files to the defined directory
   },
   filename: function (req, file, cb) {
-    // Create a unique filename: fieldname-timestamp-originalfilename
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
     cb(
       null,
@@ -56,51 +103,59 @@ const fileFilter = (req, file, cb) => {
     cb(null, true); // Accept file
   } else {
     console.warn(
-      `Upload rejected: Invalid mime type ${file.mimetype} for file ${file.originalname}`
+      `[UploadMiddleware] Upload rejected: Invalid mime type ${file.mimetype} for file ${file.originalname}`
     );
-    // Reject file but don't throw an error that crashes the server immediately
-    cb(
-      new Error(
-        "Invalid file type. Allowed types: images, PDF, documents, text, spreadsheets, CSV."
-      ),
-      false
+    const err = new Error(
+      `Invalid file type (${file.mimetype}). Not permitted for upload.`
     );
+    err.code = "INVALID_FILE_TYPE"; // Custom code for more specific error handling
+    cb(err, false); // Reject file and pass the error
   }
 };
 
 const upload = multer({
   storage: storage,
-  limits: { fileSize: MAX_FILE_SIZE },
+  limits: { fileSize: MAX_FILE_SIZE_BYTES },
   fileFilter: fileFilter,
 });
 
-// Middleware function to handle single file upload named 'file'
-// This expects the field name in FormData to be 'file'
-export const handleProjectFileUpload = upload.single("file");
+export const handleProjectFileUpload = upload.single("file"); // Expects field name 'file' in FormData
 
-// Error handling middleware specifically for Multer errors
 export const handleMulterError = (err, req, res, next) => {
-  if (err instanceof multer.MulterError) {
-    // A Multer error occurred when uploading.
-    console.error("Multer Error:", err.code, err.message);
-    let message = "File upload error.";
-    if (err.code === "LIMIT_FILE_SIZE") {
-      message = `File too large. Maximum size is ${
-        MAX_FILE_SIZE / 1024 / 1024
-      }MB.`;
-    } else if (err.code === "LIMIT_UNEXPECTED_FILE") {
-      message = "Unexpected file field received.";
+  if (err) {
+    // Catches errors from multer (MulterError) AND from fileFilter/destination callback
+    console.error(
+      "[UploadMiddleware] Error during file processing stage:",
+      err.code,
+      err.message
+    );
+    let message = "File upload processing error.";
+    let statusCode = 400; // Default to Bad Request
+
+    if (err instanceof multer.MulterError) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        message = `File too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`;
+      } else if (err.code === "LIMIT_UNEXPECTED_FILE") {
+        message =
+          "Unexpected file field received. Ensure field name is 'file'.";
+      }
+      // Add more Multer error codes as needed
+    } else if (err.code === "INVALID_FILE_TYPE") {
+      message = err.message; // Use the specific message from fileFilter
+    } else if (err.code === "UPLOAD_DIR_MISSING") {
+      message = "Server configuration error: Cannot save upload.";
+      statusCode = 500; // Server-side issue
+    } else {
+      // Generic error from fs operations or other issues
+      message =
+        err.message ||
+        "An unknown error occurred during file upload preparation.";
+      statusCode = 500;
     }
-    return res.status(400).json({ success: false, message });
-  } else if (err) {
-    // An unknown error occurred when uploading (e.g., fileFilter rejection).
-    console.error("Non-Multer Upload Error:", err.message);
-    // Use the message from the fileFilter error if available
-    return res.status(400).json({
-      success: false,
-      message: err.message || "Invalid file provided.",
-    });
+    return res
+      .status(statusCode)
+      .json({ success: false, message, field: err.field || null });
   }
-  // Everything went fine, pass to next middleware/controller
+  // If no error, proceed to the next middleware or controller
   next();
 };
