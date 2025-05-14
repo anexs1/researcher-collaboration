@@ -10,85 +10,100 @@ import {
   FaRegFileWord,
   FaRegFileArchive,
   FaRegFileAudio,
-  FaRegFileVideo, // Added for completeness if you handle video
+  FaRegFileVideo,
 } from "react-icons/fa";
-import LoadingSpinner from "./LoadingSpinner"; // Assuming this path is correct
+import LoadingSpinner from "./LoadingSpinner";
 
-// Optional: for PDF viewing (if you uncomment and use react-pdf)
+// Optional: for PDF viewing with react-pdf (npm install react-pdf)
 // import { Document, Page, pdfjs } from 'react-pdf';
+// Make sure to set the worker source if you use react-pdf
 // pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
-// Base URL for your API
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
-
-// Helper to get auth token
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000"; // Not directly used for fetching here if fileUrl is absolute
 const getAuthToken = () => localStorage.getItem("authToken");
 
 function AttachmentViewer({ fileUrl, fileName, fileType, onClose }) {
-  const [content, setContent] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
+  // Log received props for debugging
+  useEffect(() => {
+    console.log("[AttachmentViewer Props Received]", {
+      fileUrl,
+      fileName,
+      fileType,
+    });
+  }, [fileUrl, fileName, fileType]);
+
+  const [content, setContent] = useState(null); // For text files, this will be text. For others, it's the URL.
+  const [isLoading, setIsLoading] = useState(true); // Start with loading true
   const [error, setError] = useState(null);
   // const [numPagesPdf, setNumPagesPdf] = useState(null); // For react-pdf
 
   useEffect(() => {
     if (!fileUrl || !fileType) {
+      setError("File information is incomplete. Cannot display preview.");
       setIsLoading(false);
-      setError("File URL or type missing for viewer.");
+      setContent(null);
       return;
     }
 
-    const fetchContent = async () => {
-      setIsLoading(true);
-      setError(null);
-      setContent(null);
-      const token = getAuthToken();
+    setIsLoading(true); // Set loading true at the start of fetching/processing
+    setError(null);
+    setContent(null); // Reset previous content
 
-      if (
-        [
-          "txt",
-          "md",
-          "json",
-          "log",
-          "csv",
-          "xml",
-          "html",
-          "css",
-          "js",
-        ].includes(fileType.toLowerCase())
-      ) {
-        try {
-          const response = await axios.get(fileUrl, {
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-            responseType: "text",
-          });
+    const type = fileType.toLowerCase();
+
+    if (
+      [
+        "txt",
+        "md",
+        "json",
+        "log",
+        "csv",
+        "xml",
+        "html",
+        "css",
+        "js",
+        "jsx",
+        "ts",
+        "tsx",
+      ].includes(type)
+    ) {
+      const token = getAuthToken();
+      axios
+        .get(fileUrl, {
+          // fileUrl should be the absolute URL to the backend endpoint
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          responseType: "text", // Expecting plain text
+        })
+        .then((response) => {
           if (typeof response.data === "string") {
             setContent(response.data);
           } else {
-            console.warn(
-              "Received non-string data for text file:",
-              response.data
-            );
+            // Fallback if backend sends JSON for some reason despite responseType: 'text'
             setContent(JSON.stringify(response.data, null, 2));
           }
-        } catch (err) {
-          console.error("Error fetching text attachment:", err);
+        })
+        .catch((err) => {
+          console.error(
+            "Error fetching text attachment:",
+            err.response || err.message || err
+          );
           setError(
             err.response?.data?.message ||
               err.message ||
-              "Failed to load text content."
+              `Failed to load text content for ${fileName}.`
           );
-        } finally {
+        })
+        .finally(() => {
           setIsLoading(false);
-        }
-      } else {
-        setContent(fileUrl);
-        setIsLoading(false);
-      }
-    };
-
-    fetchContent();
-  }, [fileUrl, fileType]);
+        });
+    } else {
+      // For non-text types (PDF, images, office docs, etc.), the 'content' will be the fileUrl itself.
+      // The browser or an iframe will handle fetching from this URL.
+      setContent(fileUrl);
+      setIsLoading(false); // No separate fetch needed from here, iframe/img tag will do it
+    }
+  }, [fileUrl, fileType, fileName]); // Added fileName to dependencies for error messages
 
   // const onDocumentLoadSuccessPdf = ({ numPages }) => {
   //   setNumPagesPdf(numPages);
@@ -97,44 +112,50 @@ function AttachmentViewer({ fileUrl, fileName, fileType, onClose }) {
   const renderViewerContent = () => {
     if (isLoading) {
       return (
-        <div className="flex flex-col items-center justify-center h-full p-4">
-          <LoadingSpinner size="lg" />
-          <p className="mt-3 text-gray-600">
-            Loading {fileName || "attachment"}...
+        <div className="flex flex-col items-center justify-center h-full p-4 text-center">
+          <LoadingSpinner size="xl" />
+          <p className="mt-4 text-lg font-medium text-gray-600">
+            Loading preview for <br />{" "}
+            <span className="font-semibold break-all">
+              {fileName || "attachment"}
+            </span>
+            ...
           </p>
         </div>
       );
     }
     if (error) {
       return (
-        <div className="p-6 text-red-700 bg-red-100 rounded-md border border-red-300 text-sm m-4">
-          <p className="font-semibold mb-1 text-lg">Error Loading Attachment</p>
-          <p>{error}</p>
+        <div className="p-6 m-4 text-red-700 bg-red-100 rounded-lg border border-red-300 text-sm shadow-md">
+          <p className="font-bold text-lg mb-2">Error Displaying Attachment</p>
+          <p className="break-words">{error}</p>
+          {fileUrl && fileName && (
+            <div className="mt-4 text-center">
+              <a
+                href={fileUrl}
+                download={fileName}
+                className="px-5 py-2 bg-indigo-600 text-white text-xs font-semibold rounded-md hover:bg-indigo-700 transition-colors shadow-sm"
+              >
+                Download {fileName}
+              </a>
+            </div>
+          )}
         </div>
       );
     }
+    // If !content and !isLoading and !error, it means type was not text and content (URL) is set
+    // but the iframe or img will handle display. This case should be rare if content gets set to fileUrl.
+    // However, if content (the fileUrl) is null/undefined for some reason after processing:
     if (!content && !isLoading) {
-      // Handles cases where content couldn't be set but no explicit error
       return (
         <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-gray-50">
           <FaRegFileAlt className="w-16 h-16 text-gray-400 mb-4" />
           <p className="mb-2 text-gray-700 font-semibold">
-            Cannot Preview File
+            Cannot Prepare Preview
           </p>
           <p className="mb-4 text-gray-600 text-sm max-w-sm">
-            There was an issue preparing the preview for this file. You can try
-            downloading it.
+            The necessary information to display this file is missing.
           </p>
-          {fileUrl &&
-            fileName && ( // Ensure fileUrl and fileName are available for download
-              <a
-                href={fileUrl}
-                download={fileName}
-                className="px-6 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-md hover:bg-indigo-700 transition-colors shadow-sm"
-              >
-                Download {fileName}
-              </a>
-            )}
         </div>
       );
     }
@@ -142,9 +163,20 @@ function AttachmentViewer({ fileUrl, fileName, fileType, onClose }) {
     const type = fileType?.toLowerCase();
 
     if (
-      ["txt", "md", "json", "log", "csv", "xml", "html", "css", "js"].includes(
-        type
-      )
+      [
+        "txt",
+        "md",
+        "json",
+        "log",
+        "csv",
+        "xml",
+        "html",
+        "css",
+        "js",
+        "jsx",
+        "ts",
+        "tsx",
+      ].includes(type)
     ) {
       const textContent =
         typeof content === "string"
@@ -152,7 +184,7 @@ function AttachmentViewer({ fileUrl, fileName, fileType, onClose }) {
           : "Error: Content is not in expected text format.";
       return (
         <div className="w-full h-full p-1">
-          <pre className="w-full h-full p-3 bg-white text-sm overflow-auto border rounded-md whitespace-pre-wrap break-all shadow-inner">
+          <pre className="w-full h-full p-3 bg-white text-sm overflow-auto border rounded-md whitespace-pre-wrap break-all shadow-inner custom-scrollbar">
             {textContent}
           </pre>
         </div>
@@ -160,7 +192,7 @@ function AttachmentViewer({ fileUrl, fileName, fileType, onClose }) {
     } else if (type === "pdf") {
       return (
         <iframe
-          src={content}
+          src={content} // content is fileUrl
           title={fileName || "PDF Viewer"}
           className="w-full h-full border-0"
           type="application/pdf"
@@ -178,7 +210,7 @@ function AttachmentViewer({ fileUrl, fileName, fileType, onClose }) {
         //       <Page
         //         key={`page_${index + 1}`}
         //         pageNumber={index + 1}
-        //         width={Math.min(800, (document.querySelector('.flex-grow.overflow-auto.bg-gray-100')?.clientWidth || 800) - 40)} // Dynamic width
+        //         width={Math.min(800, (document.querySelector('.flex-grow.overflow-auto.bg-gray-100')?.clientWidth || 800) - 40)}
         //         className="mb-2 shadow-md"
         //       />
         //     ))}
@@ -190,8 +222,6 @@ function AttachmentViewer({ fileUrl, fileName, fileType, onClose }) {
     ) {
       return (
         <div className="w-full h-full flex items-center justify-center p-2 bg-gray-200">
-          {" "}
-          {/* Changed bg for contrast */}
           <img
             src={content}
             alt={fileName || "Image attachment"}
@@ -202,25 +232,20 @@ function AttachmentViewer({ fileUrl, fileName, fileType, onClose }) {
     } else if (["docx", "doc", "ppt", "pptx", "xls", "xlsx"].includes(type)) {
       return (
         <div className="w-full h-full flex flex-col items-stretch justify-start p-1 bg-gray-200">
-          {" "}
-          {/* Changed padding */}
           <div className="p-3 text-center bg-white border-b border-gray-300 text-sm text-gray-700 flex-shrink-0">
-            Previewing <strong>{fileName}</strong> (.<em>{type}</em>). For the
-            best experience, or if preview fails, please download the file.
+            Previewing <strong>{fileName}</strong> (.<em>{type}</em>). Direct
+            browser preview may vary. For the best experience, or if preview
+            fails, please download.
           </div>
           <iframe
-            // Using Google Docs Viewer as an example. Ensure 'content' (fileUrl) is publicly accessible.
-            src={`https://docs.google.com/gview?url=${encodeURIComponent(
-              content
-            )}&embedded=true`}
-            // src={content} // Alternative: Direct src, browser handles it (might download)
+            src={content} // Direct src from your backend
             title={fileName || "Office Document Viewer"}
-            className="w-full flex-grow border-0 bg-white" // Removed h-[] for flex-grow
-            sandbox="allow-scripts allow-same-origin allow-popups allow-forms" // Keep sandbox for security
+            className="w-full flex-grow border-0 bg-white"
+            sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
           />
           <div className="p-3 text-center bg-white border-t border-gray-300 flex-shrink-0">
             <a
-              href={content} // Direct download link
+              href={content}
               download={fileName}
               className="px-5 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-md hover:bg-indigo-700 transition-colors shadow-sm"
             >
@@ -230,7 +255,6 @@ function AttachmentViewer({ fileUrl, fileName, fileType, onClose }) {
         </div>
       );
     } else if (["mp3", "wav", "ogg", "aac", "m4a"].includes(type)) {
-      // Added m4a
       return (
         <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-gray-200">
           <FaRegFileAudio className="w-16 h-16 text-indigo-500 mb-4" />
@@ -245,14 +269,13 @@ function AttachmentViewer({ fileUrl, fileName, fileType, onClose }) {
           <a
             href={content}
             download={fileName}
-            className="mt-6 px-4 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700 transition-colors"
+            className="mt-6 px-4 py-2 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700 transition-colors"
           >
             Download
           </a>
         </div>
       );
     } else if (["mp4", "webm", "ogv", "mov"].includes(type)) {
-      // Added mov
       return (
         <div className="w-full h-full flex flex-col items-center justify-center p-2 bg-black">
           <FaRegFileVideo className="w-16 h-16 text-indigo-400 mb-4" />
@@ -275,7 +298,7 @@ function AttachmentViewer({ fileUrl, fileName, fileType, onClose }) {
       );
     }
 
-    // Fallback for genuinely unsupported or unknown types
+    // Fallback for truly unsupported or unknown types
     return (
       <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-gray-50">
         <FaRegFileAlt className="w-16 h-16 text-gray-400 mb-4" />
@@ -287,8 +310,8 @@ function AttachmentViewer({ fileUrl, fileName, fileType, onClose }) {
           view with a compatible application.
         </p>
         <a
-          href={content}
-          download={fileName || "file"} // Ensure fileName is not undefined
+          href={content} // content here is the fileUrl
+          download={fileName || "file"}
           className="px-6 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-md hover:bg-indigo-700 transition-colors shadow-sm"
         >
           Download {fileName || "File"}
@@ -318,7 +341,6 @@ function AttachmentViewer({ fileUrl, fileName, fileType, onClose }) {
       >
         <header className="flex items-center justify-between p-3.5 border-b bg-white shadow-sm sticky top-0 z-10 flex-shrink-0">
           <div className="flex items-center gap-2 overflow-hidden min-w-0">
-            {/* Dynamically choose icon in header based on type */}
             {fileType?.toLowerCase() === "pdf" ? (
               <FaRegFilePdf className="text-red-600 h-5 w-5 flex-shrink-0" />
             ) : [
@@ -334,6 +356,14 @@ function AttachmentViewer({ fileUrl, fileName, fileType, onClose }) {
               <FaRegFileImage className="text-teal-600 h-5 w-5 flex-shrink-0" />
             ) : ["doc", "docx"].includes(fileType?.toLowerCase()) ? (
               <FaRegFileWord className="text-blue-600 h-5 w-5 flex-shrink-0" />
+            ) : ["mp4", "webm", "ogv", "mov"].includes(
+                fileType?.toLowerCase()
+              ) ? (
+              <FaRegFileVideo className="text-orange-500 h-5 w-5 flex-shrink-0" />
+            ) : ["mp3", "wav", "ogg", "aac", "m4a"].includes(
+                fileType?.toLowerCase()
+              ) ? (
+              <FaRegFileAudio className="text-purple-500 h-5 w-5 flex-shrink-0" />
             ) : (
               <FaRegFileAlt className="text-indigo-600 h-5 w-5 flex-shrink-0" />
             )}
@@ -353,8 +383,6 @@ function AttachmentViewer({ fileUrl, fileName, fileType, onClose }) {
           </button>
         </header>
         <main className="flex-grow overflow-auto bg-gray-100 relative">
-          {" "}
-          {/* Added relative for potential absolute positioned elements inside content */}
           {renderViewerContent()}
         </main>
       </motion.div>
