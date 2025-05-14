@@ -1,18 +1,10 @@
-// The issue is likely NOT in this Navbar component if other links like "Publications" and "Help" work.
-// Please check your main application's routing configuration (e.g., in App.js or your routing file).
-// Ensure you have a <Route> defined for the path "/explore", like:
-// import ExplorePage from './pages/ExplorePage'; // Or wherever your Explore page component is
-// <Routes>
-//   ...
-//   <Route path="/explore" element={<ExplorePage />} />
-//   ...
-// </Routes>
-// Also, check the ExplorePage component itself for any errors that might prevent it from rendering.
-
 import React, { useState, useEffect, useRef } from "react";
 import PropTypes from "prop-types";
 import { Link, NavLink } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+
+// Import your Notifications component
+import Notifications from "./Notifications"; // Adjust path if Notifications.jsx is elsewhere
 
 // --- SVG Icon for Logo/Brand ---
 const BrandIcon = ({
@@ -29,41 +21,29 @@ const BrandIcon = ({
 );
 
 // --- Main Navigation Links Data ---
-// Add icons here if you want them next to the labels
-// import { FaSearch, FaBookOpen, FaLightbulb, FaQuestionCircle } from 'react-icons/fa';
 const mainNavLinks = [
-  {
-    path: "/explore",
-    label: "Explore" /* icon: <FaSearch className="mr-1.5" /> */,
-  },
-  {
-    path: "/publications",
-    label: "Publications" /* icon: <FaBookOpen className="mr-1.5" /> */,
-  },
-  {
-    path: "/projects",
-    label: "Projects" /* icon: <FaLightbulb className="mr-1.5" /> */,
-  },
-  {
-    path: "/help-center",
-    label: "Help" /* icon: <FaQuestionCircle className="mr-1.5" /> */,
-  },
+  { path: "/explore", label: "Explore" },
+  { path: "/publications", label: "Publications" },
+  { path: "/projects", label: "Projects" },
+  { path: "/help-center", label: "Help" },
 ];
 
 const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
-  const profileDropdownRef = useRef(null);
-  const profileButtonRef = useRef(null); // Ref for the profile button
+  // Notification state and refs are now handled by the Notifications.jsx component
 
-  // Effect for closing profile dropdown on outside click or Escape key
+  const profileDropdownRef = useRef(null);
+  const profileButtonRef = useRef(null);
+
+  // Effect for closing profile dropdown
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
         profileDropdownRef.current &&
         !profileDropdownRef.current.contains(event.target) &&
         profileButtonRef.current &&
-        !profileButtonRef.current.contains(event.target) // Also check if click was on the button itself
+        !profileButtonRef.current.contains(event.target)
       ) {
         setProfileDropdownOpen(false);
       }
@@ -71,7 +51,7 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
     const handleEscapeKey = (event) => {
       if (event.key === "Escape") {
         setProfileDropdownOpen(false);
-        profileButtonRef.current?.focus(); // Return focus to the button that opened it
+        profileButtonRef.current?.focus();
       }
     };
 
@@ -113,9 +93,8 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
       ]
     : [];
 
-  // Tailwind CSS Classes for Navigation Links
   const baseLinkClasses =
-    "relative px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-800 group flex items-center"; // Added flex items-center
+    "relative px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-800 group flex items-center";
   const activeLinkClass = "text-white";
   const inactiveLinkClass = "text-gray-300 hover:text-white";
 
@@ -136,13 +115,13 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
          : "text-gray-200 hover:bg-gray-700 hover:text-white"
      }`;
 
-  // Toggle handlers
   const toggleMobileMenu = () => setMobileMenuOpen((prev) => !prev);
   const closeMobileMenu = () => setMobileMenuOpen(false);
   const toggleProfileDropdown = () => setProfileDropdownOpen((prev) => !prev);
   const closeProfileDropdown = () => setProfileDropdownOpen(false);
+  // Notification toggles are handled by Notifications.jsx
 
-  // Framer Motion Animation Variants
+  // Framer Motion Animation Variants (only for profile dropdown and mobile menu now)
   const dropdownVariants = {
     hidden: { opacity: 0, y: -10, scale: 0.95 },
     visible: {
@@ -188,10 +167,8 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
     <nav className="bg-gray-800/90 fixed w-full z-50 top-0 shadow-lg select-none backdrop-blur-sm border-b border-gray-700/50">
       <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
+          {/* Left side: Mobile toggle + Logo */}
           <div className="flex items-center">
-            {" "}
-            {/* Left side: Mobile toggle (for small screens) + Logo */}
-            {/* Mobile Menu Toggle Button */}
             <div className="flex sm:hidden mr-2">
               <button
                 onClick={toggleMobileMenu}
@@ -260,7 +237,6 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                 </AnimatePresence>
               </button>
             </div>
-            {/* Logo */}
             <Link
               to="/"
               className="flex-shrink-0 flex items-center group"
@@ -270,9 +246,9 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
               <BrandIcon />
             </Link>
           </div>
-          {/* Right Side: Desktop Nav & Auth/Profile */}
+
+          {/* Right Side: Desktop Nav & Icons/Auth/Profile */}
           <div className="flex items-center">
-            {/* Desktop Navigation Links */}
             <div className="hidden sm:flex sm:items-center sm:space-x-1 md:space-x-3">
               {mainNavLinks.map((link, i) => (
                 <motion.div
@@ -289,119 +265,127 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
               ))}
             </div>
 
-            {/* Separator before Auth/Profile on Desktop if main nav links are present */}
             {mainNavLinks.length > 0 && (
               <div className="hidden sm:block sm:ml-3 sm:mr-1 sm:border-l sm:border-gray-700 sm:h-6"></div>
             )}
 
-            {/* Auth or User Profile Dropdown */}
-            <div className="relative ml-3" ref={profileDropdownRef}>
+            {/* Icons (Notifications) and Auth/Profile Section */}
+            <div className="flex items-center ml-2">
               {" "}
-              {/* Consistent margin */}
-              {isLoggedIn && currentUser ? (
+              {/* Ensure `ml-2` or similar spacing if needed */}
+              {isLoggedIn && currentUser && (
                 <>
-                  <motion.button
-                    ref={profileButtonRef}
-                    type="button"
-                    onClick={toggleProfileDropdown}
-                    className="flex text-sm bg-gray-700/50 rounded-full focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-gray-800 p-0.5 hover:ring-sky-400 transition-all"
-                    id="user-menu-button"
-                    aria-expanded={profileDropdownOpen}
-                    aria-haspopup="true"
-                    whileHover={{
-                      scale: 1.1,
-                      boxShadow: "0px 0px 8px rgb(56, 189, 248)",
-                    }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <span className="sr-only">Open user menu</span>
-                    <img
-                      className="h-8 w-8 rounded-full object-cover"
-                      src={
-                        currentUser.profilePictureUrl ||
-                        `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                          currentUser.fullName || currentUser.username || "U"
-                        )}&background=random&color=fff&size=128&font-size=0.5&bold=true`
-                      }
-                      alt="User profile"
-                    />
-                  </motion.button>
-                  <AnimatePresence>
-                    {profileDropdownOpen && (
-                      <motion.div
-                        variants={dropdownVariants}
-                        initial="hidden"
-                        animate="visible"
-                        exit="exit"
-                        className="absolute right-0 mt-2.5 w-64 origin-top-right rounded-lg bg-white py-1 shadow-2xl ring-1 ring-black ring-opacity-5 focus:outline-none z-30"
-                        role="menu"
-                        aria-orientation="vertical"
-                        aria-labelledby="user-menu-button"
-                      >
-                        {profileDropdownLinks.map((item, index) => {
-                          if (item.type === "header")
-                            return (
-                              <div
-                                key={`header-${index}`}
-                                className="px-4 py-3 border-b border-gray-100"
-                              >
-                                <p
-                                  className="text-sm font-semibold text-gray-800 truncate"
-                                  title={item.label}
+                  {/* Use your Notifications component here */}
+                  <Notifications />
+
+                  {/* Profile Dropdown */}
+                  <div className="relative ml-3" ref={profileDropdownRef}>
+                    {" "}
+                    {/* Added ml-3 for spacing from Notifications */}
+                    <motion.button
+                      ref={profileButtonRef}
+                      type="button"
+                      onClick={toggleProfileDropdown}
+                      className="flex text-sm bg-gray-700/50 rounded-full focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-gray-800 p-0.5 hover:ring-sky-400 transition-all"
+                      id="user-menu-button"
+                      aria-expanded={profileDropdownOpen}
+                      aria-haspopup="true"
+                      whileHover={{
+                        scale: 1.1,
+                        boxShadow: "0px 0px 8px rgb(56, 189, 248)",
+                      }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <span className="sr-only">Open user menu</span>
+                      <img
+                        className="h-8 w-8 rounded-full object-cover"
+                        src={
+                          currentUser.profilePictureUrl ||
+                          `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                            currentUser.fullName || currentUser.username || "U"
+                          )}&background=random&color=fff&size=128&font-size=0.5&bold=true`
+                        }
+                        alt="User profile"
+                      />
+                    </motion.button>
+                    <AnimatePresence>
+                      {profileDropdownOpen && (
+                        <motion.div
+                          variants={dropdownVariants}
+                          initial="hidden"
+                          animate="visible"
+                          exit="exit"
+                          className="absolute right-0 mt-2.5 w-64 origin-top-right rounded-lg bg-white py-1 shadow-2xl ring-1 ring-black ring-opacity-5 focus:outline-none z-30"
+                          role="menu"
+                          aria-orientation="vertical"
+                          aria-labelledby="user-menu-button"
+                        >
+                          {profileDropdownLinks.map((item, index) => {
+                            if (item.type === "header")
+                              return (
+                                <div
+                                  key={`header-${index}`}
+                                  className="px-4 py-3 border-b border-gray-100"
                                 >
-                                  {item.label}
-                                </p>
-                                {item.email && (
                                   <p
-                                    className="text-xs text-gray-500 truncate"
-                                    title={item.email}
+                                    className="text-sm font-semibold text-gray-800 truncate"
+                                    title={item.label}
                                   >
-                                    {item.email}
+                                    {item.label}
                                   </p>
-                                )}
-                              </div>
+                                  {item.email && (
+                                    <p
+                                      className="text-xs text-gray-500 truncate"
+                                      title={item.email}
+                                    >
+                                      {item.email}
+                                    </p>
+                                  )}
+                                </div>
+                              );
+                            if (item.type === "divider")
+                              return (
+                                <hr
+                                  key={`divider-${index}`}
+                                  className="border-gray-100 my-1"
+                                />
+                              );
+                            return item.type === "link" ? (
+                              <NavLink
+                                to={item.path}
+                                key={item.path}
+                                role="menuitem"
+                                tabIndex={-1}
+                                onClick={closeProfileDropdown}
+                                className={({ isActive }) =>
+                                  `block px-4 py-2.5 text-sm rounded-md mx-1 my-0.5 transition-colors ${
+                                    isActive
+                                      ? "bg-sky-500 text-white font-semibold"
+                                      : "text-gray-700 hover:bg-sky-50 hover:text-sky-600"
+                                  }`
+                                }
+                              >
+                                {item.label}
+                              </NavLink>
+                            ) : (
+                              <button
+                                onClick={item.action}
+                                key={item.label}
+                                role="menuitem"
+                                tabIndex={-1}
+                                className="block w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-sky-50 hover:text-sky-600 rounded-md mx-1 my-0.5 transition-colors focus:bg-sky-100 focus:outline-none"
+                              >
+                                {item.label}
+                              </button>
                             );
-                          if (item.type === "divider")
-                            return (
-                              <hr
-                                key={`divider-${index}`}
-                                className="border-gray-100 my-1"
-                              />
-                            );
-                          return item.type === "link" ? (
-                            <NavLink
-                              to={item.path}
-                              key={item.path}
-                              role="menuitem"
-                              tabIndex={-1}
-                              onClick={closeProfileDropdown}
-                              className={({ isActive }) =>
-                                `block px-4 py-2.5 text-sm rounded-md mx-1 my-0.5 transition-colors ${
-                                  isActive
-                                    ? "bg-sky-500 text-white font-semibold"
-                                    : "text-gray-700 hover:bg-sky-50 hover:text-sky-600"
-                                }`
-                              }
-                            >
-                              {item.label}
-                            </NavLink>
-                          ) : (
-                            <button
-                              onClick={item.action}
-                              key={item.label}
-                              role="menuitem"
-                              tabIndex={-1}
-                              className="block w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-sky-50 hover:text-sky-600 rounded-md mx-1 my-0.5 transition-colors focus:bg-sky-100 focus:outline-none"
-                            >
-                              {item.label}
-                            </button>
-                          );
-                        })}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                          })}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </>
-              ) : (
+              )}
+              {!isLoggedIn && (
                 <div className="hidden sm:flex sm:items-center sm:space-x-2 ml-3">
                   <NavLink
                     to="/login"
@@ -418,13 +402,11 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                 </div>
               )}
             </div>
-          </div>{" "}
-          {/* End Right Side Group */}
-        </div>{" "}
-        {/* End Main Flex Container */}
-      </div>{" "}
-      {/* End Max Width Container */}
-      {/* Mobile Navigation Menu (Dropdown) */}
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile Navigation Menu */}
       <AnimatePresence>
         {mobileMenuOpen && (
           <motion.div
@@ -433,9 +415,10 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
             initial="closed"
             animate="open"
             exit="closed"
-            className="sm:hidden absolute inset-x-0 top-16 bg-gray-800/95 shadow-xl py-3 z-40 border-t border-gray-700/50 backdrop-blur-sm overflow-y-auto max-h-[calc(100vh-4rem)]" // Added max-height and overflow
+            className="sm:hidden absolute inset-x-0 top-16 bg-gray-800/95 shadow-xl py-3 z-40 border-t border-gray-700/50 backdrop-blur-sm overflow-y-auto max-h-[calc(100vh-4rem)]"
             id="mobile-menu"
           >
+            {/* Navigation links for mobile */}
             <div className="space-y-1 px-3 pt-2 pb-3">
               {mainNavLinks.map((link) => (
                 <NavLink
@@ -448,6 +431,7 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                 </NavLink>
               ))}
             </div>
+            {/* Auth links for mobile if not logged in */}
             {!isLoggedIn && (
               <div className="border-t border-gray-700 pt-4 pb-3 px-3 space-y-2">
                 <NavLink
@@ -466,9 +450,12 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                 </NavLink>
               </div>
             )}
+            {/* Profile section for mobile if logged in */}
             {isLoggedIn && currentUser && (
               <div className="border-t border-gray-700 pt-4 pb-3 px-3">
                 <div className="flex items-center px-2 mb-3">
+                  {/* Mobile Notifications could also go here if you want them separate from the header icon */}
+                  {/* For now, Notifications component is in the main header, visible on mobile too */}
                   <div className="flex-shrink-0">
                     <img
                       className="h-10 w-10 rounded-full object-cover"
