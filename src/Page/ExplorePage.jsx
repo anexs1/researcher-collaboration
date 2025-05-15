@@ -1,22 +1,22 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { Link, useSearchParams } from "react-router-dom"; // useSearchParams for URL state
-import PaginationControls from "../Component/PaginationControls"; // <<<--- CORRECTED IMPORT PATH
+import { Link, useSearchParams } from "react-router-dom";
+import PaginationControls from "../Component/PaginationControls"; // <<< CORRECTED IMPORT PATH
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
-const DEFAULT_PROFILE_PIC = "/default-avatar.png";
+const DEFAULT_PROFILE_PIC = "/default-avatar.png"; // Ensure this is in your public folder
 
-// Example roles - fetch these from an API or define statically if fixed
+// Updated USER_ROLES to exclude 'admin' for the filter dropdown
 const USER_ROLES = [
   "academic",
   "medical",
   "corporate",
   "non-researcher",
   "user",
-  "admin",
+  // "admin", // Admin role removed from frontend filter options
 ];
 
-// Simple debounce function
+// Simple debounce function (keep as is)
 function debounce(func, delay) {
   let timeout;
   return function (...args) {
@@ -32,7 +32,6 @@ function ExplorePage() {
   const [error, setError] = useState(null);
   const [pagination, setPagination] = useState(null);
 
-  // --- Filter and Search State ---
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState(
     searchParams.get("search") || ""
@@ -43,7 +42,8 @@ function ExplorePage() {
   const [selectedUniversity, setSelectedUniversity] = useState(
     searchParams.get("university") || ""
   );
-  const currentPage = parseInt(searchParams.get("page") || "1", 10);
+  // currentPage will be derived from searchParams in useEffect to ensure consistency
+  const currentPageFromUrl = parseInt(searchParams.get("page") || "1", 10);
 
   const fetchUsers = useCallback(
     async (pageToFetch, currentSearchTerm, currentRole, currentUniversity) => {
@@ -52,14 +52,24 @@ function ExplorePage() {
 
       const queryParams = new URLSearchParams();
       queryParams.append("page", pageToFetch.toString());
-      queryParams.append("limit", "12"); // Or your preferred limit
+      queryParams.append("limit", "12");
       if (currentSearchTerm) queryParams.append("search", currentSearchTerm);
-      if (currentRole) queryParams.append("role", currentRole);
+      if (currentRole) queryParams.append("role", currentRole); // Backend handles if 'admin' is passed
       if (currentUniversity)
         queryParams.append("university", currentUniversity);
 
-      // Update URL search params without causing a full page reload
-      setSearchParams(queryParams, { replace: true });
+      // Update URL immediately to reflect current fetching state
+      // This also makes sure that if fetchUsers is called directly (e.g. on mount), the URL is in sync
+      const currentUrlParams = new URLSearchParams(searchParams.toString());
+      currentUrlParams.set("page", pageToFetch.toString());
+      if (currentSearchTerm) currentUrlParams.set("search", currentSearchTerm);
+      else currentUrlParams.delete("search");
+      if (currentRole) currentUrlParams.set("role", currentRole);
+      else currentUrlParams.delete("role");
+      if (currentUniversity)
+        currentUrlParams.set("university", currentUniversity);
+      else currentUrlParams.delete("university");
+      setSearchParams(currentUrlParams, { replace: true });
 
       try {
         const response = await fetch(
@@ -79,6 +89,7 @@ function ExplorePage() {
         if (result.success) {
           setUsers(result.data);
           setPagination(result.pagination);
+          // The actual page number is now part of searchParams and handled by useEffect dependency
         } else {
           throw new Error(result.message || "Failed to fetch users.");
         }
@@ -92,49 +103,85 @@ function ExplorePage() {
       }
     },
     [setSearchParams]
-  );
+  ); // API_BASE_URL is static, not needed as dependency
 
   useEffect(() => {
-    const pageFromUrl = parseInt(searchParams.get("page") || "1", 10);
-    const searchFromUrl = searchParams.get("search") || "";
-    const roleFromUrl = searchParams.get("role") || "";
-    const uniFromUrl = searchParams.get("university") || "";
+    // This effect now correctly reads all filter states from the URL (searchParams)
+    // and triggers fetchUsers when any of them change.
+    const page = parseInt(searchParams.get("page") || "1", 10);
+    const search = searchParams.get("search") || "";
+    const role = searchParams.get("role") || "";
+    const university = searchParams.get("university") || "";
 
-    fetchUsers(pageFromUrl, searchFromUrl, roleFromUrl, uniFromUrl);
-  }, [searchParams, fetchUsers]);
+    // Update local state for input fields if they differ from URL (e.g., on back/forward navigation)
+    if (search !== searchTerm) setSearchTerm(search);
+    if (role !== selectedRole) setSelectedRole(role);
+    if (university !== selectedUniversity) setSelectedUniversity(university);
+
+    fetchUsers(page, search, role, university);
+  }, [searchParams, fetchUsers, searchTerm, selectedRole, selectedUniversity]); // Add local state vars for inputs to sync them
+
+  const updateUrlParamsAndFetch = (newParamsData) => {
+    const newParams = new URLSearchParams(searchParams.toString()); // Preserve existing params like limit
+    newParams.set("page", "1"); // Reset to page 1 for new filters/search
+
+    Object.entries(newParamsData).forEach(([key, value]) => {
+      if (value) {
+        newParams.set(key, value);
+      } else {
+        newParams.delete(key); // Remove if value is empty
+      }
+    });
+    setSearchParams(newParams, { replace: true });
+  };
 
   const handleSearchChange = (event) => {
     const newSearchTerm = event.target.value;
-    setSearchTerm(newSearchTerm);
-    const newParams = new URLSearchParams(searchParams);
-    newParams.set("search", newSearchTerm);
-    newParams.set("page", "1");
-    setSearchParams(newParams, { replace: true });
+    setSearchTerm(newSearchTerm); // Update local state for controlled input
+    // Debounce the actual URL update and fetch
+    debouncedUpdateUrl({ search: newSearchTerm });
   };
 
   const handleRoleChange = (event) => {
     const newRole = event.target.value;
     setSelectedRole(newRole);
-    const newParams = new URLSearchParams(searchParams);
-    newParams.set("role", newRole);
-    newParams.set("page", "1");
-    setSearchParams(newParams, { replace: true });
+    updateUrlParamsAndFetch({
+      role: newRole,
+      search: searchTerm,
+      university: selectedUniversity,
+    });
   };
 
   const handleUniversityChange = (event) => {
     const newUniversity = event.target.value;
     setSelectedUniversity(newUniversity);
-    const newParams = new URLSearchParams(searchParams);
-    newParams.set("university", newUniversity);
-    newParams.set("page", "1");
-    setSearchParams(newParams, { replace: true });
+    // Debounce the actual URL update and fetch
+    debouncedUpdateUrl({ university: newUniversity });
   };
 
+  // Debounced function to update URL params for search/university to avoid too many API calls while typing
+  const debouncedUpdateUrl = useCallback(
+    debounce((filterUpdates) => {
+      const newParams = new URLSearchParams(searchParams.toString());
+      newParams.set("page", "1"); // Reset to page 1
+      for (const key in filterUpdates) {
+        if (filterUpdates[key]) {
+          newParams.set(key, filterUpdates[key]);
+        } else {
+          newParams.delete(key);
+        }
+      }
+      setSearchParams(newParams, { replace: true });
+    }, 700), // 700ms debounce
+    [searchParams, setSearchParams]
+  );
+
   const handlePageChange = (newPage) => {
+    const currentUrlPage = parseInt(searchParams.get("page") || "1", 10);
     if (
       newPage >= 1 &&
       newPage <= (pagination?.totalPages || 1) &&
-      newPage !== currentPage &&
+      newPage !== currentUrlPage && // Compare with URL page
       !loading
     ) {
       const newParams = new URLSearchParams(searchParams);
@@ -147,7 +194,11 @@ function ExplorePage() {
     setSearchTerm("");
     setSelectedRole("");
     setSelectedUniversity("");
-    setSearchParams({ page: "1", limit: "12" }, { replace: true });
+    // Only keep page and limit if they were part of default, or just reset to page 1
+    const defaultParams = new URLSearchParams();
+    defaultParams.set("page", "1");
+    defaultParams.set("limit", "12"); // Assuming 12 is your default limit
+    setSearchParams(defaultParams, { replace: true });
   };
 
   if (loading && users.length === 0) {
@@ -180,36 +231,40 @@ function ExplorePage() {
         <p className="text-gray-600 mb-6">
           Find and connect with researchers and professionals in various fields.
         </p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 items-end">
           <input
             type="text"
             placeholder="Search by name, institution..."
-            value={searchTerm}
+            value={searchTerm} // Controlled component
             onChange={handleSearchChange}
-            className="col-span-1 md:col-span-2 p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="sm:col-span-2 md:col-span-1 p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
           <select
-            value={selectedRole}
+            value={selectedRole} // Controlled component
             onChange={handleRoleChange}
             className="p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="">All Roles</option>
-            {USER_ROLES.map((role) => (
-              <option key={role} value={role} className="capitalize">
-                {role.charAt(0).toUpperCase() + role.slice(1)}
-              </option>
-            ))}
+            {USER_ROLES.map(
+              (
+                role // USER_ROLES now excludes 'admin'
+              ) => (
+                <option key={role} value={role} className="capitalize">
+                  {role.charAt(0).toUpperCase() + role.slice(1)}
+                </option>
+              )
+            )}
           </select>
           <input
             type="text"
             placeholder="Filter by University"
-            value={selectedUniversity}
+            value={selectedUniversity} // Controlled component
             onChange={handleUniversityChange}
-            className="col-span-1 md:col-span-2 p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="sm:col-span-2 md:col-span-1 p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
           <button
             onClick={clearFilters}
-            className="p-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors shadow-sm font-medium"
+            className="md:col-start-3 p-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors shadow-sm font-medium"
           >
             Clear Filters
           </button>
@@ -219,13 +274,11 @@ function ExplorePage() {
       {loading && (
         <p className="text-center text-gray-600 my-4">Updating user list...</p>
       )}
-      {error &&
-        !loading && ( // Show error only if not loading
-          <p className="text-center text-red-500 my-4 bg-red-50 p-3 rounded-md">
-            Error: {error}
-          </p>
-        )}
-
+      {error && !loading && (
+        <p className="text-center text-red-500 my-4 bg-red-50 p-3 rounded-md">
+          Error: {error}
+        </p>
+      )}
       {!loading && users.length === 0 && (
         <div className="text-center text-gray-500 py-10 text-lg">
           <p>No users found matching your criteria.</p>
@@ -271,14 +324,14 @@ function ExplorePage() {
                       {user.jobTitle}
                     </p>
                   )}
-                  {user.role && (
-                    <p className="text-xs text-blue-500 capitalize mt-0.5">
-                      {user.role}
-                    </p>
-                  )}
+                  {user.role &&
+                    user.role !== "admin" && ( // Don't display 'admin' role on card
+                      <p className="text-xs text-blue-500 capitalize mt-0.5">
+                        {user.role}
+                      </p>
+                    )}
                 </div>
               </div>
-
               {(user.university ||
                 user.medicalSpecialty ||
                 user.companyName) && (
@@ -338,7 +391,6 @@ function ExplorePage() {
                     )}
                 </div>
               )}
-
               {user.bio && (
                 <p className="text-xs text-gray-500 mb-3 line-clamp-2 flex-grow min-h-[30px]">
                   {user.bio}
@@ -385,13 +437,13 @@ function ExplorePage() {
                 </div>
               </div>
             )}
-
             <div className="p-5 mt-auto">
               <Link
                 to={`/users/${user.id}/projects`}
                 className="w-full block text-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 transition-colors text-sm font-medium shadow-md hover:shadow-lg"
               >
-                View Projects
+                {" "}
+                View Projects{" "}
               </Link>
             </div>
           </div>
@@ -400,7 +452,7 @@ function ExplorePage() {
 
       {!loading && pagination && pagination.totalPages > 1 && (
         <PaginationControls
-          currentPage={currentPage}
+          currentPage={currentPageFromUrl} // Use page from URL for PaginationControls
           totalPages={pagination.totalPages}
           onPageChange={handlePageChange}
           isLoading={loading}
@@ -409,5 +461,4 @@ function ExplorePage() {
     </div>
   );
 }
-
 export default ExplorePage;
