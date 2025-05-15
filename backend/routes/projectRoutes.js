@@ -1,5 +1,7 @@
 import express from "express";
 import multer from "multer";
+
+// Import controller functions
 import {
   getAllProjects,
   getMyProjects,
@@ -9,14 +11,15 @@ import {
   deleteProject,
   getProjectRequests,
   getProjectMembers,
-  adminGetAllProjects, // Assuming this was correctly imported from your controller
-  getProjectsByUserId, // <<<=== NEWLY ADDED IMPORT
+  adminGetAllProjects, // This import is correct IF adminGetAllProjects is exported from the controller
+  getProjectsByUserId,
 } from "../controllers/projectController.js";
-// Import optionalProtect as well
+
+// Import middleware
 import {
   protect,
   optionalProtect,
-  adminOnly, // Assuming this is your admin middleware from authMiddleware.js
+  adminOnly, // This is your admin-checking middleware
 } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -27,13 +30,10 @@ const fileFilter = (req, file, cb) => {
   if (file.mimetype.startsWith("image/")) {
     cb(null, true);
   } else {
-    // For Multer, it's better to pass a MulterError or a custom error that your error handler can identify
-    // cb(new Error("Invalid file type. Only images allowed."), false); // This works but...
-    // Using MulterError or a specific error code can be more structured for error handling middleware
     cb(
       new multer.MulterError(
-        "LIMIT_UNEXPECTED_FILE",
-        "Invalid file type. Only images allowed."
+        "LIMIT_UNEXPECTED_FILE", // Multer error code for unexpected file type
+        "Invalid file type. Only images (e.g., JPEG, PNG) are allowed." // Custom message part
       ),
       false
     );
@@ -52,12 +52,12 @@ const upload = multer({
 // GET /api/projects - View all projects
 router.get("/", optionalProtect, getAllProjects);
 
-// GET /api/projects/user/:userId - View projects for a specific user << NEW ROUTE
-// Added (\\d+) to ensure userId is numeric and avoid conflict with other string-based routes
+// GET /api/projects/user/:userId - View projects for a specific user
+// (\\d+) ensures userId is numeric to avoid conflicts
 router.get("/user/:userId(\\d+)", optionalProtect, getProjectsByUserId);
 
 // GET /api/projects/:id - View a single project by ID
-// Added (\\d+) to ensure id is numeric
+// (\\d+) ensures id is numeric
 router.get("/:id(\\d+)", optionalProtect, getProjectById);
 
 // --- PROTECTED ROUTES (Require Login via 'protect' middleware) ---
@@ -65,18 +65,15 @@ router.get("/:id(\\d+)", optionalProtect, getProjectById);
 router.get("/my", protect, getMyProjects);
 
 // GET /api/projects/:projectId/requests - View join requests for a specific project
-// Added (\\d+) to ensure projectId is numeric
 router.get("/:projectId(\\d+)/requests", protect, getProjectRequests);
 
 // GET /api/projects/:projectId/members - View members of a specific project
-// Added (\\d+) to ensure projectId is numeric
 router.get("/:projectId(\\d+)/members", protect, getProjectMembers);
 
 // POST /api/projects - Create a new project
 router.post("/", protect, upload.single("projectImageFile"), createProject);
 
 // PUT /api/projects/:id - Update a project by ID
-// Added (\\d+) to ensure id is numeric
 router.put(
   "/:id(\\d+)",
   protect,
@@ -85,12 +82,12 @@ router.put(
 );
 
 // DELETE /api/projects/:id - Delete a project by ID
-// Added (\\d+) to ensure id is numeric
 router.delete("/:id(\\d+)", protect, deleteProject);
 
 // --- ADMIN ROUTES (Example - Require Login and Admin Role) ---
-// This was commented out in your provided routes, uncomment if you intend to use it
-// router.get("/admin/all", protect, adminOnly, adminGetAllProjects);
+// If you want to use this route, ensure adminGetAllProjects is implemented beyond a placeholder in your controller.
+// If you uncomment this, the import for adminGetAllProjects must be valid (i.e., it's exported from the controller).
+router.get("/admin/all", protect, adminOnly, adminGetAllProjects); // <<<< IF YOU USE THIS, THE IMPORT MUST BE VALID
 
 // --- Multer Error Handling Middleware (Specific to this router) ---
 // Placed at the end of this router to catch multer-specific errors from routes above
@@ -100,22 +97,24 @@ router.use((err, req, res, next) => {
       "Multer Error in Project Routes:",
       err.message,
       "Field:",
-      err.field
+      err.field // This field property is useful for debugging
     );
     let message = "File upload error: " + err.message;
     if (err.code === "LIMIT_FILE_SIZE") {
       message = "File is too large. Maximum size is 5MB.";
-    } else if (
-      err.code === "LIMIT_UNEXPECTED_FILE" &&
-      err.message === "Invalid file type. Only images allowed."
-    ) {
-      // This is the custom message we set in fileFilter for wrong type
-      message = "Invalid file type. Only images (e.g., JPEG, PNG) are allowed.";
     } else if (err.code === "LIMIT_UNEXPECTED_FILE") {
-      message =
-        "Unexpected file field or too many files. Ensure you are uploading to 'projectImageFile'.";
+      // Check if our custom message part is in err.message
+      if (err.message.includes("Invalid file type. Only images allowed.")) {
+        message =
+          "Invalid file type. Only images (e.g., JPEG, PNG) are allowed.";
+      } else {
+        message =
+          "Unexpected file field or too many files. Ensure you are uploading to 'projectImageFile'.";
+      }
     }
-    return res.status(400).json({ success: false, message });
+    return res
+      .status(400)
+      .json({ success: false, message: message, code: err.code });
   }
   // If it's not a multer error, pass it to the next error handler (e.g., global error handler in server.js)
   next(err);
