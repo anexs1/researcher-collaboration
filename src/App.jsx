@@ -1,4 +1,3 @@
-// src/App.jsx
 import React, {
   useEffect,
   useState,
@@ -24,9 +23,6 @@ import axios from "axios";
 // --- Context Imports ---
 import { useNotifications } from "./context/NotificationContext";
 
-// --- REMOVED LOCAL useAuth DEFINITION ---
-// The local const useAuth = () => { ... }; block has been deleted.
-
 // --- Layout Imports ---
 import AdminLayout from "./Layout/AdminLayout";
 import UserLayout from "./Layout/UserLayout";
@@ -41,11 +37,12 @@ import NotResearcherSignupForm from "./Component/NotResearcherSignupForm";
 import UserActivityPage from "./Component/Profile/UserActivityPage";
 import Notification from "./Component/Common/Notification";
 import LoadingSpinner from "./Component/Common/LoadingSpinner";
-import useAuth from "./hooks/useAuth"; // <<<--- THIS IS THE CORRECT IMPORT
+import useAuth from "./hooks/useAuth";
 
 // --- Page Imports ---
 import Home from "./Page/Home";
 import ExplorePage from "./Page/ExplorePage";
+import UserProjectsPage from "./Page/UserProjectsPage"; // <<<--- NEW IMPORT
 import SignupPage from "./Page/SignupPage";
 import LoginPage from "./Page/LoginPage";
 import Profile from "./Page/Profile";
@@ -73,6 +70,11 @@ import AdminSinglePublicationDetailPage from "./Page/Admin/AdminSinglePublicatio
 import AdminProjectListPage from "./Page/Admin/AdminProjectListPage";
 import ProjectDetailPage from "./Page/ProjectDetailPage";
 import AdminContactSubmissionsPage from "./Page/Admin/AdminContactSubmissionsPage";
+
+// --- Slate JS related imports (Needed if DocumentEditorComponent is defined in this file) ---
+import { Slate, Editable, withReact } from "slate-react";
+import { createEditor } from "slate";
+// You might also need: import { Descendant } from 'slate'; if you type initialValue more strictly
 
 // --- Helper Components ---
 const LoadingScreen = ({ message = "Loading..." }) => (
@@ -150,9 +152,9 @@ const SocketManager = ({ token, API_BASE }) => {
         console.log(
           `🔌 Socket Disconnected: ${newSocket.id}, Reason: ${reason}`
         );
-        if (socketRef.current && socketRef.current.id === newSocket.id) {
-          // socketRef.current = null;
-        }
+        // if (socketRef.current && socketRef.current.id === newSocket.id) { // This line might be problematic if socketRef.current is already null
+        //   socketRef.current = null;
+        // }
       });
       newSocket.on("connect_error", (error) =>
         console.error(
@@ -188,10 +190,11 @@ function debounce(func, delay) {
 const DocumentEditorComponent = ({ documentId, currentUser }) => {
   const editor = useMemo(() => withReact(createEditor()), []);
   const initialSlateValue = useMemo(
+    // Type: Descendant[] if you import Descendant
     () => [{ type: "paragraph", children: [{ text: "" }] }],
     []
   );
-  const [currentDocContent, setCurrentDocContent] = useState(initialSlateValue);
+  const [currentDocContent, setCurrentDocContent] = useState(initialSlateValue); // Type: Descendant[]
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [docTitle, setDocTitle] = useState("No Document Selected");
@@ -232,15 +235,15 @@ const DocumentEditorComponent = ({ documentId, currentUser }) => {
           setDocTitle(response.data.data.title || "Untitled Document");
         } else {
           setError(response.data.message || "Failed to load document content.");
-          setCurrentDocContent(initialSlateValue);
+          setCurrentDocContent(initialSlateValue); // Reset on failure
         }
       })
       .catch((err) => {
         setError(err.response?.data?.message || "Error loading document.");
-        setCurrentDocContent(initialSlateValue);
+        setCurrentDocContent(initialSlateValue); // Reset on error
       })
       .finally(() => setLoading(false));
-  }, [documentId, initialSlateValue, currentUser]);
+  }, [documentId, initialSlateValue, currentUser]); // Added initialSlateValue to dependencies
 
   const debouncedSave = useCallback(
     debounce((newValueToSave) => {
@@ -264,7 +267,7 @@ const DocumentEditorComponent = ({ documentId, currentUser }) => {
           setError(err.response?.data?.message || "Error saving document.");
         });
     }, 2000),
-    [documentId, currentUser?.id]
+    [documentId, currentUser?.id] // API_BASE_URL_DOCS could be added if it can change, but usually it's static
   );
 
   const handleEditorChange = (newValue) => {
@@ -290,18 +293,18 @@ const DocumentEditorComponent = ({ documentId, currentUser }) => {
           <span className="ml-3 text-gray-600">Loading document...</span>
         </div>
       )}
-      {!loading && (
+      {!loading && ( // Only render Slate when not loading
         <Slate
           editor={editor}
           value={currentDocContent}
-          key={documentId || "editor-no-doc"}
+          key={documentId || "editor-no-doc"} // Key change forces re-render if documentId changes
           onChange={handleEditorChange}
         >
           <Editable
             placeholder="Start typing..."
             className="prose max-w-none p-3 border border-gray-300 rounded-md min-h-[300px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             spellCheck
-            autoFocus={!!documentId}
+            autoFocus={!!documentId} // Only autoFocus if a document is selected
             readOnly={!documentId || loading || !currentUser?.id}
           />
         </Slate>
@@ -321,22 +324,22 @@ const DocumentPageWrapper = ({ currentUser }) => {
   const getApiClient = useCallback(() => {
     const token = localStorage.getItem("authToken");
     return axios.create({
-      baseURL: API_BASE_URL_DOCS,
+      baseURL: API_BASE_URL_DOCS, // Ensure this is the correct API base for documents
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
-  }, []);
+  }, []); // API_BASE_URL_DOCS is static, no need to list as dep
 
   const fetchUserDocuments = useCallback(() => {
     if (!currentUser?.id) {
       setErrorDocs("Please log in to view documents.");
       setDocsList([]);
-      setIsLoadingDocs(false);
+      setIsLoadingDocs(false); // Ensure loading is stopped
       return;
     }
     setIsLoadingDocs(true);
     setErrorDocs("");
     getApiClient()
-      .get("/api/documents")
+      .get("/api/documents") // Assuming this is your endpoint to get user's documents
       .then((res) => {
         if (res.data.success && Array.isArray(res.data.data)) {
           setDocsList(res.data.data);
@@ -352,7 +355,7 @@ const DocumentPageWrapper = ({ currentUser }) => {
         setDocsList([]);
       })
       .finally(() => setIsLoadingDocs(false));
-  }, [currentUser, getApiClient]);
+  }, [currentUser, getApiClient]); // Removed API_BASE_URL_DOCS as it's static
 
   useEffect(() => {
     fetchUserDocuments();
@@ -369,14 +372,15 @@ const DocumentPageWrapper = ({ currentUser }) => {
     }
     try {
       const response = await getApiClient().post("/api/documents", {
+        // Endpoint to create document
         title: newDocTitle,
       });
       if (response.data.success && response.data.data) {
         const newDoc = response.data.data;
         alert(`Document "${newDoc.title}" created successfully!`);
-        fetchUserDocuments();
-        setCurrentDocumentId(newDoc.id);
-        setNewDocTitle("");
+        fetchUserDocuments(); // Refresh list
+        setCurrentDocumentId(newDoc.id); // Optionally open the new document
+        setNewDocTitle(""); // Clear input
       } else {
         alert(
           `Failed to create document: ${
@@ -393,6 +397,7 @@ const DocumentPageWrapper = ({ currentUser }) => {
     }
   };
   if (!currentUser) {
+    // Check if currentUser object exists
     return (
       <div className="container mx-auto p-8 text-center">
         <p className="text-xl text-gray-700">
@@ -463,7 +468,10 @@ const DocumentPageWrapper = ({ currentUser }) => {
                 }`}
                 onClick={() => setCurrentDocumentId(doc.id)}
               >
-                <span className="font-medium block truncate">
+                <span
+                  className="font-medium block truncate"
+                  title={doc.title || "Untitled Document"}
+                >
                   {doc.title || "Untitled Document"}
                 </span>
                 <span
@@ -516,6 +524,7 @@ const DocumentPageWrapper = ({ currentUser }) => {
                 </p>
               </div>
             ) : (
+              // No documents and not loading and no error
               <div className="bg-white p-10 rounded-lg shadow text-center text-gray-600">
                 <svg
                   className="mx-auto h-12 w-12 text-gray-400"
@@ -548,7 +557,7 @@ const DocumentPageWrapper = ({ currentUser }) => {
 
 // --- Main App Component ---
 function App() {
-  const { user: currentUser, token, login, logout } = useAuth(); // This now correctly uses the imported hook
+  const { user: currentUser, token, login, logout } = useAuth();
   const [isAdmin, setIsAdmin] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
@@ -624,6 +633,12 @@ function App() {
             path="/explore"
             element={<ExplorePage currentUser={currentUser} />}
           />
+          {/* VVVVVV --- NEW ROUTE ADDED HERE --- VVVVVV */}
+          <Route
+            path="/users/:userId/projects"
+            element={<UserProjectsPage />}
+          />
+          {/* ^^^^^^ --- NEW ROUTE ADDED HERE --- ^^^^^^ */}
           <Route path="/aboutus" element={<AboutUs />} />
           <Route
             path="/publications"
@@ -749,7 +764,7 @@ function App() {
                   currentUser?.id ? (
                     <Navigate to={`/profile/${currentUser.id}`} replace />
                   ) : (
-                    <Navigate to="/explore" replace />
+                    <Navigate to="/explore" replace /> // Fallback if no currentUser.id
                   )
                 }
               />
@@ -831,7 +846,7 @@ function App() {
               element={
                 <AdminLayout
                   currentUser={currentUser}
-                  onLogout={handleLogout} // Pass onLogout here
+                  onLogout={handleLogout}
                 />
               }
             >
@@ -856,7 +871,7 @@ function App() {
                 element={<AdminProjectListPage />}
               />
               <Route
-                path="/admin/contact-submissions" // Corrected placement
+                path="/admin/contact-submissions"
                 element={<AdminContactSubmissionsPage />}
               />
               <Route path="/admin/settings" element={<AdminSettingsPage />} />
