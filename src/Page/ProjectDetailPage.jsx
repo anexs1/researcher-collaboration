@@ -1,12 +1,11 @@
-// Example: src/Page/ProjectDetailPage.jsx
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import axiosInstance from "../api/axiosInstance"; // Or your API client
+import axiosInstance from "../api/axiosInstance";
 import LoadingSpinner from "../Component/Common/LoadingSpinner";
 import ErrorMessage from "../Component/Common/ErrorMessage";
 
 const ProjectDetailPage = ({ currentUser }) => {
-  const { projectId } = useParams(); // Get the project ID from the URL parameter
+  const { projectId } = useParams();
   const [project, setProject] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -18,10 +17,9 @@ const ProjectDetailPage = ({ currentUser }) => {
       setError(null);
       console.log(`ProjectDetailPage: Fetching project with ID: ${projectId}`);
       try {
-        // Adjust API endpoint if needed
         const response = await axiosInstance.get(`/api/projects/${projectId}`);
         if (response.data?.success) {
-          setProject(response.data.project); // Assuming response structure
+          setProject(response.data.project);
           console.log(
             "ProjectDetailPage: Project data fetched:",
             response.data.project
@@ -45,7 +43,7 @@ const ProjectDetailPage = ({ currentUser }) => {
     };
 
     fetchProject();
-  }, [projectId]); // Re-fetch if projectId changes
+  }, [projectId]);
 
   if (isLoading)
     return (
@@ -66,7 +64,6 @@ const ProjectDetailPage = ({ currentUser }) => {
 
   return (
     <div className="container mx-auto p-4 md:p-6">
-      {/* --- Render Project Details --- */}
       <h1 className="text-2xl md:text-3xl font-bold mb-4">{project.title}</h1>
       <p className="text-gray-600 mb-2">
         Category: {project.category || "N/A"}
@@ -78,23 +75,17 @@ const ProjectDetailPage = ({ currentUser }) => {
         <p>{project.description}</p>
       </div>
 
-      {/* Add sections for collaborators, requests (if owner), chat, etc. */}
       <div className="mt-8 border-t pt-6">
         <h2 className="text-xl font-semibold mb-4">Additional Details</h2>
-        {/* Example: Display requests if current user is owner */}
         {currentUser?.id === project.ownerId && (
           <div>
             <h3 className="text-lg font-medium mb-2">Join Requests</h3>
-            {/* TODO: Add component or logic to show/manage requests for THIS project */}
             <p className="text-sm text-gray-500">
               (Request management section)
             </p>
           </div>
         )}
-        {/* Other sections */}
       </div>
-
-      {/* --- End Project Details --- */}
     </div>
   );
 };

@@ -74,9 +74,7 @@ import AdminContactSubmissionsPage from "./Page/Admin/AdminContactSubmissionsPag
 // --- Slate JS related imports (Needed if DocumentEditorComponent is defined in this file) ---
 import { Slate, Editable, withReact } from "slate-react";
 import { createEditor } from "slate";
-// You might also need: import { Descendant } from 'slate'; if you type initialValue more strictly
 
-// --- Helper Components ---
 const LoadingScreen = ({ message = "Loading..." }) => (
   <div className="flex flex-col justify-center items-center h-screen text-lg font-medium text-gray-700 bg-gray-100">
     <LoadingSpinner size="lg" /> <p className="mt-4">{message}</p>

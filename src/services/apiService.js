@@ -1,17 +1,12 @@
 // frontend/src/services/apiService.js
 import axios from "axios";
 
-// 1. Get the base URL for your main API from environment variables.
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
 
-// 2. Construct the specific base URL for the Public Help Center API endpoints.
 const HELP_CENTER_API_URL = `${API_BASE_URL}/help-center`;
 
-// 3. Construct the specific base URL for the Admin Help Center management API endpoints.
 const ADMIN_HELP_API_URL = `${API_BASE_URL}/help-center/admin`;
-
-// --- Public Help Center Functions (Edited with Detailed Logging) ---
 
 export const fetchCategories = async () => {
   try {
@@ -39,7 +34,7 @@ export const fetchCategories = async () => {
       "Message:",
       error.message
     );
-    // It's important that the calling component handles this error (e.g., sets an error state)
+
     throw error;
   }
 };
@@ -74,8 +69,6 @@ export const fetchHelpItems = async (
         ? response.data.length
         : "Not an array or null/undefined"
     );
-    // For more detail if needed:
-    // console.log("[apiService] PUBLIC Help items API response data:", JSON.stringify(response.data, null, 2));
     return response.data;
   } catch (error) {
     console.error(

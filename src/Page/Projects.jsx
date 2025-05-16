@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 
-// --- Icons --- (Ensure you have react-icons installed: npm install react-icons)
+// --- Icons ---
 import {
   FaSearch,
   FaUniversity,
@@ -23,9 +23,10 @@ import {
   FaEyeSlash,
   FaSpinner,
   FaClock,
+  FaUserCircle, // Added for profile image fallback
 } from "react-icons/fa";
 
-// --- Components --- (Verify these paths are correct)
+// --- Components ---
 import LoadingSpinner from "../Component/Common/LoadingSpinner";
 import ErrorMessage from "../Component/Common/ErrorMessage";
 import Notification from "../Component/Common/Notification";
@@ -34,7 +35,7 @@ import MembersModal from "../Component/projects/MembersModal";
 import JoinRequestModal from "../Component/projects/JoinRequestModal";
 import RequestsModal from "../Component/projects/RequestsModal";
 import ReportModal from "../Component/projects/ReportModal";
-// import ChatModal from "../Component/projects/ChatModal"; // Uncomment if you have this
+// import ChatModal from "../Component/projects/ChatModal";
 
 // --- Constants ---
 const API_BASE_URL =
@@ -78,6 +79,65 @@ const getStatusBadgeClasses = (status) => {
       return "bg-gray-100 text-gray-800 border-gray-200";
   }
 };
+
+// --- ProfileImage Sub-Component ---
+const ProfileImage = memo(
+  ({ src, alt, fallbackUsername, className = "h-6 w-6 rounded-full" }) => {
+    const [hasError, setHasError] = useState(false);
+    const [imageSrc, setImageSrc] = useState(null);
+
+    useEffect(() => {
+      setHasError(false); // Reset error on src change
+      if (src) {
+        if (src.startsWith("http") || src.startsWith("blob:")) {
+          setImageSrc(src);
+        } else {
+          // Prepend API_BASE_URL if it's a relative path
+          let fullUrl = API_BASE_URL;
+          if (API_BASE_URL.endsWith("/") && src.startsWith("/")) {
+            fullUrl += src.substring(1);
+          } else if (!API_BASE_URL.endsWith("/") && !src.startsWith("/")) {
+            fullUrl += "/";
+            fullUrl += src;
+          } else {
+            fullUrl += src;
+          }
+          setImageSrc(fullUrl);
+        }
+      } else {
+        setImageSrc(null);
+      }
+    }, [src]);
+
+    if (!imageSrc || hasError) {
+      // Fallback to initials or a generic icon
+      return (
+        <span
+          className={`${className} bg-gray-300 flex items-center justify-center text-gray-600 font-semibold uppercase`}
+          title={alt} // Add title for accessibility on fallback
+        >
+          {fallbackUsername ? (
+            fallbackUsername.charAt(0)
+          ) : (
+            <FaUserCircle className="w-[80%] h-[80%] text-gray-400" />
+          )}
+        </span>
+      );
+    }
+
+    return (
+      <img
+        src={imageSrc}
+        alt={alt}
+        className={className}
+        onError={() => setHasError(true)}
+        loading="lazy"
+      />
+    );
+  }
+);
+// --- End of ProfileImage Sub-Component ---
+
 const ProjectCard = memo(
   ({
     project,
@@ -99,10 +159,7 @@ const ProjectCard = memo(
     onUpdateProjectStatus,
     onDeleteProject,
   }) => {
-    // Determine if the current user is the owner of the project
     const isOwner = currentUser?.id === project?.ownerId;
-
-    // State to manage hover on interactive child elements (like buttons) to prevent card hover effect
     const [isHoveringChild, setIsHoveringChild] = useState(false);
     const handleChildMouseEnter = useCallback(
       () => setIsHoveringChild(true),
@@ -113,25 +170,20 @@ const ProjectCard = memo(
       []
     );
 
-    // Construct image source URL, handling relative/absolute paths and potential base URL prefixing
     const imageSource = project?.image
       ? project.image.startsWith("http") || project.image.startsWith("blob:")
         ? project.image
         : project.image.startsWith("/")
-        ? `${API_BASE_URL}${project.image}`
-        : project.image
-      : null; // Default to null if no image provided
+        ? `${API_BASE_URL}${project.image}` // Assuming project.image is like /path/to/image.png
+        : `${API_BASE_URL}/${project.image}` // Assuming project.image is like image.png
+      : null;
 
-    // Check if the project status indicates it's hidden/archived
     const isHidden = project?.status === "Archived";
 
-    // --- Render function for non-owner actions ---
     const renderNonOwnerAction = () => {
-      // Don't render action buttons if user is not logged in
       if (!currentUser) return null;
-
       switch (project?.currentUserMembershipStatus) {
-        case "approved": // User is an approved member
+        case "approved":
           return (
             <button
               onMouseEnter={handleChildMouseEnter}
@@ -145,10 +197,8 @@ const ProjectCard = memo(
             >
               <FaEye /> View
             </button>
-            // Placeholder: Add Leave button/logic here if needed later
-            // <button onClick={onLeaveProject}>Leave</button>
           );
-        case "pending": // User has a pending request
+        case "pending":
           return (
             <button
               disabled
@@ -159,10 +209,8 @@ const ProjectCard = memo(
             >
               <FaClock /> Pending
             </button>
-            // Placeholder: Add Cancel Request button/logic here if needed later
-            // <button onClick={onCancelRequest}>Cancel Request</button>
           );
-        default: // User can join (not owner, not approved, not pending)
+        default:
           return (
             <button
               onMouseEnter={handleChildMouseEnter}
@@ -179,9 +227,7 @@ const ProjectCard = memo(
           );
       }
     };
-    // --- End renderNonOwnerAction ---
 
-    // Main card return
     return (
       <motion.div
         layout
@@ -200,9 +246,7 @@ const ProjectCard = memo(
         }
         className="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden border border-gray-200 relative flex flex-col h-full"
       >
-        {/* Header Section */}
         <div className="relative">
-          {/* Top Right Icons */}
           <div className="absolute top-3 right-3 z-10 flex space-x-1.5">
             {!isOwner && currentUser && (
               <button
@@ -242,7 +286,6 @@ const ProjectCard = memo(
               </button>
             )}
           </div>
-          {/* Dropdown Menu */}
           <AnimatePresence>
             {activeDropdown === project.id && currentUser && (
               <motion.div
@@ -256,7 +299,6 @@ const ProjectCard = memo(
                 aria-orientation="vertical"
                 aria-labelledby={`options-menu-${project.id}`}
               >
-                {/* Dropdown Items */}
                 <button
                   onMouseEnter={handleChildMouseEnter}
                   onMouseLeave={handleChildMouseLeave}
@@ -293,7 +335,6 @@ const ProjectCard = memo(
                 >
                   <FaUsers className="mr-2 text-orange-500" /> View Members
                 </button>
-                {/* Show "Request to Join" only if applicable */}
                 {!isOwner &&
                   project.currentUserMembershipStatus !== "approved" &&
                   project.currentUserMembershipStatus !== "pending" && (
@@ -308,7 +349,6 @@ const ProjectCard = memo(
                       Join
                     </button>
                   )}
-                {/* Owner-specific dropdown items */}
                 {isOwner && (
                   <>
                     <div className="border-t my-1 mx-2 border-gray-100"></div>
@@ -339,7 +379,6 @@ const ProjectCard = memo(
               </motion.div>
             )}
           </AnimatePresence>
-          {/* Project Image */}
           <div
             className="h-48 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center overflow-hidden cursor-pointer"
             onClick={() => onViewProject(project)}
@@ -351,7 +390,7 @@ const ProjectCard = memo(
                 className="w-full h-full object-cover"
                 loading="lazy"
                 onError={(e) => {
-                  e.target.src = "/placeholder-image.png";
+                  e.target.src = "/placeholder-image.png"; // Ensure this is in your public folder
                 }}
               />
             ) : (
@@ -360,9 +399,7 @@ const ProjectCard = memo(
           </div>
         </div>
 
-        {/* Card Body Content */}
         <div className="p-4 flex flex-col flex-grow">
-          {/* Status & Owner Info */}
           <div className="flex justify-between items-center mb-2 text-xs">
             <span
               className={`font-medium px-2.5 py-0.5 rounded-full border ${getStatusBadgeClasses(
@@ -388,42 +425,35 @@ const ProjectCard = memo(
                       onMouseEnter={handleChildMouseEnter}
                       onMouseLeave={handleChildMouseLeave}
                       onClick={(e) => e.stopPropagation()}
-                      className="font-medium hover:text-indigo-600 hover:underline"
+                      className="font-medium hover:text-indigo-600 hover:underline truncate max-w-[100px] sm:max-w-[150px]"
                     >
                       {project.owner.username || "User"}
                     </Link>
                   )}
-                  {project.owner.profilePictureUrl ? (
-                    <img
-                      src={project.owner.profilePictureUrl}
-                      alt="Owner"
-                      className="ml-1.5 h-4 w-4 rounded-full object-cover"
-                    />
-                  ) : (
-                    <span className="ml-1.5 bg-gray-200 rounded-full h-4 w-4 flex items-center justify-center text-gray-500 text-[8px] font-bold uppercase">
-                      {project.owner.username ? project.owner.username[0] : "?"}
-                    </span>
-                  )}
+                  {/* MODIFIED: Use ProfileImage component */}
+                  <ProfileImage
+                    src={project.owner.profilePictureUrl}
+                    alt={project.owner.username || "Owner"}
+                    fallbackUsername={project.owner.username}
+                    className="ml-1.5 h-4 w-4 rounded-full object-cover flex-shrink-0"
+                  />
                 </>
               ) : (
                 <span className="text-gray-400 italic">Owner unknown</span>
               )}
             </div>
           </div>
-          {/* Title */}
           <h3
             className="text-base md:text-lg font-semibold text-gray-800 mb-2 line-clamp-2 hover:text-indigo-600 cursor-pointer"
             onClick={() => onViewProject(project)}
           >
             {project?.title || "Untitled Project"}
           </h3>
-          {/* Description */}
           <p className="text-gray-600 text-sm mb-3 line-clamp-3 flex-grow">
             {project?.description || (
               <span className="italic text-gray-400">No description.</span>
             )}
           </p>
-          {/* Collaborators Info */}
           <div className="flex items-center text-sm text-gray-500 mb-4">
             <FaUsers className="mr-1.5 text-gray-400" />
             <span>
@@ -435,13 +465,12 @@ const ProjectCard = memo(
             </span>
           </div>
 
-          {/* Footer Buttons */}
           <div
             className={`flex mt-auto pt-3 border-t border-gray-100 ${
               isOwner ? "gap-1 sm:gap-1.5" : "space-x-2"
             }`}
           >
-            {isOwner ? ( // Owner Buttons
+            {isOwner ? (
               <>
                 <button
                   onMouseEnter={handleChildMouseEnter}
@@ -504,7 +533,6 @@ const ProjectCard = memo(
                 </button>
               </>
             ) : (
-              // Non-Owner Buttons (Rendered by function)
               renderNonOwnerAction()
             )}
           </div>
@@ -512,10 +540,9 @@ const ProjectCard = memo(
       </motion.div>
     );
   }
-); // End of ProjectCard component
+);
 
 export default function Projects({ currentUser }) {
-  // --- State ---
   const [projects, setProjects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -523,22 +550,21 @@ export default function Projects({ currentUser }) {
   const [filterStatus, setFilterStatus] = useState("");
   const [selectedProject, setSelectedProject] = useState(null);
   const [modalType, setModalType] = useState(null);
-  const [savedProjects, setSavedProjects] = useState(new Set()); // Placeholder state
+  const [savedProjects, setSavedProjects] = useState(new Set());
   const [activeDropdown, setActiveDropdown] = useState(null);
-  const [reportData, setReportData] = useState(""); // Placeholder state
+  const [reportData, setReportData] = useState("");
   const [notification, setNotification] = useState({
     message: "",
     type: "",
     show: false,
   });
-  const [isSubmittingJoin, setIsSubmittingJoin] = useState(false); // Loading state for join request
-  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false); // Loading state for hide/unhide
-  const [projectsWithNoPending, setProjectsWithNoPending] = useState(new Set()); // Tracks projects with no pending reqs
+  const [isSubmittingJoin, setIsSubmittingJoin] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [projectsWithNoPending, setProjectsWithNoPending] = useState(new Set());
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const limit = PROJECTS_PER_PAGE;
 
-  // --- Callbacks ---
   const showNotification = useCallback((message, type = "success") => {
     setNotification({ message, type, show: true });
     setTimeout(
@@ -547,12 +573,8 @@ export default function Projects({ currentUser }) {
     );
   }, []);
 
-  // Fetch projects API call
   const fetchProjects = useCallback(
     async (currentPage = 1) => {
-      console.log(
-        `Fetching projects: page=${currentPage}, limit=${limit}, status=${filterStatus}, search=${searchTerm}`
-      );
       setIsLoading(true);
       setError("");
       try {
@@ -563,7 +585,6 @@ export default function Projects({ currentUser }) {
             page: currentPage,
             limit,
           },
-          // Auth token added by interceptor
         });
 
         if (response.data?.success && Array.isArray(response.data.data)) {
@@ -574,31 +595,25 @@ export default function Projects({ currentUser }) {
             status: proj.status ?? "Unknown",
             requiredCollaborators: proj.requiredCollaborators ?? 0,
             ownerId: proj.ownerId ?? null,
-            owner: proj.owner
+            owner: proj.owner // Ensure owner object is passed as is
               ? {
                   id: proj.owner.id,
                   username: proj.owner.username ?? "Unknown",
-                  profilePictureUrl: proj.owner.profilePictureUrl || null,
+                  profilePictureUrl: proj.owner.profilePictureUrl || null, // This will be used by ProfileImage
                 }
               : null,
             createdAt: proj.createdAt,
             updatedAt: proj.updatedAt,
-            image: proj.imagePath || proj.imageUrl || null, // Use correct image field from backend
+            image: proj.imagePath || proj.imageUrl || null,
             currentUserMembershipStatus:
-              proj.currentUserMembershipStatus || null, // Expect this field
+              proj.currentUserMembershipStatus || null,
           }));
           setProjects(fetchedProjects);
           setTotalPages(response.data.totalPages || 1);
-          console.log(
-            `Fetched ${fetchedProjects.length} projects. Total pages: ${
-              response.data.totalPages || 1
-            }`
-          );
         } else {
           throw new Error(response.data?.message || "Invalid data format.");
         }
       } catch (err) {
-        console.error("Fetch projects error:", err);
         const errorMsg =
           err.response?.data?.message ||
           err.message ||
@@ -606,28 +621,25 @@ export default function Projects({ currentUser }) {
         setError(errorMsg);
         showNotification(errorMsg, "error");
         setProjects([]);
-        setTotalPages(1); // Reset on error
+        setTotalPages(1);
       } finally {
         setIsLoading(false);
       }
     },
     [searchTerm, filterStatus, limit, showNotification]
-  ); // Added showNotification back
+  );
 
   useEffect(() => {
-    setPage(1); // Reset to page 1 when filters change
-    setProjectsWithNoPending(new Set()); // Reset pending knowledge
-    fetchProjects(1); // Fetch page 1
-  }, [searchTerm, filterStatus]); // fetchProjects removed to avoid double call on mount
+    setPage(1);
+    setProjectsWithNoPending(new Set());
+    // fetchProjects(1); // fetchProjects is now a dependency, this line is removed to prevent double call
+  }, [searchTerm, filterStatus]);
 
-  // Effect for pagination changes
+  // useEffect to call fetchProjects when page or other dependencies change
   useEffect(() => {
-    if (page > 1) {
-      fetchProjects(page);
-    }
-  }, [page, fetchProjects]);
+    fetchProjects(page);
+  }, [page, fetchProjects]); // Added fetchProjects as dependency
 
-  // --- Modal Handlers ---
   const handleCloseModal = useCallback(() => {
     setModalType(null);
     setSelectedProject(null);
@@ -661,7 +673,6 @@ export default function Projects({ currentUser }) {
     setActiveDropdown(null);
   }, []);
 
-  // --- Action Handlers ---
   const confirmJoinRequest = useCallback(
     async (message) => {
       if (!selectedProject || !currentUser?.id) return;
@@ -689,10 +700,8 @@ export default function Projects({ currentUser }) {
     [selectedProject, currentUser?.id, showNotification, handleCloseModal]
   );
 
-  // Placeholder - Implement API calls
   const toggleSaveProject = useCallback(
     (projectId) => {
-      console.log("Toggle save:", projectId);
       showNotification("Save toggled (UI only)", "info");
       setSavedProjects((prev) => {
         const ns = new Set(prev);
@@ -706,11 +715,10 @@ export default function Projects({ currentUser }) {
   );
   const handleShareProject = useCallback(
     (projectId) => {
-      console.log("Share:", projectId);
       navigator.clipboard
-        .writeText(`${window.location.origin}/projects/${projectId}`)
+        .writeText(`${window.location.origin}/projects/${projectId}`) // Adjusted to share project specific URL
         .then(
-          () => showNotification("Link copied!", "success"),
+          () => showNotification("Project link copied!", "success"),
           () => showNotification("Copy failed.", "error")
         );
       setActiveDropdown(null);
@@ -719,27 +727,33 @@ export default function Projects({ currentUser }) {
   );
   const handleDownloadProject = useCallback(
     (project) => {
-      console.log("Download:", project.id);
-      const data = `Title: ${project.title}\nDesc: ${project.description}`;
+      const data = `Title: ${project.title}\nDescription: ${project.description}\nStatus: ${project.status}\nRequired Collaborators: ${project.requiredCollaborators}`;
       const blob = new Blob([data], { type: "text/plain" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${project.title}.txt`;
+      a.download = `${project.title.replace(/\s+/g, "_")}_project_info.txt`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      showNotification("Downloaded.", "info");
+      showNotification("Project info downloaded.", "info");
       setActiveDropdown(null);
     },
     [showNotification]
   );
   const downloadReport = useCallback(
     (reportText, projectName) => {
-      console.log("Download report:", projectName);
-      /* ... download logic ... */ showNotification(
-        "Report downloaded.",
-        "info"
-      );
+      const blob = new Blob([reportText], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Report_${projectName.replace(/\s+/g, "_")}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showNotification("Report downloaded.", "info");
       handleCloseModal();
     },
     [showNotification, handleCloseModal]
@@ -751,14 +765,10 @@ export default function Projects({ currentUser }) {
   const handleUpdateProjectStatus = useCallback(
     async (projectToUpdate, newStatus) => {
       if (!projectToUpdate) return;
-      console.log(
-        `Updating project ${projectToUpdate.id} status to ${newStatus}`
-      );
-      const oldStatus = projectToUpdate.status; // Store old status for revert
+      const oldStatus = projectToUpdate.status;
       setIsUpdatingStatus(true);
-      setSelectedProject(projectToUpdate);
+      setSelectedProject(projectToUpdate); // Keep track of which project is being updated
       setActiveDropdown(null);
-      // Optimistic UI Update
       setProjects((prev) =>
         prev.map((p) =>
           p.id === projectToUpdate.id ? { ...p, status: newStatus } : p
@@ -767,15 +777,16 @@ export default function Projects({ currentUser }) {
       try {
         await apiClient.patch(`/api/projects/${projectToUpdate.id}/status`, {
           status: newStatus,
-        }); // Example using PATCH
-        showNotification(`Status updated to ${newStatus}.`, "success");
-      } catch (err) {
-        console.error("Update status error:", err);
+        });
         showNotification(
-          err.response?.data?.message || "Update failed.",
+          `Project "${projectToUpdate.title}" status updated to ${newStatus}.`,
+          "success"
+        );
+      } catch (err) {
+        showNotification(
+          err.response?.data?.message || "Status update failed.",
           "error"
         );
-        // Revert Optimistic Update on error
         setProjects((prev) =>
           prev.map((p) =>
             p.id === projectToUpdate.id ? { ...p, status: oldStatus } : p
@@ -783,7 +794,7 @@ export default function Projects({ currentUser }) {
         );
       } finally {
         setIsUpdatingStatus(false);
-        setSelectedProject(null);
+        setSelectedProject(null); // Clear selected project after update
       }
     },
     [showNotification]
@@ -795,120 +806,133 @@ export default function Projects({ currentUser }) {
         setActiveDropdown(null);
         return;
       }
-      console.log("Deleting project:", projectId);
       const originalProjects = [...projects];
-      setProjects((prev) => prev.filter((p) => p.id !== projectId)); // Optimistic remove
+      setProjects((prev) => prev.filter((p) => p.id !== projectId));
       setActiveDropdown(null);
       try {
         await apiClient.delete(`/api/projects/${projectId}`);
         showNotification("Project deleted.", "success");
-        // Consider refetching current page if deletion affects pagination
-        if (projects.length === 1 && page > 1) setPage((p) => p - 1);
-        else fetchProjects(page); // Refetch current page
+        if (projects.length === 1 && page > 1) {
+          setPage((p) => p - 1); // Go to previous page if current becomes empty
+        } else {
+          fetchProjects(page); // Refetch current page data
+        }
       } catch (err) {
         showNotification(
           err.response?.data?.message || "Delete failed.",
           "error"
         );
         setProjects(originalProjects);
-      } // Revert on error
+      }
     },
     [projects, page, showNotification, fetchProjects]
-  ); // Added fetchProjects
+  );
 
   const handleRequestsHandled = useCallback((projectId) => {
-    console.log("All requests handled callback:", projectId);
     setProjectsWithNoPending((prev) => new Set(prev).add(projectId));
   }, []);
 
-  // --- Main Render ---
   return (
     <div className="bg-gray-50 min-h-screen py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Notification Area */}
         <div className="fixed top-5 right-5 z-[100] w-full max-w-sm">
           <AnimatePresence>
             {notification.show && (
-              <motion.div /* ... */>
-                {" "}
-                <Notification /* ... */ />{" "}
+              <motion.div
+                initial={{ opacity: 0, y: -20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, x: 50, scale: 0.9 }}
+                transition={{ duration: 0.3, ease: "circOut" }}
+              >
+                <Notification
+                  message={notification.message}
+                  type={notification.type}
+                  show={notification.show}
+                  onClose={() =>
+                    setNotification((prev) => ({ ...prev, show: false }))
+                  }
+                />
               </motion.div>
-            )}{" "}
+            )}
           </AnimatePresence>
         </div>
 
-        {/* Header & Filters */}
         <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
           <div>
-            {" "}
             <h1 className="text-2xl md:text-3xl font-bold text-gray-800">
               Research Projects
-            </h1>{" "}
+            </h1>
             <p className="text-sm text-gray-600 mt-1">
               Discover, Collaborate, Innovate.
-            </p>{" "}
+            </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
             <div className="relative flex-grow">
-              {" "}
-              <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />{" "}
+              <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search title..."
-                className="w-full pl-10 pr-4 py-2 rounded-lg border"
-              />{" "}
+                placeholder="Search title, owner..."
+                className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm"
+              />
             </div>
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-3 py-2 rounded-lg border bg-white"
+              className="px-3 py-2 rounded-lg border border-gray-300 bg-white focus:ring-indigo-500 focus:border-indigo-500 shadow-sm"
             >
-              {" "}
               {statusOptions.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
-              ))}{" "}
+              ))}
             </select>
             {currentUser && (
               <Link
                 to="/projects/new"
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center justify-center"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center justify-center shadow-sm"
               >
-                {" "}
-                <FaPlus className="mr-1.5" /> New
+                <FaPlus className="mr-1.5" /> New Project
               </Link>
             )}
           </div>
         </div>
 
-        {/* Error Message */}
         {error && !isLoading && (
           <div className="mb-6">
             <ErrorMessage message={error} onClose={() => setError("")} />
           </div>
         )}
 
-        {/* Content Area */}
         <div className="mt-6 pb-10">
-          {isLoading ? (
-            <div className="flex justify-center py-24">
+          {isLoading && projects.length === 0 ? ( // Show full page spinner only if no projects are yet displayed
+            <div className="flex flex-col items-center justify-center py-24 text-center">
               <LoadingSpinner size="lg" />
-              <span className="ml-3">Loading...</span>
+              <span className="ml-3 text-lg font-medium text-gray-600 mt-4">
+                Loading Projects...
+              </span>
             </div>
-          ) : projects.length === 0 ? (
+          ) : !isLoading && projects.length === 0 ? (
             <div className="text-center mt-8 py-12 px-6 bg-white rounded-lg shadow border">
-              {" "}
-              <FaSearch className="mx-auto h-12 w-12 text-gray-300 mb-4" />{" "}
-              <h3 className="text-xl font-semibold">No Projects Found</h3>{" "}
+              <FaSearch className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+              <h3 className="text-xl font-semibold text-gray-700">
+                No Projects Found
+              </h3>
               <p className="mt-2 text-gray-600">
                 {searchTerm || filterStatus
-                  ? "No projects match filters."
-                  : "No projects yet."}
-              </p>{" "}
-              {/* ... buttons ... */}{" "}
+                  ? "No projects match your current filters."
+                  : "There are no projects to display at the moment."}
+              </p>
+              {currentUser && !searchTerm && !filterStatus && (
+                <Link
+                  to="/projects/new"
+                  className="mt-6 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  <FaPlus className="mr-2 -ml-1 h-5 w-5" />
+                  Create Your First Project
+                </Link>
+              )}
             </div>
           ) : (
             <>
@@ -925,7 +949,8 @@ export default function Projects({ currentUser }) {
                       isSaved={savedProjects.has(project.id)}
                       activeDropdown={activeDropdown}
                       hasPendingRequests={
-                        !projectsWithNoPending.has(project.id)
+                        project.ownerId === currentUser?.id && // Only owners see this for their projects
+                        !projectsWithNoPending.has(project.id) // And if requests haven't been marked as handled
                       }
                       onToggleDropdown={toggleDropdown}
                       onToggleSave={toggleSaveProject}
@@ -945,8 +970,14 @@ export default function Projects({ currentUser }) {
                   ))}
                 </AnimatePresence>
               </motion.div>
-              {/* Pagination */}
-              {totalPages > 1 && (
+              {isLoading &&
+                projects.length > 0 && ( // Show a smaller loading indicator if projects are already there but more are loading (e.g. pagination)
+                  <div className="flex justify-center items-center py-8">
+                    <LoadingSpinner size="md" />
+                    <span className="ml-2 text-gray-600">Loading more...</span>
+                  </div>
+                )}
+              {totalPages > 1 && !isLoading && (
                 <div
                   className="flex justify-center items-center mt-10"
                   role="navigation"
@@ -955,21 +986,20 @@ export default function Projects({ currentUser }) {
                   <button
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                     disabled={page <= 1 || isLoading}
-                    className="px-3 py-1.5 mx-1 rounded border bg-white disabled:opacity-50"
+                    className="px-4 py-2 mx-1 rounded-md border bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
                   >
-                    Prev
+                    Previous
                   </button>
-                  <span className="px-2 text-sm text-gray-600">
+                  <span className="px-3 py-2 text-sm text-gray-600">
                     Page {page} of {totalPages}
                   </span>
                   <button
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                     disabled={page >= totalPages || isLoading}
-                    className="px-3 py-1.5 mx-1 rounded border bg-white disabled:opacity-50"
+                    className="px-4 py-2 mx-1 rounded-md border bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
                   >
                     Next
                   </button>
-                  {/* Consider a more advanced pagination component for many pages */}
                 </div>
               )}
             </>
@@ -977,7 +1007,6 @@ export default function Projects({ currentUser }) {
         </div>
       </div>
 
-      {/* Modals */}
       <AnimatePresence>
         {modalType === "details" && selectedProject && (
           <ProjectDetailModal
@@ -1016,9 +1045,21 @@ export default function Projects({ currentUser }) {
         {modalType === "report" && selectedProject && (
           <ReportModal
             key={`report-${selectedProject.id}`}
-            reportData={reportData}
-            projectName={selectedProject?.title}
+            reportData={reportData} // You might want to pass the project ID or more context
+            itemName={selectedProject?.title} // Use itemName for consistency if ReportModal expects it
+            itemType="project"
             onClose={handleCloseModal}
+            onSubmit={(reportContent) => {
+              // Placeholder for report submission logic
+              console.log(
+                "Submitting report for project:",
+                selectedProject.id,
+                "Content:",
+                reportContent
+              );
+              showNotification("Report submitted (simulated).", "success");
+              handleCloseModal();
+            }}
             onDownload={(text) => downloadReport(text, selectedProject?.title)}
           />
         )}
@@ -1026,7 +1067,7 @@ export default function Projects({ currentUser }) {
 
       {activeDropdown && (
         <div
-          className="fixed inset-0 z-10 bg-transparent"
+          className="fixed inset-0 z-10 bg-transparent" // Click away to close dropdown
           onClick={() => setActiveDropdown(null)}
           aria-hidden="true"
         />
