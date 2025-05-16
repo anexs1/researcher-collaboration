@@ -14,12 +14,14 @@ import {
   FaLinkedin,
   FaTwitter,
   FaCalendarAlt,
+  FaProjectDiagram, // For Projects Hosted
+  FaHandsHelping, // For Collaborations Formed
+  FaChartLine, // For overall impact
 } from "react-icons/fa";
 import { RiTeamFill, RiSeedlingLine } from "react-icons/ri";
 import { BsGraphUp, BsShieldCheck } from "react-icons/bs";
 import { FiGlobe } from "react-icons/fi";
 
-// Animation Variants
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
@@ -47,7 +49,6 @@ const fadeIn = {
   visible: { opacity: 1, transition: { duration: 0.6 } },
 };
 
-// Card Components
 const FeatureCard = ({ icon, title, description }) => (
   <motion.div
     variants={itemVariants}
@@ -61,42 +62,6 @@ const FeatureCard = ({ icon, title, description }) => (
   </motion.div>
 );
 
-const EventCard = ({ event }) => (
-  <motion.div
-    variants={itemVariants}
-    className="bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-200"
-  >
-    <div className="h-40 bg-gray-100 overflow-hidden">
-      <img
-        src={event.image || "/default-event.jpg"}
-        alt={event.title}
-        className="w-full h-full object-cover"
-      />
-    </div>
-    <div className="p-4">
-      <div className="flex justify-between items-start mb-2">
-        <span className="text-xs font-medium px-2 py-1 bg-blue-100 text-blue-800 rounded">
-          {event.type}
-        </span>
-        <div className="flex items-center text-xs text-gray-500">
-          <FaCalendarAlt className="mr-1" />
-          {event.date}
-        </div>
-      </div>
-      <h3 className="font-medium text-gray-800 mb-2">{event.title}</h3>
-      <p className="text-gray-600 text-sm mb-3 line-clamp-2">
-        {event.description}
-      </p>
-      <a
-        href={event.link}
-        className="text-blue-600 hover:text-blue-800 text-sm font-medium inline-flex items-center"
-      >
-        Learn more <FaArrowRight className="ml-1 text-xs" />
-      </a>
-    </div>
-  </motion.div>
-);
-
 const ResearcherCard = ({ researcher }) => (
   <motion.div
     variants={itemVariants}
@@ -104,9 +69,10 @@ const ResearcherCard = ({ researcher }) => (
   >
     <div className="w-20 h-20 rounded-full bg-gray-200 overflow-hidden mx-auto mb-3">
       <img
-        src={researcher.image || "/default-avatar.png"}
+        src={researcher.image || "/placeholder-image.jpg"}
         alt={researcher.name}
         className="w-full h-full object-cover"
+        onError={(e) => (e.target.src = "/placeholder-image.jpg")}
       />
     </div>
     <h3 className="font-semibold text-gray-800">{researcher.name}</h3>
@@ -115,12 +81,16 @@ const ResearcherCard = ({ researcher }) => (
     <div className="flex justify-center space-x-2">
       <a
         href={researcher.linkedin}
+        target="_blank"
+        rel="noopener noreferrer"
         className="text-gray-400 hover:text-blue-600"
       >
         <FaLinkedin />
       </a>
       <a
         href={researcher.twitter}
+        target="_blank"
+        rel="noopener noreferrer"
         className="text-gray-400 hover:text-blue-400"
       >
         <FaTwitter />
@@ -129,63 +99,83 @@ const ResearcherCard = ({ researcher }) => (
   </motion.div>
 );
 
+// --- NEW: StatisticCard Component ---
+const StatisticCard = ({ icon, value, label, color }) => (
+  <motion.div
+    variants={itemVariants}
+    className={`bg-gradient-to-br ${
+      color || "from-blue-50 to-indigo-50"
+    } p-6 rounded-lg shadow-md text-center h-full flex flex-col justify-center items-center border border-gray-200`}
+  >
+    <div className={`text-4xl mb-3 ${color ? "text-white" : "text-blue-600"}`}>
+      {icon}
+    </div>
+    <div
+      className={`text-3xl font-bold ${color ? "text-white" : "text-gray-800"}`}
+    >
+      {value}
+    </div>
+    <p
+      className={`text-sm mt-1 ${color ? "text-indigo-100" : "text-gray-600"}`}
+    >
+      {label}
+    </p>
+  </motion.div>
+);
+// --- End of StatisticCard Component ---
+
 const Home = () => {
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState("");
+  // const [searchQuery, setSearchQuery] = useState(""); // State remains, though input field removed from this component
   const [activeTestimonial, setActiveTestimonial] = useState(0);
 
-  // Sample data
   const features = [
     {
       icon: <RiTeamFill className="text-xl" />,
       title: "Find Collaborators",
       description:
-        "Connect with researchers across disciplines and institutions",
+        "Connect with researchers across disciplines and institutions.",
     },
     {
       icon: <FaBookOpen className="text-xl" />,
       title: "Share Publications",
-      description: "Upload and discover research papers and articles",
+      description: "Upload and discover research papers and articles.",
     },
     {
       icon: <BsGraphUp className="text-xl" />,
       title: "Manage Projects",
-      description: "Organize and track collaborative research projects",
+      description:
+        "Organize and track collaborative research projects effectively.",
     },
     {
       icon: <BsShieldCheck className="text-xl" />,
       title: "Secure Workspace",
-      description: "Encrypted tools with version control and task management",
-    },
-  ];
-
-  const events = [
-    {
-      id: 1,
-      type: "Conference",
-      title: "African AI Research Summit 2023",
-      date: "Nov 15-17",
-      description: "Join leading AI researchers from across the continent",
-      link: "#",
-      image: "/ai-summit.jpg",
+      description:
+        "Utilize encrypted tools with version control and task management.",
     },
     {
-      id: 2,
-      type: "Workshop",
-      title: "Data Visualization Techniques",
-      date: "Oct 20",
-      description: "Hands-on workshop covering cutting-edge tools",
-      link: "#",
-      image: "/data-viz.jpg",
+      icon: <FaLightbulb className="text-xl" />,
+      title: "Discover Funding",
+      description:
+        "Find relevant grants, fellowships, and funding calls tailored to your research area.",
     },
     {
-      id: 3,
-      type: "Call for Papers",
-      title: "Journal of Sustainable Development",
-      date: "Dec 1",
-      description: "Seeking original research on water scarcity solutions",
-      link: "#",
-      image: "/journal-cfp.jpg",
+      icon: <FiGlobe className="text-xl" />,
+      title: "Access Shared Datasets",
+      description:
+        "Explore and utilize diverse datasets contributed by the research community securely.",
+    },
+    {
+      icon: <FaUsers className="text-xl" />,
+      title: "Join Interest Groups",
+      description:
+        "Connect with peers in specialized groups to discuss niche topics and innovations.",
+    },
+    {
+      icon: <FaGraduationCap className="text-xl" />,
+      title: "Skill Development Hub",
+      description:
+        "Access workshops, courses, and resources to enhance your research skills.",
     },
   ];
 
@@ -195,25 +185,27 @@ const Home = () => {
       name: "Dr. Almaz Bekele",
       title: "Lead Researcher",
       institution: "Addis Ababa University",
-      linkedin: "#",
-      twitter: "#",
-      image: "/researcher1.jpg",
+      linkedin: "https://linkedin.com", // Added full links
+      twitter: "https://twitter.com",
+      image: "https://randomuser.me/api/portraits/women/68.jpg", // Placeholder user image
     },
     {
       id: 2,
       name: "Prof. Tesfaye Lemma",
-      title: "Professor of Computer Science",
+      title: "Professor of AgriTech",
       institution: "Arba Minch University",
-      linkedin: "#",
-      image: "/researcher2.jpg",
+      linkedin: "https://linkedin.com",
+      twitter: "https://twitter.com",
+      image: "https://randomuser.me/api/portraits/men/75.jpg",
     },
     {
       id: 3,
       name: "Dr. Sara Gebre",
       title: "Postdoctoral Fellow",
-      institution: "University of Nairobi",
-      twitter: "#",
-      image: "/researcher3.jpg",
+      institution: "Hawassa University", // Changed for variety
+      linkedin: "https://linkedin.com",
+      twitter: "https://twitter.com",
+      image: "https://randomuser.me/api/portraits/women/78.jpg",
     },
   ];
 
@@ -223,28 +215,56 @@ const Home = () => {
       name: "Dr. Amanuel Tesfaye",
       title: "Researcher, AAU",
       quote:
-        "This platform transformed how I find collaborators. Essential tool!",
-      image: "/testimonial1.jpg",
+        "This platform transformed how I find collaborators. Essential tool for modern research!",
+      image: "https://randomuser.me/api/portraits/men/32.jpg",
     },
     {
       id: 2,
       name: "Prof. Mulu Alemayehu",
       title: "Professor, UoG",
       quote:
-        "The collaboration tools saved countless hours coordinating our team.",
-      image: "/testimonial2.jpg",
+        "The collaboration tools saved countless hours coordinating our interdisciplinary team. Highly recommended.",
+      image: "https://randomuser.me/api/portraits/women/45.jpg",
     },
     {
-      id: 2,
-      name: "Prof. Anuwar Addisu",
-      title: "Professor, UoG",
+      id: 3,
+      name: "Dr. Anuwar Addisu", // Changed to Dr. for variety
+      title: "Data Scientist, MoSHE", // Changed for variety
       quote:
-        "its a great platform for researchers to collaborate and share knowledge.",
-      image: "/testimonial2.jpg",
+        "It's a great platform for researchers to collaborate, share knowledge, and push the boundaries of science.",
+      image: "https://randomuser.me/api/portraits/men/55.jpg",
     },
   ];
 
-  // Auto-rotate testimonials
+  // --- NEW: Dummy Statistics Data ---
+  const platformStats = [
+    {
+      icon: <FaUsers />,
+      value: "1,200+",
+      label: "Active Researchers",
+      color: "from-teal-500 to-cyan-500",
+    },
+    {
+      icon: <FaProjectDiagram />,
+      value: "350+",
+      label: "Projects Hosted",
+      color: "from-purple-500 to-indigo-500",
+    },
+    {
+      icon: <FaBookOpen />,
+      value: "2,500+",
+      label: "Publications Shared",
+      color: "from-orange-500 to-amber-500",
+    },
+    {
+      icon: <FaHandsHelping />,
+      value: "800+",
+      label: "Collaborations Formed",
+      color: "from-green-500 to-lime-500",
+    },
+  ];
+  // --- End of Dummy Statistics Data ---
+
   useEffect(() => {
     const interval = setInterval(() => {
       setActiveTestimonial((prev) => (prev + 1) % testimonials.length);
@@ -256,7 +276,8 @@ const Home = () => {
     <div className="bg-gray-50">
       {/* Hero Section */}
       <section className="relative bg-gradient-to-r from-blue-800 to-blue-600 text-white pt-24 pb-32 overflow-hidden">
-        <div className="absolute inset-0 opacity-10 bg-[url('/pattern.svg')]"></div>
+        <div className="absolute inset-0 opacity-10 bg-[url('/pattern.svg')]"></div>{" "}
+        {/* Ensure pattern.svg is in public */}
         <div className="container mx-auto px-6 relative z-10">
           <motion.div
             initial="hidden"
@@ -284,13 +305,13 @@ const Home = () => {
             >
               <button
                 onClick={() => navigate("/signup")}
-                className="bg-white text-blue-800 font-semibold py-3 px-8 rounded-lg hover:bg-gray-100 transition-colors"
+                className="bg-white text-blue-800 font-semibold py-3 px-8 rounded-lg hover:bg-gray-100 transition-colors shadow-md"
               >
                 Join Now
               </button>
               <button
-                onClick={() => navigate("/explore")}
-                className="bg-transparent border-2 border-white text-white py-3 px-8 rounded-lg hover:bg-white/10 transition-colors"
+                onClick={() => navigate("/explore")} // Changed to /explore for projects
+                className="bg-transparent border-2 border-white text-white font-semibold py-3 px-8 rounded-lg hover:bg-white/10 transition-colors"
               >
                 Explore Projects
               </button>
@@ -299,72 +320,63 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Partners Section */}
+      {/* Trusted By Section */}
       <motion.section
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
-        className="py-8 bg-white shadow-sm -mt-16 relative z-20 mx-6 rounded-lg"
+        className="py-8 bg-white shadow-sm -mt-16 relative z-20 mx-4 sm:mx-6 rounded-lg"
       >
-        <div className="container mx-auto">
-          <p className="text-center text-sm text-gray-500 mb-6">
+        <div className="container mx-auto px-4">
+          <p className="text-center text-sm text-gray-500 mb-6 tracking-wider font-medium">
             TRUSTED BY LEADING INSTITUTIONS
           </p>
-          <div className="flex flex-wrap justify-center items-center gap-8 md:gap-12 opacity-70">
-            {["aau", "amu", "uog", "uon"].map((uni) => (
-              <img
-                key={uni}
-                src={`/${uni}-logo.png`}
-                alt={`${uni.toUpperCase()} logo`}
-                className="h-10 object-contain"
-                onError={(e) => (e.target.style.display = "none")}
-              />
-            ))}
+          <div className="flex flex-wrap justify-center items-center gap-x-8 gap-y-4 md:gap-x-12 opacity-70">
+            {/* Replace with actual logos if available */}
+            <img
+              src="/logos/aau-logo.png"
+              alt="AAU Logo"
+              className="h-8 md:h-10 object-contain"
+              onError={(e) => (e.target.style.display = "none")}
+            />
+            <img
+              src="/logos/amu-logo.png"
+              alt="AMU Logo"
+              className="h-8 md:h-10 object-contain"
+              onError={(e) => (e.target.style.display = "none")}
+            />
+            <img
+              src="/logos/uog-logo.png"
+              alt="UoG Logo"
+              className="h-8 md:h-10 object-contain"
+              onError={(e) => (e.target.style.display = "none")}
+            />
+            <img
+              src="/logos/hu-logo.png"
+              alt="HU Logo"
+              className="h-8 md:h-10 object-contain"
+              onError={(e) => (e.target.style.display = "none")}
+            />
+            <img
+              src="/logos/ju-logo.png"
+              alt="JU Logo"
+              className="h-8 md:h-10 object-contain"
+              onError={(e) => (e.target.style.display = "none")}
+            />
           </div>
         </div>
       </motion.section>
 
-      {/* Search Section */}
-      <section className="py-16 bg-gray-50">
-        <div className="container mx-auto px-6">
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            variants={containerVariants}
-            viewport={{ once: true }}
-            className="max-w-3xl mx-auto"
-          >
-            <motion.h2
-              variants={itemVariants}
-              className="text-3xl font-bold text-center mb-8 text-gray-800"
-            >
-              Find Collaboration Opportunities
-            </motion.h2>
-            <motion.div variants={itemVariants} className="relative">
-              <FaSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search collaborators, projects, publications..."
-                className="w-full pl-12 pr-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <button className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-600 text-white px-4 py-1.5 rounded-md hover:bg-blue-700 transition-colors">
-                Search
-              </button>
-            </motion.div>
-          </motion.div>
-        </div>
-      </section>
-
       {/* Features Section */}
-      <section className="py-16 bg-white">
+      <section className="py-16 bg-gray-50">
+        {" "}
+        {/* Changed background for consistency */}
         <div className="container mx-auto px-6">
           <motion.div
             initial="hidden"
             whileInView="visible"
             variants={containerVariants}
-            viewport={{ once: true }}
+            viewport={{ once: true, amount: 0.2 }}
           >
             <motion.h2
               variants={itemVariants}
@@ -377,9 +389,10 @@ const Home = () => {
               className="text-gray-600 text-center mb-12 max-w-2xl mx-auto"
             >
               Powerful tools designed to enhance your collaborative experience
+              and accelerate research outcomes.
             </motion.p>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {features.map((feature, index) => (
                 <FeatureCard
                   key={index}
@@ -393,63 +406,53 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Events Section */}
-      <section className="py-16 bg-gray-50">
-        <div className="container mx-auto px-6">
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            variants={containerVariants}
-            viewport={{ once: true }}
-          >
-            <div className="flex justify-between items-center mb-8">
-              <motion.h2
-                variants={itemVariants}
-                className="text-3xl font-bold text-gray-800"
-              >
-                Upcoming Events
-              </motion.h2>
-              <motion.a
-                variants={itemVariants}
-                href="/events"
-                className="text-blue-600 hover:text-blue-800 font-medium inline-flex items-center"
-              >
-                View all <FaArrowRight className="ml-1" />
-              </motion.a>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {events.map((event) => (
-                <EventCard key={event.id} event={event} />
-              ))}
-            </div>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Researchers Section */}
+      {/* --- NEW: Platform Impact at a Glance Section --- */}
       <section className="py-16 bg-white">
         <div className="container mx-auto px-6">
           <motion.div
             initial="hidden"
             whileInView="visible"
             variants={containerVariants}
-            viewport={{ once: true }}
+            viewport={{ once: true, amount: 0.2 }}
           >
-            <div className="flex justify-between items-center mb-8">
+            <motion.h2
+              variants={itemVariants}
+              className="text-3xl font-bold text-center mb-12 text-gray-800"
+            >
+              Platform Impact at a Glance
+            </motion.h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {platformStats.map((stat, index) => (
+                <StatisticCard
+                  key={index}
+                  icon={stat.icon}
+                  value={stat.value}
+                  label={stat.label}
+                  color={stat.color}
+                />
+              ))}
+            </div>
+          </motion.div>
+        </div>
+      </section>
+      {/* --- End of Platform Impact Section --- */}
+
+      {/* Featured Collaborators Section */}
+      <section className="py-16 bg-gray-50">
+        <div className="container mx-auto px-6">
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            variants={containerVariants}
+            viewport={{ once: true, amount: 0.2 }}
+          >
+            <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
               <motion.h2
                 variants={itemVariants}
-                className="text-3xl font-bold text-gray-800"
+                className="text-3xl font-bold text-gray-800 text-center sm:text-left"
               >
                 Featured Collaborators
               </motion.h2>
-              <motion.a
-                variants={itemVariants}
-                href="/researchers"
-                className="text-blue-600 hover:text-blue-800 font-medium inline-flex items-center"
-              >
-                View all <FaArrowRight className="ml-1" />
-              </motion.a>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
@@ -468,7 +471,7 @@ const Home = () => {
             initial="hidden"
             whileInView="visible"
             variants={containerVariants}
-            viewport={{ once: true }}
+            viewport={{ once: true, amount: 0.2 }}
             className="text-center"
           >
             <motion.h2
@@ -478,29 +481,34 @@ const Home = () => {
               What Our Users Say
             </motion.h2>
 
-            <div className="relative h-64">
+            <div className="relative h-72 md:h-64 overflow-hidden">
+              {" "}
+              {/* Adjusted height and added overflow */}
               <AnimatePresence mode="wait">
                 {testimonials.map(
                   (testimonial, index) =>
                     activeTestimonial === index && (
                       <motion.div
                         key={testimonial.id}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
+                        initial={{ opacity: 0, x: 50 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -50 }}
                         transition={{ duration: 0.5 }}
-                        className="absolute inset-0 flex flex-col md:flex-row items-center justify-center gap-8"
+                        className="absolute inset-0 flex flex-col items-center justify-center p-4"
                       >
-                        <div className="w-24 h-24 rounded-full bg-gray-200 overflow-hidden flex-shrink-0">
+                        <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-gray-200 overflow-hidden flex-shrink-0 mb-4 shadow-lg">
                           <img
-                            src={testimonial.image}
+                            src={testimonial.image || "/placeholder-image.jpg"}
                             alt={testimonial.name}
                             className="w-full h-full object-cover"
+                            onError={(e) =>
+                              (e.target.src = "/placeholder-image.jpg")
+                            }
                           />
                         </div>
-                        <div className="max-w-2xl relative">
-                          <FaQuoteLeft className="absolute -top-6 left-0 text-blue-200 text-3xl" />
-                          <blockquote className="text-lg italic text-gray-700 mb-4">
+                        <div className="max-w-xl relative text-center">
+                          <FaQuoteLeft className="absolute -top-2 -left-2 md:-top-4 md:-left-4 text-blue-200 text-2xl md:text-3xl opacity-70" />
+                          <blockquote className="text-md md:text-lg italic text-gray-700 mb-3">
                             "{testimonial.quote}"
                           </blockquote>
                           <div>
@@ -518,14 +526,17 @@ const Home = () => {
               </AnimatePresence>
             </div>
 
-            <div className="flex justify-center gap-2 mt-8">
+            <div className="flex justify-center gap-2.5 mt-8">
               {testimonials.map((_, index) => (
                 <button
                   key={index}
                   onClick={() => setActiveTestimonial(index)}
-                  className={`w-3 h-3 rounded-full transition-colors ${
-                    activeTestimonial === index ? "bg-blue-600" : "bg-gray-300"
+                  className={`w-2.5 h-2.5 rounded-full transition-all duration-300 focus:outline-none ${
+                    activeTestimonial === index
+                      ? "bg-blue-600 scale-125"
+                      : "bg-gray-300 hover:bg-gray-400"
                   }`}
+                  aria-label={`View testimonial ${index + 1}`}
                 />
               ))}
             </div>
@@ -540,7 +551,7 @@ const Home = () => {
             initial="hidden"
             whileInView="visible"
             variants={fadeIn}
-            viewport={{ once: true }}
+            viewport={{ once: true, amount: 0.2 }}
           >
             <h2 className="text-3xl md:text-4xl font-bold mb-6">
               Ready to Supercharge Your Collaboration?
@@ -552,13 +563,13 @@ const Home = () => {
             <div className="flex flex-col sm:flex-row justify-center gap-4">
               <button
                 onClick={() => navigate("/signup")}
-                className="bg-white text-blue-800 font-semibold py-3 px-8 rounded-lg hover:bg-gray-100 transition-colors"
+                className="bg-white text-blue-800 font-semibold py-3 px-8 rounded-lg hover:bg-gray-100 transition-colors shadow-md"
               >
                 Get Started Free
               </button>
               <button
                 onClick={() => navigate("/contact")}
-                className="bg-transparent border-2 border-white text-white py-3 px-8 rounded-lg hover:bg-white/10 transition-colors"
+                className="bg-transparent border-2 border-white text-white font-semibold py-3 px-8 rounded-lg hover:bg-white/10 transition-colors"
               >
                 Contact Us
               </button>
@@ -568,70 +579,131 @@ const Home = () => {
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-gray-400 py-2">
-        <div className="container mx-auto px-1">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-1">
+      <footer className="bg-gray-900 text-gray-400 py-12">
+        <div className="container mx-auto px-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
             <div>
-              <h3 className="text-white font-semibold mb-4">
-                searcher Collaboration Portal
+              <h3 className="text-lg text-white font-semibold mb-4">
+                Researcher Portal
               </h3>
-              <p className="text-sm">
-                Connecting innovators across Africa to foster collaboration and
-                accelerate discovery.
+              <p className="text-sm leading-relaxed">
+                Connecting innovators across Ethiopia and beyond to foster
+                collaboration and accelerate discovery.
               </p>
             </div>
             <div>
-              <h3 className="text-white font-semibold mb-4">Explore</h3>
+              <h3 className="text-lg text-white font-semibold mb-4">Explore</h3>
               <ul className="space-y-2 text-sm">
                 <li>
-                  <Link to="/" className="hover:text-white">
+                  <Link to="/" className="hover:text-white transition-colors">
                     Home
                   </Link>
                 </li>
                 <li>
-                  <Link to="/projects" className="hover:text-white">
+                  <Link
+                    to="/projects"
+                    className="hover:text-white transition-colors"
+                  >
                     Projects
                   </Link>
                 </li>
-
                 <li>
-                  <Link to="/resources" className="hover:text-white">
-                    Resources
+                  <Link
+                    to="/publications"
+                    className="hover:text-white transition-colors"
+                  >
+                    Publications
                   </Link>
                 </li>
+                <li>
+                  <Link
+                    to="/explore-researchers"
+                    className="hover:text-white transition-colors"
+                  >
+                    Researchers
+                  </Link>
+                </li>
+                {/* <li><Link to="/resources" className="hover:text-white transition-colors">Resources</Link></li> */}
               </ul>
             </div>
             <div>
-              <h3 className="text-white font-semibold mb-4">Platform</h3>
+              <h3 className="text-lg text-white font-semibold mb-4">
+                Platform
+              </h3>
               <ul className="space-y-2 text-sm">
                 <li>
-                  <Link to="/about" className="hover:text-white">
+                  <Link
+                    to="/about"
+                    className="hover:text-white transition-colors"
+                  >
                     About Us
                   </Link>
                 </li>
-
                 <li>
-                  <Link to="/terms" className="hover:text-white">
+                  <Link
+                    to="/contact"
+                    className="hover:text-white transition-colors"
+                  >
+                    Contact
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to="/faq"
+                    className="hover:text-white transition-colors"
+                  >
+                    FAQ
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to="/terms"
+                    className="hover:text-white transition-colors"
+                  >
                     Terms of Service
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to="/privacy"
+                    className="hover:text-white transition-colors"
+                  >
+                    Privacy Policy
                   </Link>
                 </li>
               </ul>
             </div>
             <div>
-              <h3 className="text-white font-semibold mb-4">Connect</h3>
-              <div className="flex space-x-4">
-                <a href="#" className="hover:text-white">
-                  <FaTwitter />
+              <h3 className="text-lg text-white font-semibold mb-4">
+                Connect With Us
+              </h3>
+              <div className="flex space-x-4 mb-4">
+                <a
+                  href="https://twitter.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-white transition-colors"
+                  aria-label="Twitter"
+                >
+                  <FaTwitter size={20} />
                 </a>
-                <a href="#" className="hover:text-white">
-                  <FaLinkedin />
+                <a
+                  href="https://linkedin.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-white transition-colors"
+                  aria-label="LinkedIn"
+                >
+                  <FaLinkedin size={20} />
                 </a>
               </div>
+              <p className="text-sm">contact@researchportal.et</p>{" "}
+              {/* Example email */}
             </div>
           </div>
           <div className="border-t border-gray-800 pt-8 text-sm text-center">
             © {new Date().getFullYear()} Researcher Collaboration Portal. All
-            rights reserved.
+            rights reserved. Built with passion in Ethiopia.
           </div>
         </div>
       </footer>

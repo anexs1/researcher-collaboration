@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, memo } from "react"; // Import memo
+import React, { useState, useEffect, useCallback, memo } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
@@ -23,7 +23,8 @@ import {
   FaEyeSlash,
   FaSpinner,
   FaClock,
-  FaUserCircle, // Added for profile image fallback
+  FaUserCircle,
+  FaRunning, // New icon for "Ongoing" or "Team Full"
 } from "react-icons/fa";
 
 // --- Components ---
@@ -35,7 +36,6 @@ import MembersModal from "../Component/projects/MembersModal";
 import JoinRequestModal from "../Component/projects/JoinRequestModal";
 import RequestsModal from "../Component/projects/RequestsModal";
 import ReportModal from "../Component/projects/ReportModal";
-// import ChatModal from "../Component/projects/ChatModal";
 
 // --- Constants ---
 const API_BASE_URL =
@@ -44,7 +44,8 @@ const PROJECTS_PER_PAGE = 9;
 const statusOptions = [
   { value: "", label: "All Statuses" },
   { value: "Planning", label: "Planning" },
-  { value: "Active", label: "Active" },
+  { value: "Active", label: "Active" }, // "Ongoing" could be a sub-state of Active or a new status
+  { value: "Ongoing", label: "Ongoing" }, // Added for filter, if you make it a distinct status
   { value: "Completed", label: "Completed" },
   { value: "On Hold", label: "On Hold" },
   { value: "Archived", label: "Archived" },
@@ -64,11 +65,18 @@ apiClient.interceptors.request.use(
 );
 
 // --- Helper Function for Status Badge ---
-const getStatusBadgeClasses = (status) => {
+const getStatusBadgeClasses = (status, isTeamFull = false) => {
+  // If team is full and status is Active/Planning, we might want to highlight it
+  // For now, let's just use the primary status. You can add more logic here.
+  // if (isTeamFull && (status?.toLowerCase() === 'active' || status?.toLowerCase() === 'planning')) {
+  //   return "bg-teal-100 text-teal-800 border-teal-200"; // Example: "Active (Full)"
+  // }
+
   switch (status?.toLowerCase()) {
     case "completed":
       return "bg-green-100 text-green-800 border-green-200";
     case "active":
+    case "ongoing": // If "Ongoing" is a distinct status
       return "bg-blue-100 text-blue-800 border-blue-200";
     case "planning":
       return "bg-yellow-100 text-yellow-800 border-yellow-200";
@@ -80,19 +88,18 @@ const getStatusBadgeClasses = (status) => {
   }
 };
 
-// --- ProfileImage Sub-Component ---
+// --- ProfileImage Sub-Component (No changes here) ---
 const ProfileImage = memo(
   ({ src, alt, fallbackUsername, className = "h-6 w-6 rounded-full" }) => {
     const [hasError, setHasError] = useState(false);
     const [imageSrc, setImageSrc] = useState(null);
 
     useEffect(() => {
-      setHasError(false); // Reset error on src change
+      setHasError(false);
       if (src) {
         if (src.startsWith("http") || src.startsWith("blob:")) {
           setImageSrc(src);
         } else {
-          // Prepend API_BASE_URL if it's a relative path
           let fullUrl = API_BASE_URL;
           if (API_BASE_URL.endsWith("/") && src.startsWith("/")) {
             fullUrl += src.substring(1);
@@ -110,11 +117,10 @@ const ProfileImage = memo(
     }, [src]);
 
     if (!imageSrc || hasError) {
-      // Fallback to initials or a generic icon
       return (
         <span
           className={`${className} bg-gray-300 flex items-center justify-center text-gray-600 font-semibold uppercase`}
-          title={alt} // Add title for accessibility on fallback
+          title={alt}
         >
           {fallbackUsername ? (
             fallbackUsername.charAt(0)
@@ -124,7 +130,6 @@ const ProfileImage = memo(
         </span>
       );
     }
-
     return (
       <img
         src={imageSrc}
@@ -136,7 +141,6 @@ const ProfileImage = memo(
     );
   }
 );
-// --- End of ProfileImage Sub-Component ---
 
 const ProjectCard = memo(
   ({
@@ -146,7 +150,6 @@ const ProjectCard = memo(
     activeDropdown,
     isUpdatingStatus,
     hasPendingRequests,
-    // Callback Props
     onToggleDropdown,
     onToggleSave,
     onViewProject,
@@ -174,14 +177,24 @@ const ProjectCard = memo(
       ? project.image.startsWith("http") || project.image.startsWith("blob:")
         ? project.image
         : project.image.startsWith("/")
-        ? `${API_BASE_URL}${project.image}` // Assuming project.image is like /path/to/image.png
-        : `${API_BASE_URL}/${project.image}` // Assuming project.image is like image.png
+        ? `${API_BASE_URL}${project.image}`
+        : `${API_BASE_URL}/${project.image}`
       : null;
 
     const isHidden = project?.status === "Archived";
 
+    // --- MODIFIED: Determine if the team is full ---
+    const requiredSpots = parseInt(project?.requiredCollaborators, 10) || 0;
+    const currentSpotsFilled = parseInt(project?.currentCollaborators, 10) || 0; // Expect this from backend
+    const isTeamFull = requiredSpots > 0 && currentSpotsFilled >= requiredSpots;
+
+    // If the project status should *actually change* to "Ongoing" in the backend when full,
+    // then project.status would reflect that. Here, we are primarily changing the UI presentation.
+    const displayStatus = project?.status; // You could override this: isTeamFull && project.status === 'Active' ? 'Ongoing' : project.status;
+
     const renderNonOwnerAction = () => {
       if (!currentUser) return null;
+
       switch (project?.currentUserMembershipStatus) {
         case "approved":
           return (
@@ -210,7 +223,22 @@ const ProjectCard = memo(
               <FaClock /> Pending
             </button>
           );
-        default:
+        default: // Not owner, not approved, not pending
+          // --- MODIFIED: Check if team is full ---
+          if (isTeamFull) {
+            return (
+              <button
+                disabled
+                onMouseEnter={handleChildMouseEnter}
+                onMouseLeave={handleChildMouseLeave}
+                className="flex-1 bg-gray-100 text-gray-500 py-1.5 px-3 rounded-md cursor-not-allowed text-sm font-medium flex items-center justify-center gap-1.5"
+                title="This project team is currently full."
+              >
+                <FaRunning /> Team Full
+              </button>
+            );
+          }
+          // --- END MODIFIED ---
           return (
             <button
               onMouseEnter={handleChildMouseEnter}
@@ -300,8 +328,6 @@ const ProjectCard = memo(
                 aria-labelledby={`options-menu-${project.id}`}
               >
                 <button
-                  onMouseEnter={handleChildMouseEnter}
-                  onMouseLeave={handleChildMouseLeave}
                   onClick={() => onDownloadProject(project)}
                   className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                   role="menuitem"
@@ -309,8 +335,6 @@ const ProjectCard = memo(
                   <FaDownload className="mr-2 text-blue-500" /> Download Info
                 </button>
                 <button
-                  onMouseEnter={handleChildMouseEnter}
-                  onMouseLeave={handleChildMouseLeave}
                   onClick={() => onOpenReportModal(project)}
                   className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                   role="menuitem"
@@ -318,8 +342,6 @@ const ProjectCard = memo(
                   <FaFileAlt className="mr-2 text-purple-500" /> Report
                 </button>
                 <button
-                  onMouseEnter={handleChildMouseEnter}
-                  onMouseLeave={handleChildMouseLeave}
                   onClick={() => onShareProject(project.id)}
                   className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                   role="menuitem"
@@ -327,8 +349,6 @@ const ProjectCard = memo(
                   <FaShareAlt className="mr-2 text-green-500" /> Share
                 </button>
                 <button
-                  onMouseEnter={handleChildMouseEnter}
-                  onMouseLeave={handleChildMouseLeave}
                   onClick={() => onViewMembers(project)}
                   className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                   role="menuitem"
@@ -337,10 +357,9 @@ const ProjectCard = memo(
                 </button>
                 {!isOwner &&
                   project.currentUserMembershipStatus !== "approved" &&
-                  project.currentUserMembershipStatus !== "pending" && (
+                  project.currentUserMembershipStatus !== "pending" &&
+                  !isTeamFull && (
                     <button
-                      onMouseEnter={handleChildMouseEnter}
-                      onMouseLeave={handleChildMouseLeave}
                       onClick={() => onOpenJoinModal(project)}
                       className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                       role="menuitem"
@@ -353,8 +372,6 @@ const ProjectCard = memo(
                   <>
                     <div className="border-t my-1 mx-2 border-gray-100"></div>
                     <button
-                      onMouseEnter={handleChildMouseEnter}
-                      onMouseLeave={handleChildMouseLeave}
                       onClick={() =>
                         onUpdateProjectStatus(
                           project,
@@ -390,7 +407,7 @@ const ProjectCard = memo(
                 className="w-full h-full object-cover"
                 loading="lazy"
                 onError={(e) => {
-                  e.target.src = "/placeholder-image.png"; // Ensure this is in your public folder
+                  e.target.src = "/placeholder-image.png";
                 }}
               />
             ) : (
@@ -403,10 +420,16 @@ const ProjectCard = memo(
           <div className="flex justify-between items-center mb-2 text-xs">
             <span
               className={`font-medium px-2.5 py-0.5 rounded-full border ${getStatusBadgeClasses(
-                project?.status
+                displayStatus,
+                isTeamFull
               )}`}
             >
-              {project?.status || "Unknown"}
+              {displayStatus || "Unknown"}
+              {isTeamFull &&
+                (project.status === "Active" ||
+                  project.status === "Planning") && (
+                  <span className="ml-1">(Full)</span>
+                )}
             </span>
             <div
               className="flex items-center text-gray-500"
@@ -422,15 +445,12 @@ const ProjectCard = memo(
                       to={
                         project.owner.id ? `/profile/${project.owner.id}` : "#"
                       }
-                      onMouseEnter={handleChildMouseEnter}
-                      onMouseLeave={handleChildMouseLeave}
                       onClick={(e) => e.stopPropagation()}
                       className="font-medium hover:text-indigo-600 hover:underline truncate max-w-[100px] sm:max-w-[150px]"
                     >
                       {project.owner.username || "User"}
                     </Link>
                   )}
-                  {/* MODIFIED: Use ProfileImage component */}
                   <ProfileImage
                     src={project.owner.profilePictureUrl}
                     alt={project.owner.username || "Owner"}
@@ -454,16 +474,38 @@ const ProjectCard = memo(
               <span className="italic text-gray-400">No description.</span>
             )}
           </p>
+          {/* --- MODIFIED: Collaborators Info --- */}
           <div className="flex items-center text-sm text-gray-500 mb-4">
             <FaUsers className="mr-1.5 text-gray-400" />
+            {isTeamFull ? (
+              <span className="font-medium text-green-600">
+                Team Full ({currentSpotsFilled}/{requiredSpots})
+              </span>
+            ) : requiredSpots > 0 ? (
+              <span>
+                Needs:{" "}
+                <span className="font-medium text-gray-700">
+                  {requiredSpots - currentSpotsFilled}
+                </span>{" "}
+                of{" "}
+                <span className="font-medium text-gray-700">
+                  {requiredSpots}
+                </span>
+              </span>
+            ) : (
+              <span>
+                Needs: <span className="font-medium text-gray-700">N/A</span>
+              </span>
+            )}
+            <span className="mx-1">·</span>
             <span>
-              Needs:{" "}
+              Members:{" "}
               <span className="font-medium text-gray-700">
-                {project?.requiredCollaborators ?? "N/A"}
-              </span>{" "}
-              collaborator(s)
+                {currentSpotsFilled}
+              </span>
             </span>
           </div>
+          {/* --- END MODIFIED --- */}
 
           <div
             className={`flex mt-auto pt-3 border-t border-gray-100 ${
@@ -473,8 +515,6 @@ const ProjectCard = memo(
             {isOwner ? (
               <>
                 <button
-                  onMouseEnter={handleChildMouseEnter}
-                  onMouseLeave={handleChildMouseLeave}
                   onClick={(e) => {
                     e.stopPropagation();
                     onViewProject(project);
@@ -487,8 +527,6 @@ const ProjectCard = memo(
                 </button>
                 <Link
                   to={`/projects/edit/${project?.id}`}
-                  onMouseEnter={handleChildMouseEnter}
-                  onMouseLeave={handleChildMouseLeave}
                   onClick={(e) => e.stopPropagation()}
                   className="py-1.5 px-2 sm:px-3 rounded-md text-sm font-medium flex items-center justify-center gap-1 transition-colors flex-grow bg-amber-50 text-amber-700 hover:bg-amber-100"
                   title="Edit Project"
@@ -497,8 +535,6 @@ const ProjectCard = memo(
                   <span className="hidden sm:inline">Edit</span>
                 </Link>
                 <button
-                  onMouseEnter={handleChildMouseEnter}
-                  onMouseLeave={handleChildMouseLeave}
                   onClick={(e) => {
                     e.stopPropagation();
                     onOpenRequestsModal(project);
@@ -519,8 +555,6 @@ const ProjectCard = memo(
                   <span className="hidden sm:inline">Requests</span>
                 </button>
                 <button
-                  onMouseEnter={handleChildMouseEnter}
-                  onMouseLeave={handleChildMouseLeave}
                   onClick={(e) => {
                     e.stopPropagation();
                     onDeleteProject(project?.id);
@@ -594,12 +628,16 @@ export default function Projects({ currentUser }) {
             description: proj.description ?? "No description.",
             status: proj.status ?? "Unknown",
             requiredCollaborators: proj.requiredCollaborators ?? 0,
+            // --- MODIFIED: Ensure currentCollaborators is fetched ---
+            currentCollaborators:
+              proj.currentCollaborators ?? proj.membersCount ?? 0, // Adjust field name as per your backend
+            // --- END MODIFIED ---
             ownerId: proj.ownerId ?? null,
-            owner: proj.owner // Ensure owner object is passed as is
+            owner: proj.owner
               ? {
                   id: proj.owner.id,
                   username: proj.owner.username ?? "Unknown",
-                  profilePictureUrl: proj.owner.profilePictureUrl || null, // This will be used by ProfileImage
+                  profilePictureUrl: proj.owner.profilePictureUrl || null,
                 }
               : null,
             createdAt: proj.createdAt,
@@ -632,13 +670,11 @@ export default function Projects({ currentUser }) {
   useEffect(() => {
     setPage(1);
     setProjectsWithNoPending(new Set());
-    // fetchProjects(1); // fetchProjects is now a dependency, this line is removed to prevent double call
   }, [searchTerm, filterStatus]);
 
-  // useEffect to call fetchProjects when page or other dependencies change
   useEffect(() => {
     fetchProjects(page);
-  }, [page, fetchProjects]); // Added fetchProjects as dependency
+  }, [page, fetchProjects]);
 
   const handleCloseModal = useCallback(() => {
     setModalType(null);
@@ -713,10 +749,11 @@ export default function Projects({ currentUser }) {
     },
     [showNotification]
   );
+
   const handleShareProject = useCallback(
     (projectId) => {
       navigator.clipboard
-        .writeText(`${window.location.origin}/projects/${projectId}`) // Adjusted to share project specific URL
+        .writeText(`${window.location.origin}/projects/${projectId}`)
         .then(
           () => showNotification("Project link copied!", "success"),
           () => showNotification("Copy failed.", "error")
@@ -725,9 +762,10 @@ export default function Projects({ currentUser }) {
     },
     [showNotification]
   );
+
   const handleDownloadProject = useCallback(
     (project) => {
-      const data = `Title: ${project.title}\nDescription: ${project.description}\nStatus: ${project.status}\nRequired Collaborators: ${project.requiredCollaborators}`;
+      const data = `Title: ${project.title}\nDescription: ${project.description}\nStatus: ${project.status}\nRequired Collaborators: ${project.requiredCollaborators}\nCurrent Collaborators: ${project.currentCollaborators}`;
       const blob = new Blob([data], { type: "text/plain" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -742,6 +780,7 @@ export default function Projects({ currentUser }) {
     },
     [showNotification]
   );
+
   const downloadReport = useCallback(
     (reportText, projectName) => {
       const blob = new Blob([reportText], { type: "text/plain" });
@@ -758,6 +797,7 @@ export default function Projects({ currentUser }) {
     },
     [showNotification, handleCloseModal]
   );
+
   const toggleDropdown = useCallback((projectId) => {
     setActiveDropdown((prev) => (prev === projectId ? null : projectId));
   }, []);
@@ -767,7 +807,7 @@ export default function Projects({ currentUser }) {
       if (!projectToUpdate) return;
       const oldStatus = projectToUpdate.status;
       setIsUpdatingStatus(true);
-      setSelectedProject(projectToUpdate); // Keep track of which project is being updated
+      setSelectedProject(projectToUpdate);
       setActiveDropdown(null);
       setProjects((prev) =>
         prev.map((p) =>
@@ -794,7 +834,7 @@ export default function Projects({ currentUser }) {
         );
       } finally {
         setIsUpdatingStatus(false);
-        setSelectedProject(null); // Clear selected project after update
+        setSelectedProject(null);
       }
     },
     [showNotification]
@@ -813,9 +853,9 @@ export default function Projects({ currentUser }) {
         await apiClient.delete(`/api/projects/${projectId}`);
         showNotification("Project deleted.", "success");
         if (projects.length === 1 && page > 1) {
-          setPage((p) => p - 1); // Go to previous page if current becomes empty
+          setPage((p) => p - 1);
         } else {
-          fetchProjects(page); // Refetch current page data
+          fetchProjects(page);
         }
       } catch (err) {
         showNotification(
@@ -830,6 +870,8 @@ export default function Projects({ currentUser }) {
 
   const handleRequestsHandled = useCallback((projectId) => {
     setProjectsWithNoPending((prev) => new Set(prev).add(projectId));
+    // Optionally, refetch the specific project or all projects if its status/collaborator count might have changed
+    // fetchProjects(page); // Or a more targeted update
   }, []);
 
   return (
@@ -906,7 +948,7 @@ export default function Projects({ currentUser }) {
         )}
 
         <div className="mt-6 pb-10">
-          {isLoading && projects.length === 0 ? ( // Show full page spinner only if no projects are yet displayed
+          {isLoading && projects.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 text-center">
               <LoadingSpinner size="lg" />
               <span className="ml-3 text-lg font-medium text-gray-600 mt-4">
@@ -929,8 +971,8 @@ export default function Projects({ currentUser }) {
                   to="/projects/new"
                   className="mt-6 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
-                  <FaPlus className="mr-2 -ml-1 h-5 w-5" />
-                  Create Your First Project
+                  <FaPlus className="mr-2 -ml-1 h-5 w-5" /> Create Your First
+                  Project
                 </Link>
               )}
             </div>
@@ -949,8 +991,8 @@ export default function Projects({ currentUser }) {
                       isSaved={savedProjects.has(project.id)}
                       activeDropdown={activeDropdown}
                       hasPendingRequests={
-                        project.ownerId === currentUser?.id && // Only owners see this for their projects
-                        !projectsWithNoPending.has(project.id) // And if requests haven't been marked as handled
+                        project.ownerId === currentUser?.id &&
+                        !projectsWithNoPending.has(project.id)
                       }
                       onToggleDropdown={toggleDropdown}
                       onToggleSave={toggleSaveProject}
@@ -970,13 +1012,12 @@ export default function Projects({ currentUser }) {
                   ))}
                 </AnimatePresence>
               </motion.div>
-              {isLoading &&
-                projects.length > 0 && ( // Show a smaller loading indicator if projects are already there but more are loading (e.g. pagination)
-                  <div className="flex justify-center items-center py-8">
-                    <LoadingSpinner size="md" />
-                    <span className="ml-2 text-gray-600">Loading more...</span>
-                  </div>
-                )}
+              {isLoading && projects.length > 0 && (
+                <div className="flex justify-center items-center py-8">
+                  <LoadingSpinner size="md" />
+                  <span className="ml-2 text-gray-600">Loading more...</span>
+                </div>
+              )}
               {totalPages > 1 && !isLoading && (
                 <div
                   className="flex justify-center items-center mt-10"
@@ -1045,12 +1086,11 @@ export default function Projects({ currentUser }) {
         {modalType === "report" && selectedProject && (
           <ReportModal
             key={`report-${selectedProject.id}`}
-            reportData={reportData} // You might want to pass the project ID or more context
-            itemName={selectedProject?.title} // Use itemName for consistency if ReportModal expects it
+            reportData={reportData}
+            itemName={selectedProject?.title}
             itemType="project"
             onClose={handleCloseModal}
             onSubmit={(reportContent) => {
-              // Placeholder for report submission logic
               console.log(
                 "Submitting report for project:",
                 selectedProject.id,
@@ -1067,7 +1107,7 @@ export default function Projects({ currentUser }) {
 
       {activeDropdown && (
         <div
-          className="fixed inset-0 z-10 bg-transparent" // Click away to close dropdown
+          className="fixed inset-0 z-10 bg-transparent"
           onClick={() => setActiveDropdown(null)}
           aria-hidden="true"
         />

@@ -1,42 +1,36 @@
 import asyncHandler from "express-async-handler";
 import db from "../models/index.js";
-import { Op } from "sequelize";
+import { Op, literal } from "sequelize";
 import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 
-// ES Module __dirname setup
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const BACKEND_ROOT_DIR = path.resolve(__dirname, "..");
 const UPLOADS_ROOT_DIR = path.join(BACKEND_ROOT_DIR, "uploads");
 const PROJECT_UPLOADS_DIR = path.join(UPLOADS_ROOT_DIR, "projects");
 
-// Ensure all needed models are loaded and destructured
 const { Project, User, Member, CollaborationRequest, sequelize } = db;
 if (!Project || !User || !Member || !CollaborationRequest || !sequelize) {
   console.error(
-    "FATAL: Database models (Project, User, Member, CollaborationRequest, sequelize) not loaded correctly in projectController.js. Check models/index.js."
+    "FATAL: Database models not loaded correctly in projectController.js."
   );
-  // process.exit(1); // Consider for production
+  // process.exit(1);
 }
 
-// --- Helper to ensure directory exists ---
 const ensureUploadsDirExists = async (dirPath) => {
   try {
     await fs.access(dirPath);
   } catch (error) {
     if (error.code === "ENOENT") {
-      console.log(`Directory ${dirPath} not found, attempting to create...`);
       try {
         await fs.mkdir(dirPath, { recursive: true });
-        console.log(`Successfully created directory: ${dirPath}`);
       } catch (mkdirError) {
         console.error(`Error creating directory ${dirPath}:`, mkdirError);
         throw new Error(`Failed to create required directory: ${dirPath}`);
       }
     } else {
-      console.error(`Error accessing directory ${dirPath}:`, error);
       throw error;
     }
   }
@@ -45,7 +39,7 @@ ensureUploadsDirExists(PROJECT_UPLOADS_DIR).catch((err) =>
   console.error("Failed to ensure initial project uploads directory:", err)
 );
 
-// --- Field Definitions (using MODEL camelCase names) ---
+// --- Field Definitions with CORRECTED literal subquery ---
 const projectListSelectFields = [
   "id",
   "title",
@@ -59,7 +53,12 @@ const projectListSelectFields = [
   "category",
   "duration",
   "funding",
-  // "skillsNeeded", // Add back if column 'skills_needed' exists and is mapped in ProjectModel
+  [
+    literal(
+      `(SELECT COUNT(*) FROM \`project_members\` WHERE \`project_members\`.\`project_id\` = \`${Project.name}\`.\`id\` AND \`project_members\`.\`status\` IN ('active', 'approved'))`
+    ),
+    "currentCollaborators",
+  ],
 ];
 const projectDetailSelectFields = [
   "id",
@@ -79,24 +78,18 @@ const projectDetailSelectFields = [
   "views",
   "likes",
   "comments",
+  [
+    literal(
+      `(SELECT COUNT(*) FROM \`project_members\` WHERE \`project_members\`.\`project_id\` = \`${Project.name}\`.\`id\` AND \`project_members\`.\`status\` IN ('active', 'approved'))`
+    ),
+    "currentCollaborators",
+  ],
 ];
 const userPublicSelectFields = ["id", "username", "profilePictureUrl"];
 
-// --- Controller Functions ---
-
-/**
- * @desc    Get all projects (paginated, searchable, with user membership status if logged in)
- * @route   GET /api/projects
- * @access  Public (Membership status included ONLY if user is logged in via optionalProtect)
- */
+// --- Controller Functions (rest of the code remains the same as your last provided version) ---
 export const getAllProjects = asyncHandler(async (req, res) => {
   const currentUserId = req.user?.id;
-  console.log(
-    `getAllProjects - Current User ID (from req.user): ${
-      currentUserId || "Guest"
-    }`
-  );
-
   try {
     const { status, search, page = 1, limit = 9 } = req.query;
     const where = {};
@@ -105,13 +98,11 @@ export const getAllProjects = asyncHandler(async (req, res) => {
     } else if (status === "archived") {
       where.status = "Archived";
     } else if (status !== "all") {
-      // Default: exclude archived if status is not 'all' or 'archived'
       where.status = { [Op.ne]: "Archived" };
     }
 
     if (search) {
-      const likeOperator =
-        sequelize.getDialect() === "postgres" ? Op.iLike : Op.like;
+      const likeOperator = Op.like;
       where[Op.or] = [
         { title: { [likeOperator]: `%${search}%` } },
         { description: { [likeOperator]: `%${search}%` } },
@@ -139,7 +130,6 @@ export const getAllProjects = asyncHandler(async (req, res) => {
         required: false,
       },
     ];
-
     if (currentUserId) {
       includes.push(
         {
@@ -171,13 +161,13 @@ export const getAllProjects = asyncHandler(async (req, res) => {
 
     const processedProjects = projects.map((p) => {
       const projectJson = p.toJSON();
+      projectJson.currentCollaborators =
+        parseInt(projectJson.currentCollaborators, 10) || 0;
       projectJson.currentUserMembershipStatus = null;
-
       if (currentUserId) {
         const currentUserMembership = projectJson.memberships?.[0];
         const currentUserPendingRequest =
           projectJson.collaborationRequests?.[0];
-
         if (
           currentUserMembership &&
           (currentUserMembership.status === "active" ||
@@ -215,11 +205,6 @@ export const getAllProjects = asyncHandler(async (req, res) => {
   }
 });
 
-/**
- * @desc    Get projects owned or joined by the logged-in user
- * @route   GET /api/projects/my
- * @access  Private (Requires login)
- */
 export const getMyProjects = asyncHandler(async (req, res) => {
   const userId = req.user?.id;
   if (!userId) {
@@ -228,17 +213,9 @@ export const getMyProjects = asyncHandler(async (req, res) => {
   }
   try {
     const projectWhereConditions = {
-      [Op.or]: [
-        { ownerId: userId },
-        // This alias 'myMemberships' needs to be defined in the include below
-        // and must match an association defined from Project to Member
-        // Usually Project.hasMany(Member, { as: 'memberships' })
-        // If we use 'memberships' as the alias in include, it should be '$memberships.id$'
-        { "$memberships.id$": { [Op.not]: null } },
-      ],
+      [Op.or]: [{ ownerId: userId }, { "$memberships.user_id$": userId }],
       status: { [Op.ne]: "Archived" },
     };
-
     const { count, rows: projects } = await Project.findAndCountAll({
       where: projectWhereConditions,
       attributes: projectListSelectFields,
@@ -246,47 +223,38 @@ export const getMyProjects = asyncHandler(async (req, res) => {
         { model: User, as: "owner", attributes: userPublicSelectFields },
         {
           model: Member,
-          as: "memberships", // This alias must match Project.hasMany(Member, { as: "memberships"})
-          where: {
-            userId: userId,
-            status: { [Op.in]: ["active", "approved"] },
-          },
-          attributes: ["id"], // Only need to check for existence for the Op.or logic
-          required: false, // LEFT JOIN is crucial for the OR to work correctly
+          as: "memberships",
+          where: { status: { [Op.in]: ["active", "approved"] } },
+          attributes: [],
+          required: false,
         },
       ],
       order: [["updatedAt", "DESC"]],
-      distinct: true, // Important with Op.or and includes
+      distinct: true,
     });
-
+    const processedProjects = projects.map((p) => {
+      const projectJson = p.toJSON();
+      projectJson.currentCollaborators =
+        parseInt(projectJson.currentCollaborators, 10) || 0;
+      return projectJson;
+    });
     res
       .status(200)
-      .json({
-        success: true,
-        count: count,
-        data: projects.map((p) => p.toJSON()),
-      });
+      .json({ success: true, count: count, data: processedProjects });
   } catch (error) {
     console.error(`Error in getMyProjects for User ${userId}:`, error);
-    if (error.name && error.name.startsWith("Sequelize")) {
-      console.error("Sequelize Error Details:", JSON.stringify(error, null, 2));
-    }
-    res.status(500).json({
-      success: false,
-      message: error.message || "Server error retrieving user's projects.",
-    });
+    res
+      .status(500)
+      .json({
+        success: false,
+        message: error.message || "Server error retrieving user's projects.",
+      });
   }
 });
 
-/**
- * @desc    Get a single project by ID
- * @route   GET /api/projects/:id
- * @access  Public (Basic details are public, membership status added if logged in)
- */
 export const getProjectById = asyncHandler(async (req, res) => {
   const projectIdParam = req.params.id;
   const currentUserId = req.user?.id;
-
   const projectId = parseInt(projectIdParam, 10);
   if (isNaN(projectId) || projectId <= 0) {
     res.status(400);
@@ -300,21 +268,20 @@ export const getProjectById = asyncHandler(async (req, res) => {
         { model: User, as: "owner", attributes: userPublicSelectFields },
       ],
     });
-
     if (!project) {
       res.status(404);
       throw new Error("Project not found.");
     }
 
     const projectJson = project.toJSON();
+    projectJson.currentCollaborators =
+      parseInt(projectJson.currentCollaborators, 10) || 0;
     projectJson.currentUserMembershipStatus = null;
-
     if (currentUserId) {
       const memberRecord = await Member.findOne({
         where: { userId: currentUserId, projectId: projectId },
         attributes: ["status"],
       });
-
       if (
         memberRecord &&
         (memberRecord.status === "active" || memberRecord.status === "approved")
@@ -344,18 +311,12 @@ export const getProjectById = asyncHandler(async (req, res) => {
   }
 });
 
-/**
- * @desc    Create a new project and add owner as member
- * @route   POST /api/projects
- * @access  Private (Requires Login)
- */
 export const createProject = asyncHandler(async (req, res) => {
   const ownerId = req.user?.id;
   if (!ownerId) {
     res.status(401);
     throw new Error("Authentication required to create a project.");
   }
-
   const {
     title,
     description,
@@ -367,7 +328,6 @@ export const createProject = asyncHandler(async (req, res) => {
     skillsNeeded,
     progress = 0,
   } = req.body;
-
   if (!title?.trim()) {
     res.status(400);
     throw new Error("Project title is required.");
@@ -376,7 +336,6 @@ export const createProject = asyncHandler(async (req, res) => {
     res.status(400);
     throw new Error("Project description is required.");
   }
-
   let parsedSkills = [];
   if (skillsNeeded) {
     try {
@@ -393,15 +352,13 @@ export const createProject = asyncHandler(async (req, res) => {
       );
     }
   }
-
   const collaborators = requiredCollaborators
     ? parseInt(requiredCollaborators, 10)
-    : 1;
+    : 0;
   if (isNaN(collaborators) || collaborators < 0) {
     res.status(400);
     throw new Error("Required collaborators must be a non-negative number.");
   }
-
   const allowedStatuses = Project.getAttributes().status?.values;
   if (allowedStatuses && !allowedStatuses.includes(status)) {
     res.status(400);
@@ -411,10 +368,8 @@ export const createProject = asyncHandler(async (req, res) => {
       )}`
     );
   }
-
   let savedImageUrl = null;
   let absoluteFilePath = null;
-
   if (req.file) {
     try {
       await ensureUploadsDirExists(PROJECT_UPLOADS_DIR);
@@ -433,7 +388,6 @@ export const createProject = asyncHandler(async (req, res) => {
       throw new Error("Server error saving project image.");
     }
   }
-
   const transaction = await sequelize.transaction();
   try {
     const newProject = await Project.create(
@@ -455,7 +409,6 @@ export const createProject = asyncHandler(async (req, res) => {
       },
       { transaction }
     );
-
     await Member.create(
       {
         userId: ownerId,
@@ -466,14 +419,16 @@ export const createProject = asyncHandler(async (req, res) => {
       { transaction }
     );
     await transaction.commit();
-
     const createdProject = await Project.findByPk(newProject.id, {
       attributes: projectDetailSelectFields,
       include: [
         { model: User, as: "owner", attributes: userPublicSelectFields },
       ],
     });
-    res.status(201).json({ success: true, data: createdProject });
+    const projectJson = createdProject.toJSON();
+    projectJson.currentCollaborators =
+      parseInt(projectJson.currentCollaborators, 10) || 0;
+    res.status(201).json({ success: true, data: projectJson });
   } catch (error) {
     if (
       transaction &&
@@ -502,11 +457,6 @@ export const createProject = asyncHandler(async (req, res) => {
   }
 });
 
-/**
- * @desc    Update an existing project
- * @route   PUT /api/projects/:id
- * @access  Private (Owner only)
- */
 export const updateProject = asyncHandler(async (req, res) => {
   const projectIdParam = req.params.id;
   const userId = req.user?.id;
@@ -514,18 +464,15 @@ export const updateProject = asyncHandler(async (req, res) => {
     res.status(401);
     throw new Error("Authentication required.");
   }
-
   const projectId = parseInt(projectIdParam, 10);
   if (isNaN(projectId) || projectId <= 0) {
     res.status(400);
     throw new Error("Invalid Project ID format.");
   }
-
   const transaction = await sequelize.transaction();
   let newImageUrl = null;
   let newAbsoluteFilePath = null;
   let oldImageUrl = null;
-
   try {
     const project = await Project.findByPk(projectId, {
       transaction,
@@ -542,7 +489,6 @@ export const updateProject = asyncHandler(async (req, res) => {
       throw new Error("Not authorized: You are not the owner.");
     }
     oldImageUrl = project.imageUrl;
-
     if (req.file) {
       try {
         await ensureUploadsDirExists(PROJECT_UPLOADS_DIR);
@@ -561,7 +507,6 @@ export const updateProject = asyncHandler(async (req, res) => {
         throw new Error("Server error saving updated project image.");
       }
     }
-
     const {
       title,
       description,
@@ -639,18 +584,19 @@ export const updateProject = asyncHandler(async (req, res) => {
           { model: User, as: "owner", attributes: userPublicSelectFields },
         ],
       });
+      const projectJson = currentProject.toJSON();
+      projectJson.currentCollaborators =
+        parseInt(projectJson.currentCollaborators, 10) || 0;
       return res
         .status(200)
         .json({
           success: true,
           message: "No changes detected.",
-          data: currentProject,
+          data: projectJson,
         });
     }
-
     await project.update(updates, { transaction });
     await transaction.commit();
-
     if (newImageUrl && oldImageUrl && oldImageUrl !== newImageUrl) {
       try {
         const oldAbsoluteFilePath = path.join(
@@ -666,19 +612,21 @@ export const updateProject = asyncHandler(async (req, res) => {
           );
       }
     }
-
     const updatedProject = await Project.findByPk(project.id, {
       attributes: projectDetailSelectFields,
       include: [
         { model: User, as: "owner", attributes: userPublicSelectFields },
       ],
     });
+    const projectJson = updatedProject.toJSON();
+    projectJson.currentCollaborators =
+      parseInt(projectJson.currentCollaborators, 10) || 0;
     res
       .status(200)
       .json({
         success: true,
         message: "Project updated successfully.",
-        data: updatedProject,
+        data: projectJson,
       });
   } catch (error) {
     if (
@@ -708,11 +656,6 @@ export const updateProject = asyncHandler(async (req, res) => {
   }
 });
 
-/**
- * @desc    Delete a project
- * @route   DELETE /api/projects/:id
- * @access  Private (Owner only)
- */
 export const deleteProject = asyncHandler(async (req, res) => {
   const projectIdParam = req.params.id;
   const userId = req.user?.id;
@@ -720,13 +663,11 @@ export const deleteProject = asyncHandler(async (req, res) => {
     res.status(401);
     throw new Error("Authentication required.");
   }
-
   const projectId = parseInt(projectIdParam, 10);
   if (isNaN(projectId) || projectId <= 0) {
     res.status(400);
     throw new Error("Invalid Project ID format.");
   }
-
   let imagePathToDelete = null;
   const transaction = await sequelize.transaction();
   try {
@@ -746,18 +687,13 @@ export const deleteProject = asyncHandler(async (req, res) => {
       throw new Error("Not authorized: You are not the owner.");
     }
     imagePathToDelete = project.imageUrl;
-
     await Member.destroy({ where: { projectId: projectId }, transaction });
     await CollaborationRequest.destroy({
       where: { projectId: projectId },
       transaction,
     });
-    // Consider Messages related to the project if applicable
-    // await Message.destroy({ where: { projectId: projectId }, transaction });
-
     await project.destroy({ transaction });
     await transaction.commit();
-
     if (imagePathToDelete) {
       try {
         const absoluteFilePath = path.join(
@@ -800,11 +736,6 @@ export const deleteProject = asyncHandler(async (req, res) => {
   }
 });
 
-/**
- * @desc    Get PENDING collaboration requests for a specific project
- * @route   GET /api/projects/:projectId/requests
- * @access  Private (Owner only)
- */
 export const getProjectRequests = asyncHandler(async (req, res) => {
   const projectIdParam = req.params.projectId;
   const userId = req.user?.id;
@@ -812,13 +743,11 @@ export const getProjectRequests = asyncHandler(async (req, res) => {
     res.status(401);
     throw new Error("Authentication required.");
   }
-
   const projectId = parseInt(projectIdParam, 10);
   if (isNaN(projectId) || projectId <= 0) {
     res.status(400);
     throw new Error("Invalid Project ID format.");
   }
-
   try {
     const project = await Project.findByPk(projectId, {
       attributes: ["id", "ownerId"],
@@ -831,7 +760,6 @@ export const getProjectRequests = asyncHandler(async (req, res) => {
       res.status(403);
       throw new Error("Forbidden: Only owner can view requests.");
     }
-
     const pendingRequests = await CollaborationRequest.findAll({
       where: { projectId: projectId, status: "pending" },
       include: [
@@ -844,7 +772,7 @@ export const getProjectRequests = asyncHandler(async (req, res) => {
       .json({
         success: true,
         count: pendingRequests.length,
-        data: pendingRequests,
+        data: pendingRequests.map((r) => r.toJSON()),
       });
   } catch (error) {
     console.error(
@@ -858,11 +786,6 @@ export const getProjectRequests = asyncHandler(async (req, res) => {
   }
 });
 
-/**
- * @desc    Get ACTIVE members of a specific project
- * @route   GET /api/projects/:projectId/members
- * @access  Private (Owner or Active Member only)
- */
 export const getProjectMembers = asyncHandler(async (req, res) => {
   const projectIdParam = req.params.projectId;
   const currentUserId = req.user?.id;
@@ -870,13 +793,11 @@ export const getProjectMembers = asyncHandler(async (req, res) => {
     res.status(401);
     throw new Error("Authentication required.");
   }
-
   const projectId = parseInt(projectIdParam, 10);
   if (isNaN(projectId) || projectId <= 0) {
     res.status(400);
     throw new Error("Invalid Project ID format.");
   }
-
   try {
     const project = await Project.findByPk(projectId, {
       attributes: ["id", "ownerId", "createdAt"],
@@ -888,11 +809,10 @@ export const getProjectMembers = asyncHandler(async (req, res) => {
       res.status(404);
       throw new Error("Project not found.");
     }
-
-    const ownerId = project.ownerId;
-    const isOwner = ownerId === currentUserId;
-    let isActiveMember = false;
-    if (!isOwner) {
+    const projectOwnerId = project.ownerId;
+    const isCurrentUserOwner = projectOwnerId === currentUserId;
+    let isCurrentUserActiveMember = false;
+    if (!isCurrentUserOwner) {
       const membership = await Member.findOne({
         where: {
           userId: currentUserId,
@@ -901,14 +821,14 @@ export const getProjectMembers = asyncHandler(async (req, res) => {
         },
         attributes: ["userId"],
       });
-      isActiveMember = !!membership;
+      isCurrentUserActiveMember = !!membership;
     }
-
-    if (!isOwner && !isActiveMember) {
+    if (!isCurrentUserOwner && !isCurrentUserActiveMember) {
       res.status(403);
-      throw new Error("Access Denied: Owner or active member only.");
+      throw new Error(
+        "Access Denied: Only the project owner or an active member can view the member list."
+      );
     }
-
     const members = await Member.findAll({
       where: {
         projectId: projectId,
@@ -925,29 +845,28 @@ export const getProjectMembers = asyncHandler(async (req, res) => {
       attributes: ["userId", "role", "status", "joinedAt"],
       order: [["joinedAt", "ASC"]],
     });
-
     const projectOwnerInfo = project.owner?.toJSON();
     let formattedMembers = members
       .map((m) => ({
         userId: m.user?.id,
         username: m.user?.username,
         profilePictureUrl: m.user?.profilePictureUrl,
-        role: m.userId === ownerId ? "Owner" : m.role || "Member",
+        role: m.userId === projectOwnerId ? "Owner" : m.role || "Member",
         status: m.status,
         joinedAt: m.joinedAt,
       }))
       .filter((m) => m.userId);
-
     if (projectOwnerInfo) {
       const ownerInListIndex = formattedMembers.findIndex(
-        (m) => m.userId === ownerId
+        (m) => m.userId === projectOwnerId
       );
       if (ownerInListIndex === -1) {
         formattedMembers.unshift({
-          userId: ownerId,
+          userId: projectOwnerId,
           username: projectOwnerInfo.username,
           profilePictureUrl: projectOwnerInfo.profilePictureUrl,
           role: "Owner",
+          status: "active",
           joinedAt: project.createdAt,
         });
       } else {
@@ -959,7 +878,6 @@ export const getProjectMembers = asyncHandler(async (req, res) => {
       if (b.role === "Owner" && a.role !== "Owner") return 1;
       return (a.username || "").localeCompare(b.username || "");
     });
-
     res.status(200).json({ success: true, data: formattedMembers });
   } catch (error) {
     console.error(
@@ -967,36 +885,20 @@ export const getProjectMembers = asyncHandler(async (req, res) => {
       error
     );
     const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
-    const message = error.message || "Server error retrieving members.";
+    const message = error.message || "Server error retrieving project members.";
     if (!res.headersSent)
       res.status(statusCode).json({ success: false, message });
   }
 });
 
-// ==================================================================
-// === SIMPLIFIED getProjectsByUserId - FOCUS ON OWNED PROJECTS ===
-// ==================================================================
-/**
- * @desc    Get all projects OWNED BY a specific user
- * @route   GET /api/projects/user/:userId
- * @access  Public (uses optionalProtect in routes to add viewer-specific context if logged in)
- */
 export const getProjectsByUserId = asyncHandler(async (req, res) => {
   const targetUserIdParam = req.params.userId;
-  const currentLoggedInUserId = req.user?.id; // From optionalProtect
-
+  const currentLoggedInUserId = req.user?.id;
   const targetUserId = parseInt(targetUserIdParam, 10);
   if (isNaN(targetUserId) || targetUserId <= 0) {
     res.status(400);
     throw new Error("Invalid User ID format provided.");
   }
-
-  console.log(
-    `API: getProjectsByUserId (Owned by User ${targetUserId}) invoked by ${
-      currentLoggedInUserId ? "User " + currentLoggedInUserId : "Guest"
-    }`
-  );
-
   try {
     const targetUserExists = await User.findByPk(targetUserId, {
       attributes: ["id", "username"],
@@ -1005,11 +907,9 @@ export const getProjectsByUserId = asyncHandler(async (req, res) => {
       res.status(404);
       throw new Error(`User with ID ${targetUserId} not found.`);
     }
-
     const { page = 1, limit = 9, status: projectStatusQuery } = req.query;
     const parsedLimit = parseInt(limit, 10);
     const parsedPage = parseInt(page, 10);
-
     if (
       isNaN(parsedLimit) ||
       isNaN(parsedPage) ||
@@ -1020,51 +920,35 @@ export const getProjectsByUserId = asyncHandler(async (req, res) => {
       throw new Error("Invalid pagination parameters.");
     }
     const offset = (parsedPage - 1) * parsedLimit;
-
-    const projectWhereConditions = {
-      ownerId: targetUserId, // Only projects owned by this user
-      status:
-        projectStatusQuery === "archived"
-          ? "Archived"
-          : { [Op.ne]: "Archived" },
-    };
-    if (
-      projectStatusQuery &&
-      projectStatusQuery !== "all" &&
-      projectStatusQuery !== "archived"
-    ) {
+    const projectWhereConditions = { ownerId: targetUserId };
+    if (projectStatusQuery === "archived") {
+      projectWhereConditions.status = "Archived";
+    } else if (projectStatusQuery && projectStatusQuery !== "all") {
       projectWhereConditions.status = projectStatusQuery;
+    } else if (projectStatusQuery !== "all") {
+      projectWhereConditions.status = { [Op.ne]: "Archived" };
     }
-
     const includeClauses = [
       { model: User, as: "owner", attributes: userPublicSelectFields },
     ];
-
     if (currentLoggedInUserId) {
       includeClauses.push(
         {
           model: Member,
           as: "currentUserSpecificMembership",
           attributes: ["status"],
-          where: {
-            userId:
-              currentLoggedInUserId /* projectId will be joined by Sequelize */,
-          },
-          required: false, // LEFT JOIN
+          where: { userId: currentLoggedInUserId },
+          required: false,
         },
         {
           model: CollaborationRequest,
           as: "currentUserSpecificRequest",
           attributes: ["status"],
-          where: {
-            requesterId: currentLoggedInUserId,
-            status: "pending" /* projectId will be joined */,
-          },
-          required: false, // LEFT JOIN
+          where: { requesterId: currentLoggedInUserId, status: "pending" },
+          required: false,
         }
       );
     }
-
     const { count, rows: projects } = await Project.findAndCountAll({
       where: projectWhereConditions,
       attributes: projectListSelectFields,
@@ -1072,12 +956,13 @@ export const getProjectsByUserId = asyncHandler(async (req, res) => {
       order: [["updatedAt", "DESC"]],
       limit: parsedLimit,
       offset: offset,
+      distinct: true,
     });
-
     const processedProjects = projects.map((p) => {
       const projectJson = p.toJSON();
-      projectJson.currentUserMembershipStatus = null; // Default
-
+      projectJson.currentCollaborators =
+        parseInt(projectJson.currentCollaborators, 10) || 0;
+      projectJson.currentUserMembershipStatus = null;
       if (currentLoggedInUserId) {
         const membership = projectJson.currentUserSpecificMembership;
         const request = projectJson.currentUserSpecificRequest;
@@ -1090,12 +975,10 @@ export const getProjectsByUserId = asyncHandler(async (req, res) => {
           projectJson.currentUserMembershipStatus = "pending";
         }
       }
-      // Clean up to avoid sending too much data to frontend if these are not needed directly
       delete projectJson.currentUserSpecificMembership;
       delete projectJson.currentUserSpecificRequest;
       return projectJson;
     });
-
     res.status(200).json({
       success: true,
       pagination: {
@@ -1111,20 +994,14 @@ export const getProjectsByUserId = asyncHandler(async (req, res) => {
       `Error in getProjectsByUserId (Owned Only) for User ${targetUserId}:`,
       error
     );
-    if (error.name && error.name.startsWith("Sequelize")) {
-      console.error("Sequelize Error Details:", JSON.stringify(error, null, 2));
-    }
     const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
     const message = error.message || "Server error retrieving user's projects.";
     if (!res.headersSent)
       res.status(statusCode).json({ success: false, message });
   }
 });
-// ==================================================================
 
-/** @desc Admin get all projects (placeholder/stub from your original code) */
 export const adminGetAllProjects = asyncHandler(async (req, res) => {
-  // This route would need `protect` and `adminOnly` middleware in `projectRoutes.js`
   console.warn("API: adminGetAllProjects invoked but not fully implemented.");
   res
     .status(501)

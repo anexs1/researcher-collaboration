@@ -1,26 +1,21 @@
-// src/pages/EditProjectPage.jsx
+// src/Page/EditProjectPage.jsx
 
 import React, { useState, useCallback, useEffect } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import axios from "axios";
-// Removed 'Select' import if it was only for collaborators
-import CreatableSelect from "react-select/creatable"; // Keep for Tags
+import CreatableSelect from "react-select/creatable";
 import {
   FaPencilAlt,
   FaSave,
   FaSpinner,
-  FaUserPlus,
-  FaTimes,
   FaArrowLeft,
   FaExclamationTriangle,
 } from "react-icons/fa";
 
-// Import shared components
 import Notification from "../Component/Common/Notification";
 import ErrorMessage from "../Component/Common/ErrorMessage";
 import LoadingSpinner from "../Component/Common/LoadingSpinner";
 
-// API Client Setup
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 const apiClient = axios.create({ baseURL: API_BASE_URL });
@@ -35,25 +30,29 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Default state for the form
 const defaultProjectData = {
+  id: null,
   title: "",
   description: "",
-  status: "Planning",
-  collaborators: [], // Holds existing collaborator IDs loaded from the project
+  status: "Planning", // Default to a valid capitalized ENUM value
   tags: [],
   dueDate: "",
-  members: [], // For adding/removing members via modal
+  requiredCollaborators: 0,
+  category: "General",
+  duration: "",
+  funding: "",
+  progress: 0,
+  imageUrl: null,
+  collaborators: [],
+  members: [],
 };
 
-// Style constants
 const labelClasses = "block text-sm font-medium text-gray-700 mb-1";
 const inputClasses =
   "mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm placeholder-gray-400 disabled:bg-gray-100";
 const buttonClasses =
   "inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed";
 
-// Custom styles for react-select (Only needed if Tags uses it)
 const selectStyles = {
   control: (p, s) => ({
     ...p,
@@ -99,12 +98,10 @@ const selectStyles = {
   menu: (base) => ({ ...base, zIndex: 50 }),
 };
 
-// --- Component Start ---
 const EditProjectPage = ({ currentUser }) => {
   const navigate = useNavigate();
-  const { projectId } = useParams();
+  const { projectId: routeProjectId } = useParams();
 
-  // State
   const [formData, setFormData] = useState(defaultProjectData);
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -116,15 +113,7 @@ const EditProjectPage = ({ currentUser }) => {
     type: "",
     show: false,
   });
-  const [showMemberModal, setShowMemberModal] = useState(false);
-  const [newMember, setNewMember] = useState({
-    email: "",
-    role: "Collaborator",
-    message: "",
-  });
-  // Collaborator options/loading state removed
 
-  // Notification handler
   const showNotification = useCallback((message, type = "success") => {
     setNotification({ message, type, show: true });
     setTimeout(
@@ -133,118 +122,13 @@ const EditProjectPage = ({ currentUser }) => {
     );
   }, []);
 
-  // Fetch existing project data
-  useEffect(() => {
-    if (!projectId) {
-      setApiError("Project ID is missing.");
-      setIsLoadingProject(false);
-      return;
-    }
-    console.log(`Fetching project data for ID: ${projectId}`);
-    const fetchProject = async () => {
-      setIsLoadingProject(true);
-      setProjectNotFoundError(false);
-      setApiError("");
-      try {
-        const response = await apiClient.get(`/api/projects/${projectId}`);
-        console.log("fetchProject Raw Response:", response.data);
-        const projectData = response.data?.project; // Use .project key
-        if (!projectData) {
-          if (response.data?.success) {
-            console.warn(
-              "API returned success but no project data found.",
-              response.data
-            );
-            setProjectNotFoundError(true);
-          } else {
-            throw new Error(
-              response.data?.message || "Failed to retrieve project details."
-            );
-          }
-        } else {
-          console.log("Fetched and Processed Project Data:", projectData);
-          setFormData({
-            title: projectData.title || "",
-            description: projectData.description || "",
-            status: projectData.status || "Planning",
-            collaborators: Array.isArray(projectData.collaborators)
-              ? projectData.collaborators
-                  .map((c) => (typeof c === "object" && c !== null ? c.id : c))
-                  .filter((id) => id != null)
-              : [],
-            tags: Array.isArray(projectData.tags) ? projectData.tags : [],
-            dueDate: projectData.dueDate
-              ? new Date(projectData.dueDate).toISOString().split("T")[0]
-              : "",
-            members: Array.isArray(projectData.members)
-              ? projectData.members
-              : [],
-          });
-        }
-      } catch (err) {
-        console.error("Fetch project API error:", err);
-        if (axios.isAxiosError(err) && err.response?.status === 404) {
-          setProjectNotFoundError(true);
-        } else {
-          setApiError(
-            err.response?.data?.message ||
-              err.message ||
-              "Failed to load project data."
-          );
-        }
-      } finally {
-        setIsLoadingProject(false);
-      }
-    };
-    fetchProject();
-  }, [projectId]);
-
-  // --- Member Management Functions ---
-  const handleAddMember = () => {
-    if (!newMember.email || !/\S+@\S+\.\S+/.test(newMember.email)) {
-      setFormErrors((prev) => ({
-        ...prev,
-        memberEmail: "Valid email is required",
-      }));
-      return;
-    }
-    const memberExists = formData.members.some(
-      (m) => m.email === newMember.email
-    );
-    if (memberExists) {
-      setFormErrors((prev) => ({
-        ...prev,
-        memberEmail: "Member already added",
-      }));
-      return;
-    }
-    setFormData((prev) => ({
-      ...prev,
-      members: [...prev.members, { ...newMember }],
-    }));
-    setNewMember({ email: "", role: "Collaborator", message: "" });
-    setFormErrors((prev) => ({ ...prev, memberEmail: undefined }));
-    setShowMemberModal(false);
-  };
-  const handleRemoveMember = (email) => {
-    setFormData((prev) => ({
-      ...prev,
-      members: prev.members.filter((m) => m.email !== email),
-    }));
-  };
-  const handleMemberInputChange = (e) => {
-    const { name, value } = e.target;
-    setNewMember((prev) => ({ ...prev, [name]: value }));
-    if (name === "email" && formErrors.memberEmail) {
-      setFormErrors((prev) => ({ ...prev, memberEmail: undefined }));
-    }
-  };
-
-  // --- Standard Input & Select Handlers ---
   const handleInputChange = useCallback(
     (e) => {
-      const { name, value } = e.target;
-      setFormData((prev) => ({ ...prev, [name]: value }));
+      const { name, value, type, checked } = e.target;
+      setFormData((prev) => ({
+        ...prev,
+        [name]: type === "checkbox" ? checked : value,
+      }));
       if (formErrors[name])
         setFormErrors((prev) => ({ ...prev, [name]: undefined }));
       setApiError("");
@@ -252,7 +136,110 @@ const EditProjectPage = ({ currentUser }) => {
     [formErrors]
   );
 
-  // Tags handler
+  useEffect(() => {
+    if (!routeProjectId) {
+      setApiError("Project ID is missing from URL.");
+      setIsLoadingProject(false);
+      setProjectNotFoundError(true);
+      return;
+    }
+
+    const fetchProject = async () => {
+      console.log(
+        `Fetching project data for ID (from routeProjectId): ${routeProjectId}`
+      );
+      setIsLoadingProject(true);
+      setProjectNotFoundError(false);
+      setApiError("");
+      try {
+        const response = await apiClient.get(`/api/projects/${routeProjectId}`);
+        console.log(
+          "EditProjectPage - fetchProject Raw Response:",
+          response.data
+        );
+        const projectDataFromApi = response.data?.data;
+
+        if (
+          response.data?.success &&
+          projectDataFromApi &&
+          typeof projectDataFromApi === "object"
+        ) {
+          console.log(
+            "EditProjectPage - Fetched and Processed Project Data:",
+            projectDataFromApi
+          );
+          setFormData({
+            id: projectDataFromApi.id || routeProjectId,
+            title: projectDataFromApi.title || "",
+            description: projectDataFromApi.description || "",
+            status: projectDataFromApi.status || "Planning", // Ensure this is capitalized if from API
+            tags: Array.isArray(projectDataFromApi.skillsNeeded)
+              ? projectDataFromApi.skillsNeeded
+              : [],
+            dueDate: projectDataFromApi.dueDate
+              ? new Date(projectDataFromApi.dueDate).toISOString().split("T")[0]
+              : "",
+            requiredCollaborators:
+              projectDataFromApi.requiredCollaborators ?? 0,
+            category: projectDataFromApi.category || "General",
+            duration: projectDataFromApi.duration || "",
+            funding: projectDataFromApi.funding || "",
+            progress: projectDataFromApi.progress ?? 0,
+            imageUrl: projectDataFromApi.imageUrl || null,
+            collaborators: [],
+            members: [],
+          });
+        } else {
+          let message = "Failed to retrieve project details.";
+          if (
+            response.data &&
+            !response.data.success &&
+            response.data.message
+          ) {
+            message = response.data.message;
+          } else if (
+            response.data &&
+            response.data.success &&
+            (!projectDataFromApi || typeof projectDataFromApi !== "object")
+          ) {
+            message =
+              "API reported success, but project data format is invalid.";
+          }
+          console.warn(`EditProjectPage - ${message}`, response.data);
+          setProjectNotFoundError(true);
+          setApiError(message);
+        }
+      } catch (err) {
+        console.error("EditProjectPage - Fetch project API error:", err);
+        let errMsg = "Failed to load project data.";
+        if (axios.isAxiosError(err)) {
+          if (err.response) {
+            errMsg =
+              err.response.data?.message ||
+              `Server error (${err.response.status})`;
+            if (err.response.status === 404) {
+              setProjectNotFoundError(true);
+              errMsg = "Project not found (404 from server).";
+            }
+          } else if (err.request) {
+            errMsg = "Network error. Unable to reach server.";
+          } else {
+            errMsg = "Error configuring the request.";
+          }
+        } else {
+          errMsg = err.message || errMsg;
+        }
+        setApiError(errMsg);
+        if (err.response?.status === 404) {
+          setProjectNotFoundError(true);
+        }
+      } finally {
+        setIsLoadingProject(false);
+      }
+    };
+    fetchProject();
+  }, [routeProjectId]);
+
   const handleTagsChange = (selectedOptions) => {
     const values = selectedOptions
       ? selectedOptions.map((option) => option.value)
@@ -263,21 +250,23 @@ const EditProjectPage = ({ currentUser }) => {
     setApiError("");
   };
 
-  // --- Form Validation ---
   const validateForm = useCallback(() => {
     let errors = {};
     if (!formData.title?.trim()) errors.title = "Project title is required.";
     if (!formData.description?.trim())
       errors.description = "Project description is required.";
+    if (formData.requiredCollaborators < 0)
+      errors.requiredCollaborators = "Cannot be negative.";
+    if (formData.progress < 0 || formData.progress > 100)
+      errors.progress = "Must be between 0 and 100.";
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   }, [formData]);
 
-  // --- Form Submission ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) {
-      showNotification("Please fill required fields.", "error");
+      showNotification("Please correct the errors in the form.", "error");
       return;
     }
     setIsSubmitting(true);
@@ -285,31 +274,45 @@ const EditProjectPage = ({ currentUser }) => {
     const payload = {
       title: formData.title,
       description: formData.description,
-      status: formData.status,
-      collaborators: formData.collaborators, // Send existing collaborator IDs
-      members: formData.members,
-      tags: formData.tags,
+      status: formData.status, // This will now be capitalized if Option 1 is used
+      requiredCollaborators: parseInt(formData.requiredCollaborators, 10) || 0,
+      category: formData.category,
+      duration: formData.duration,
+      funding: formData.funding,
+      skillsNeeded: formData.tags,
+      progress: parseInt(formData.progress, 10) || 0,
       dueDate: formData.dueDate || null,
     };
-    console.log("Submitting updated data:", payload);
+    console.log(
+      "Submitting updated data to backend:",
+      payload,
+      "for project ID:",
+      routeProjectId
+    );
     try {
       const response = await apiClient.put(
-        `/api/projects/${projectId}`,
+        `/api/projects/${routeProjectId}`,
         payload
       );
-      if (response.data?.success && response.data?.project) {
-        // Check response structure
+      if (response.data?.success && response.data?.data) {
         showNotification("Project updated successfully!", "success");
-        navigate("/projects"); // Navigate to projects list
+        navigate(`/projects/${routeProjectId}`);
       } else {
-        throw new Error(response.data?.message || "Failed to update project.");
+        const message =
+          response.data?.message ||
+          "Failed to update project. Unexpected response.";
+        console.error(
+          "Update project error - unexpected response:",
+          response.data
+        );
+        throw new Error(message);
       }
     } catch (err) {
       console.error("Update project API error:", err);
       const errMsg =
         err.response?.data?.message ||
         err.message ||
-        "An error occurred saving.";
+        "An error occurred while saving the project.";
       setApiError(errMsg);
       showNotification(errMsg, "error");
     } finally {
@@ -317,9 +320,6 @@ const EditProjectPage = ({ currentUser }) => {
     }
   };
 
-  // --- Render Logic ---
-
-  // 1. Loading
   if (isLoadingProject) {
     return (
       <div className="flex justify-center items-center py-20 min-h-[300px]">
@@ -328,7 +328,6 @@ const EditProjectPage = ({ currentUser }) => {
     );
   }
 
-  // 2. Not Found
   if (projectNotFoundError) {
     return (
       <div className="text-center py-10 px-4">
@@ -339,7 +338,8 @@ const EditProjectPage = ({ currentUser }) => {
           Error: Project Not Found
         </h2>
         <p className="text-gray-600 mb-6">
-          The project you are trying to edit could not be found.
+          {apiError ||
+            "The project you are trying to edit could not be found or loaded."}
         </p>
         <Link
           to="/projects"
@@ -351,11 +351,15 @@ const EditProjectPage = ({ currentUser }) => {
     );
   }
 
-  // 3. Initial Load API Error
-  if (apiError && !formData.title && !projectNotFoundError) {
+  if (
+    apiError &&
+    !formData.title &&
+    !isLoadingProject &&
+    !projectNotFoundError
+  ) {
     return (
       <div className="text-center py-10 px-4">
-        <ErrorMessage message={`Initial Load Error: ${apiError}`} />
+        <ErrorMessage message={`Error loading project: ${apiError}`} />
         <button
           onClick={() => window.location.reload()}
           className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 mr-2"
@@ -372,12 +376,10 @@ const EditProjectPage = ({ currentUser }) => {
     );
   }
 
-  // Prepare select values (Only for Tags now)
-  const tagsSelectValue = formData.tags
+  const tagsSelectValue = Array.isArray(formData.tags)
     ? formData.tags.map((tag) => ({ value: tag, label: tag }))
     : [];
 
-  // 5. Render Form
   return (
     <>
       {notification.show && (
@@ -389,32 +391,32 @@ const EditProjectPage = ({ currentUser }) => {
           }
         />
       )}
-      <div className="max-w-3xl mx-auto mb-10">
+      <div className="max-w-3xl mx-auto my-8">
         <div className="bg-white shadow-xl rounded-lg border border-gray-200 p-6 md:p-8">
-          {/* Header */}
           <div className="flex items-center justify-between border-b border-gray-200 pb-4 mb-6">
             <h1 className="text-xl md:text-2xl font-semibold text-gray-800 flex items-center">
-              <FaPencilAlt className="mr-3 text-indigo-600" /> Edit Project
+              <FaPencilAlt className="mr-3 text-indigo-600" /> Edit Project:{" "}
+              {formData.title || "..."}
             </h1>
             <Link
-              to="/projects"
+              to={routeProjectId ? `/projects/${routeProjectId}` : "/projects"}
               className="text-sm text-indigo-600 hover:text-indigo-800 flex items-center"
             >
-              <FaArrowLeft className="mr-1" /> Back to Projects
+              <FaArrowLeft className="mr-1" /> Cancel
             </Link>
           </div>
-          {/* API Error Display (for submission) */}
-          {apiError && !isSubmitting && (
-            <div className="mb-4">
-              <ErrorMessage
-                message={apiError}
-                onClose={() => setApiError("")}
-              />
-            </div>
-          )}
-          {/* Form */}
+          {apiError &&
+            !isSubmitting &&
+            !projectNotFoundError &&
+            !isLoadingProject && (
+              <div className="mb-4">
+                <ErrorMessage
+                  message={apiError}
+                  onClose={() => setApiError("")}
+                />
+              </div>
+            )}
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Title */}
             <div>
               <label htmlFor="title" className={labelClasses}>
                 Project Title <span className="text-red-600">*</span>
@@ -434,7 +436,6 @@ const EditProjectPage = ({ currentUser }) => {
                 <p className="mt-1 text-xs text-red-600">{formErrors.title}</p>
               )}
             </div>
-            {/* Description */}
             <div>
               <label htmlFor="description" className={labelClasses}>
                 Description <span className="text-red-600">*</span>
@@ -456,8 +457,7 @@ const EditProjectPage = ({ currentUser }) => {
                 </p>
               )}
             </div>
-            {/* Status & Due Date */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
               <div>
                 <label htmlFor="status" className={labelClasses}>
                   Status
@@ -465,16 +465,105 @@ const EditProjectPage = ({ currentUser }) => {
                 <select
                   id="status"
                   name="status"
-                  value={formData.status}
+                  value={formData.status} // Value should match one of the <option> values
                   onChange={handleInputChange}
                   className={inputClasses}
                   disabled={isSubmitting}
                 >
+                  {/* CORRECTED: Option values are capitalized to match backend ENUM */}
                   <option value="Planning">Planning</option>
+                  <option value="Active">Active</option>
                   <option value="Ongoing">Ongoing</option>
                   <option value="Completed">Completed</option>
                   <option value="On Hold">On Hold</option>
+                  <option value="Archived">Archived</option>
                 </select>
+              </div>
+              <div>
+                <label htmlFor="requiredCollaborators" className={labelClasses}>
+                  Required Collaborators
+                </label>
+                <input
+                  type="number"
+                  name="requiredCollaborators"
+                  id="requiredCollaborators"
+                  value={formData.requiredCollaborators}
+                  onChange={handleInputChange}
+                  className={inputClasses}
+                  min="0"
+                  disabled={isSubmitting}
+                />
+                {formErrors.requiredCollaborators && (
+                  <p className="mt-1 text-xs text-red-600">
+                    {formErrors.requiredCollaborators}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label htmlFor="progress" className={labelClasses}>
+                  Progress (%)
+                </label>
+                <input
+                  type="number"
+                  name="progress"
+                  id="progress"
+                  value={formData.progress}
+                  onChange={handleInputChange}
+                  className={inputClasses}
+                  min="0"
+                  max="100"
+                  disabled={isSubmitting}
+                />
+                {formErrors.progress && (
+                  <p className="mt-1 text-xs text-red-600">
+                    {formErrors.progress}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label htmlFor="category" className={labelClasses}>
+                  Category
+                </label>
+                <input
+                  type="text"
+                  name="category"
+                  id="category"
+                  value={formData.category || ""}
+                  onChange={handleInputChange}
+                  className={inputClasses}
+                  placeholder="e.g., Health, Agriculture"
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div>
+                <label htmlFor="duration" className={labelClasses}>
+                  Estimated Duration
+                </label>
+                <input
+                  type="text"
+                  name="duration"
+                  id="duration"
+                  value={formData.duration || ""}
+                  onChange={handleInputChange}
+                  className={inputClasses}
+                  placeholder="e.g., 6 Months, 1 Year"
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div>
+                <label htmlFor="funding" className={labelClasses}>
+                  Funding Status/Source
+                </label>
+                <input
+                  type="text"
+                  name="funding"
+                  id="funding"
+                  value={formData.funding || ""}
+                  onChange={handleInputChange}
+                  className={inputClasses}
+                  placeholder="e.g., Self-funded, Grant Name"
+                  disabled={isSubmitting}
+                />
               </div>
               <div>
                 <label htmlFor="dueDate" className={labelClasses}>
@@ -491,67 +580,9 @@ const EditProjectPage = ({ currentUser }) => {
                 />
               </div>
             </div>
-
-            {/* Members section */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className={labelClasses}>
-                  Team Members (Invited/Added)
-                </label>
-                <button
-                  type="button"
-                  onClick={() => !isSubmitting && setShowMemberModal(true)}
-                  disabled={isSubmitting}
-                  className="text-sm text-indigo-600 hover:text-indigo-800 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <FaUserPlus className="mr-1" /> Add/Invite Member
-                </button>
-              </div>
-              {formData.members.length > 0 ? (
-                <div className="space-y-2 max-h-40 overflow-y-auto border rounded p-2 bg-gray-50">
-                  {formData.members.map((member, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between p-2 bg-white rounded border border-gray-200 text-sm"
-                    >
-                      <div>
-                        <span className="font-medium text-gray-800">
-                          {member.email}
-                        </span>{" "}
-                        <span className="text-gray-500 ml-2">
-                          ({member.role})
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          !isSubmitting && handleRemoveMember(member.email)
-                        }
-                        disabled={isSubmitting}
-                        className="text-red-500 hover:text-red-700 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Remove Member"
-                      >
-                        <FaTimes />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-sm text-gray-500 py-2 text-center border rounded bg-gray-50">
-                  No members added yet.
-                </div>
-              )}
-              {formErrors.memberEmail && (
-                <p className="mt-1 text-xs text-red-600">
-                  {formErrors.memberEmail}
-                </p>
-              )}
-            </div>
-
-            {/* Tags */}
             <div>
               <label htmlFor="tags" className={labelClasses}>
-                Tags (Keywords)
+                Skills Needed (Tags)
               </label>
               <CreatableSelect
                 id="tags"
@@ -561,17 +592,15 @@ const EditProjectPage = ({ currentUser }) => {
                 value={tagsSelectValue}
                 onChange={handleTagsChange}
                 styles={selectStyles}
-                placeholder="Type or select tags..."
-                formatCreateLabel={(inputValue) => `Add tag: "${inputValue}"`}
+                placeholder="Type or select skills..."
+                formatCreateLabel={(inputValue) => `Add skill: "${inputValue}"`}
                 isDisabled={isSubmitting}
               />
               <p className="mt-1 text-xs text-gray-500">
-                Enter relevant keywords. Press Enter or Tab after typing a new
-                tag.
+                Enter relevant skills. Press Enter or Tab after typing a new
+                skill.
               </p>
             </div>
-
-            {/* Submit Button */}
             <div className="flex justify-end pt-5 border-t border-gray-200 mt-4">
               <button
                 type="submit"
@@ -589,103 +618,6 @@ const EditProjectPage = ({ currentUser }) => {
           </form>
         </div>
       </div>
-      {/* Add Member Modal */}
-      {showMemberModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium text-gray-900">
-                <FaUserPlus className="inline mr-2" /> Add Team Member
-              </h3>
-              <button
-                onClick={() => {
-                  setShowMemberModal(false);
-                  setNewMember({
-                    email: "",
-                    role: "Collaborator",
-                    message: "",
-                  });
-                  setFormErrors((prev) => ({
-                    ...prev,
-                    memberEmail: undefined,
-                  }));
-                }}
-                className="text-gray-400 hover:text-gray-500"
-              >
-                <FaTimes />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="memberEmail" className={labelClasses}>
-                  Email Address <span className="text-red-600">*</span>
-                </label>
-                <input
-                  type="email"
-                  id="memberEmail"
-                  name="email"
-                  value={newMember.email}
-                  onChange={handleMemberInputChange}
-                  className={inputClasses}
-                  placeholder="member@example.com"
-                  required
-                />
-                {formErrors.memberEmail && (
-                  <p className="mt-1 text-xs text-red-600">
-                    {formErrors.memberEmail}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label htmlFor="memberRole" className={labelClasses}>
-                  Role
-                </label>
-                <select
-                  id="memberRole"
-                  name="role"
-                  value={newMember.role}
-                  onChange={handleMemberInputChange}
-                  className={inputClasses}
-                >
-                  <option value="Collaborator">Collaborator</option>
-                  <option value="Reviewer">Reviewer</option>
-                  <option value="Observer">Observer</option>
-                </select>
-              </div>
-              <div>
-                <label htmlFor="memberMessage" className={labelClasses}>
-                  Invitation Message (Optional)
-                </label>
-                <textarea
-                  id="memberMessage"
-                  name="message"
-                  rows="3"
-                  value={newMember.message}
-                  onChange={handleMemberInputChange}
-                  className={inputClasses}
-                  placeholder="Add a personal message..."
-                ></textarea>
-              </div>
-            </div>
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                type="button"
-                onClick={() => setShowMemberModal(false)}
-                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleAddMember}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700"
-              >
-                Add Member
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 };
