@@ -1,4 +1,3 @@
-// src/Page/ConfirmationModal.jsx (or src/components/ConfirmationModal.jsx)
 import React, { useEffect, useRef } from "react";
 import { FaTimes, FaExclamationTriangle } from "react-icons/fa"; // Example using icons
 

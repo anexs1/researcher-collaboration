@@ -1,3 +1,5 @@
+// backend/controllers/projectController.js
+
 import asyncHandler from "express-async-handler";
 import db from "../models/index.js";
 import { Op, literal } from "sequelize";
@@ -16,7 +18,7 @@ if (!Project || !User || !Member || !CollaborationRequest || !sequelize) {
   console.error(
     "FATAL: Database models not loaded correctly in projectController.js."
   );
-  // process.exit(1);
+  // process.exit(1); // Consider for production if this happens
 }
 
 const ensureUploadsDirExists = async (dirPath) => {
@@ -26,11 +28,13 @@ const ensureUploadsDirExists = async (dirPath) => {
     if (error.code === "ENOENT") {
       try {
         await fs.mkdir(dirPath, { recursive: true });
+        console.log(`Successfully created directory: ${dirPath}`);
       } catch (mkdirError) {
         console.error(`Error creating directory ${dirPath}:`, mkdirError);
         throw new Error(`Failed to create required directory: ${dirPath}`);
       }
     } else {
+      console.error(`Error accessing directory ${dirPath}:`, error);
       throw error;
     }
   }
@@ -39,7 +43,8 @@ ensureUploadsDirExists(PROJECT_UPLOADS_DIR).catch((err) =>
   console.error("Failed to ensure initial project uploads directory:", err)
 );
 
-// --- Field Definitions with CORRECTED literal subquery ---
+// --- Field Definitions with CORRECTED literal subquery for MySQL ---
+// Make sure `project_members`, `project_id`, `status` and `${Project.name}` (resolves to `Project` or `Projects` table name) are correct.
 const projectListSelectFields = [
   "id",
   "title",
@@ -87,17 +92,30 @@ const projectDetailSelectFields = [
 ];
 const userPublicSelectFields = ["id", "username", "profilePictureUrl"];
 
-// --- Controller Functions (rest of the code remains the same as your last provided version) ---
+// --- Controller Functions ---
 export const getAllProjects = asyncHandler(async (req, res) => {
   const currentUserId = req.user?.id;
   try {
     const { status, search, page = 1, limit = 9 } = req.query;
     const where = {};
     if (status && status !== "all" && status !== "archived") {
-      where.status = status;
+      // Normalize incoming status for query if necessary, or ensure frontend sends canonical
+      const allowedDbStatuses = Project.getAttributes().status?.values || [];
+      const canonicalQueryStatus = allowedDbStatuses.find(
+        (s) => s.toLowerCase() === status.toLowerCase()
+      );
+      if (canonicalQueryStatus) {
+        where.status = canonicalQueryStatus;
+      } else if (status !== "all") {
+        // If status is some other invalid value, don't filter by it or error
+        console.warn(
+          `getAllProjects: Invalid status query parameter received: ${status}`
+        );
+      }
     } else if (status === "archived") {
       where.status = "Archived";
     } else if (status !== "all") {
+      // Default: exclude archived if status is not 'all' or specific
       where.status = { [Op.ne]: "Archived" };
     }
 
@@ -163,6 +181,15 @@ export const getAllProjects = asyncHandler(async (req, res) => {
       const projectJson = p.toJSON();
       projectJson.currentCollaborators =
         parseInt(projectJson.currentCollaborators, 10) || 0;
+      // Normalize status before sending to frontend
+      if (projectJson.status) {
+        const allowedDbStatuses = Project.getAttributes().status?.values || [];
+        const canonicalStatus = allowedDbStatuses.find(
+          (s) => s.toLowerCase() === projectJson.status.toLowerCase()
+        );
+        projectJson.status = canonicalStatus || projectJson.status;
+      }
+
       projectJson.currentUserMembershipStatus = null;
       if (currentUserId) {
         const currentUserMembership = projectJson.memberships?.[0];
@@ -236,6 +263,13 @@ export const getMyProjects = asyncHandler(async (req, res) => {
       const projectJson = p.toJSON();
       projectJson.currentCollaborators =
         parseInt(projectJson.currentCollaborators, 10) || 0;
+      if (projectJson.status) {
+        const allowedDbStatuses = Project.getAttributes().status?.values || [];
+        const canonicalStatus = allowedDbStatuses.find(
+          (s) => s.toLowerCase() === projectJson.status.toLowerCase()
+        );
+        projectJson.status = canonicalStatus || projectJson.status;
+      }
       return projectJson;
     });
     res
@@ -269,13 +303,23 @@ export const getProjectById = asyncHandler(async (req, res) => {
       ],
     });
     if (!project) {
-      res.status(404);
+      res.status(404); // Set status before throwing for the catch block
       throw new Error("Project not found.");
     }
 
     const projectJson = project.toJSON();
     projectJson.currentCollaborators =
       parseInt(projectJson.currentCollaborators, 10) || 0;
+
+    // Normalize status being sent to frontend
+    if (projectJson.status) {
+      const allowedDbStatuses = Project.getAttributes().status?.values || [];
+      const canonicalStatus = allowedDbStatuses.find(
+        (s) => s.toLowerCase() === projectJson.status.toLowerCase()
+      );
+      projectJson.status = canonicalStatus || projectJson.status; // Send canonical if found
+    }
+
     projectJson.currentUserMembershipStatus = null;
     if (currentUserId) {
       const memberRecord = await Member.findOne({
@@ -303,11 +347,19 @@ export const getProjectById = asyncHandler(async (req, res) => {
     }
     res.status(200).json({ success: true, data: projectJson });
   } catch (error) {
-    console.error(`Error in getProjectById for ID ${projectIdParam}:`, error);
-    const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
-    const message = error.message || "Server error retrieving project details.";
-    if (!res.headersSent)
-      res.status(statusCode).json({ success: false, message });
+    console.error(
+      `[getProjectById] Error for ID ${projectIdParam}:`,
+      error.message
+    );
+    const statusCode = res.statusCode !== 200 ? res.statusCode : 500;
+    if (!res.headersSent) {
+      res
+        .status(statusCode)
+        .json({
+          success: false,
+          message: error.message || "Server error retrieving project details.",
+        });
+    }
   }
 });
 
@@ -359,15 +411,26 @@ export const createProject = asyncHandler(async (req, res) => {
     res.status(400);
     throw new Error("Required collaborators must be a non-negative number.");
   }
-  const allowedStatuses = Project.getAttributes().status?.values;
-  if (allowedStatuses && !allowedStatuses.includes(status)) {
-    res.status(400);
-    throw new Error(
-      `Invalid project status: '${status}'. Must be one of: ${allowedStatuses.join(
-        ", "
-      )}`
+
+  // Normalize incoming status for creation
+  let canonicalCreateStatus = "Planning"; // Default
+  const allowedDbStatusesCreate = Project.getAttributes().status?.values || [];
+  if (status) {
+    const foundStatus = allowedDbStatusesCreate.find(
+      (s) => s.toLowerCase() === status.toLowerCase()
     );
+    if (foundStatus) {
+      canonicalCreateStatus = foundStatus;
+    } else {
+      res.status(400);
+      throw new Error(
+        `Invalid project status: '${status}'. Must be one of: ${allowedDbStatusesCreate.join(
+          ", "
+        )}`
+      );
+    }
   }
+
   let savedImageUrl = null;
   let absoluteFilePath = null;
   if (req.file) {
@@ -396,7 +459,7 @@ export const createProject = asyncHandler(async (req, res) => {
         description: description.trim(),
         ownerId,
         requiredCollaborators: collaborators,
-        status,
+        status: canonicalCreateStatus, // Use normalized status
         category: category || null,
         duration: duration || null,
         funding: funding || null,
@@ -428,6 +491,13 @@ export const createProject = asyncHandler(async (req, res) => {
     const projectJson = createdProject.toJSON();
     projectJson.currentCollaborators =
       parseInt(projectJson.currentCollaborators, 10) || 0;
+    if (projectJson.status) {
+      // Normalize status for response consistency
+      const canonicalRespStatus = allowedDbStatusesCreate.find(
+        (s) => s.toLowerCase() === projectJson.status.toLowerCase()
+      );
+      projectJson.status = canonicalRespStatus || projectJson.status;
+    }
     res.status(201).json({ success: true, data: projectJson });
   } catch (error) {
     if (
@@ -536,14 +606,28 @@ export const updateProject = asyncHandler(async (req, res) => {
       }
       updates.requiredCollaborators = c;
     }
-    if (status !== undefined) {
-      const allowed = Project.getAttributes().status?.values;
-      if (allowed && !allowed.includes(status)) {
+
+    if (
+      status !== undefined &&
+      status !== null &&
+      typeof status === "string" &&
+      status.trim() !== ""
+    ) {
+      const allowedDbStatuses = Project.getAttributes().status?.values || [];
+      const canonicalStatus = allowedDbStatuses.find(
+        (s) => s.toLowerCase() === status.toLowerCase()
+      );
+      if (!canonicalStatus) {
         res.status(400);
-        throw new Error(`Invalid status: '${status}'.`);
+        throw new Error(
+          `Invalid status: '${status}'. Must be one of: ${allowedDbStatuses.join(
+            ", "
+          )}`
+        );
       }
-      updates.status = status;
+      updates.status = canonicalStatus;
     }
+
     if (category !== undefined) updates.category = category || null;
     if (duration !== undefined) updates.duration = duration || null;
     if (funding !== undefined) updates.funding = funding || null;
@@ -587,6 +671,14 @@ export const updateProject = asyncHandler(async (req, res) => {
       const projectJson = currentProject.toJSON();
       projectJson.currentCollaborators =
         parseInt(projectJson.currentCollaborators, 10) || 0;
+      if (projectJson.status) {
+        // Normalize status for response
+        const allowed = Project.getAttributes().status?.values || [];
+        const canon = allowed.find(
+          (s) => s.toLowerCase() === projectJson.status.toLowerCase()
+        );
+        projectJson.status = canon || projectJson.status;
+      }
       return res
         .status(200)
         .json({
@@ -621,6 +713,14 @@ export const updateProject = asyncHandler(async (req, res) => {
     const projectJson = updatedProject.toJSON();
     projectJson.currentCollaborators =
       parseInt(projectJson.currentCollaborators, 10) || 0;
+    if (projectJson.status) {
+      // Normalize status for response
+      const allowed = Project.getAttributes().status?.values || [];
+      const canon = allowed.find(
+        (s) => s.toLowerCase() === projectJson.status.toLowerCase()
+      );
+      projectJson.status = canon || projectJson.status;
+    }
     res
       .status(200)
       .json({
@@ -648,7 +748,7 @@ export const updateProject = asyncHandler(async (req, res) => {
         );
       }
     }
-    console.error(`Error updating project ${projectIdParam}:`, error);
+    console.error(`Error updating project ${projectIdParam}:`, error); // Log actual error
     const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
     const message = error.message || "Server error updating project.";
     if (!res.headersSent)
@@ -924,10 +1024,22 @@ export const getProjectsByUserId = asyncHandler(async (req, res) => {
     if (projectStatusQuery === "archived") {
       projectWhereConditions.status = "Archived";
     } else if (projectStatusQuery && projectStatusQuery !== "all") {
-      projectWhereConditions.status = projectStatusQuery;
+      // Normalize incoming status for query
+      const allowedDbStatuses = Project.getAttributes().status?.values || [];
+      const canonicalQueryStatus = allowedDbStatuses.find(
+        (s) => s.toLowerCase() === projectStatusQuery.toLowerCase()
+      );
+      if (canonicalQueryStatus) {
+        projectWhereConditions.status = canonicalQueryStatus;
+      } else {
+        console.warn(
+          `getProjectsByUserId: Invalid status query parameter received: ${projectStatusQuery}`
+        );
+      }
     } else if (projectStatusQuery !== "all") {
       projectWhereConditions.status = { [Op.ne]: "Archived" };
     }
+
     const includeClauses = [
       { model: User, as: "owner", attributes: userPublicSelectFields },
     ];
@@ -962,6 +1074,14 @@ export const getProjectsByUserId = asyncHandler(async (req, res) => {
       const projectJson = p.toJSON();
       projectJson.currentCollaborators =
         parseInt(projectJson.currentCollaborators, 10) || 0;
+      if (projectJson.status) {
+        // Normalize status for response
+        const allowed = Project.getAttributes().status?.values || [];
+        const canon = allowed.find(
+          (s) => s.toLowerCase() === projectJson.status.toLowerCase()
+        );
+        projectJson.status = canon || projectJson.status;
+      }
       projectJson.currentUserMembershipStatus = null;
       if (currentLoggedInUserId) {
         const membership = projectJson.currentUserSpecificMembership;
