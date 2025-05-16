@@ -21,7 +21,6 @@ import {
   adminUpdateUserRole,
   adminDeleteUser,
 } from "../controllers/userController.js";
-
 const router = express.Router();
 
 // --- Multer Configuration for Profile Pictures ---
@@ -38,17 +37,10 @@ const uploadProfilePic = multer({
   fileFilter: fileFilter,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
 });
-// --- End Multer Configuration ---
 
-// === PUBLIC ROUTES ===
-// No 'protect' or 'adminOnly' middleware
 router.get("/public/:userId", getUserPublicProfile);
 router.get("/discoverable", getDiscoverableUsers); // Explore page route
 
-// === AUTHENTICATED USER ROUTES ('ME' ROUTES) ===
-// These routes require the user to be logged in (via 'protect' middleware)
-
-// Profile update: uses multer for profileImageFile, then protect, then controller
 router.put(
   "/profile", // Endpoint for logged-in user to update their own profile
   protect,
@@ -61,10 +53,6 @@ router.put("/me/password", protect, updateUserPassword);
 router.get("/selectable", protect, getSelectableUsers); // For dropdowns, etc.
 router.get("/:userId/activity", protect, getUserActivity); // User getting their own or admin getting any
 
-// === ADMIN ROUTES ===
-// These routes require the user to be logged in AND have an 'admin' role
-// (via 'protect' and 'adminOnly' middleware)
-
 router.get("/admin/all", protect, adminOnly, adminGetAllUsers);
 router.get("/admin/pending", protect, adminOnly, adminGetPendingUsers);
 router.get("/admin/:id", protect, adminOnly, adminGetUserById); // Get specific user details
@@ -72,10 +60,6 @@ router.put("/admin/:id/status", protect, adminOnly, adminUpdateUserStatus); // U
 router.put("/admin/:id/role", protect, adminOnly, adminUpdateUserRole); // Update user role
 router.delete("/admin/:id", protect, adminOnly, adminDeleteUser); // Delete a user
 
-// --- Multer Error Handling Middleware (Specific to this router) ---
-// This should be placed after all routes that use multer if you want to catch its errors
-// Or you can handle multer errors within each controller.
-// For a more global approach, you'd put it in your main server.js error handlers.
 router.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     // A Multer error occurred when uploading.

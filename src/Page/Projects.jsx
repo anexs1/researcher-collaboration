@@ -1,5 +1,3 @@
-// src/Page/Projects.jsx
-
 import React, { useState, useEffect, useCallback, memo } from "react"; // Import memo
 import { Link } from "react-router-dom";
 import axios from "axios";
@@ -80,11 +78,6 @@ const getStatusBadgeClasses = (status) => {
       return "bg-gray-100 text-gray-800 border-gray-200";
   }
 };
-
-// ========================================================================
-// --- ProjectCard Sub-Component ---
-// ========================================================================
-// Use React.memo for performance optimization if props don't change often
 const ProjectCard = memo(
   ({
     project,
@@ -521,9 +514,6 @@ const ProjectCard = memo(
   }
 ); // End of ProjectCard component
 
-// ========================================================================
-// --- Main Projects Page Component ---
-// ========================================================================
 export default function Projects({ currentUser }) {
   // --- State ---
   const [projects, setProjects] = useState([]);
@@ -624,7 +614,6 @@ export default function Projects({ currentUser }) {
     [searchTerm, filterStatus, limit, showNotification]
   ); // Added showNotification back
 
-  // Effect for initial load and filter changes
   useEffect(() => {
     setPage(1); // Reset to page 1 when filters change
     setProjectsWithNoPending(new Set()); // Reset pending knowledge
@@ -633,9 +622,6 @@ export default function Projects({ currentUser }) {
 
   // Effect for pagination changes
   useEffect(() => {
-    // Fetch only when page number changes *after* the initial load/filter change
-    // We need a way to distinguish initial load/filter from actual pagination click
-    // This simple check fetches if page > 1, assuming filters always reset to 1
     if (page > 1) {
       fetchProjects(page);
     }
@@ -779,10 +765,6 @@ export default function Projects({ currentUser }) {
         )
       );
       try {
-        // --- IMPORTANT: Use the correct endpoint for status update ---
-        // Option A: General PUT/PATCH to /api/projects/:id
-        // await apiClient.put(`/api/projects/${projectToUpdate.id}`, { status: newStatus });
-        // Option B: Specific PATCH to /api/projects/:id/status (if you created one)
         await apiClient.patch(`/api/projects/${projectToUpdate.id}/status`, {
           status: newStatus,
         }); // Example using PATCH
@@ -1040,11 +1022,8 @@ export default function Projects({ currentUser }) {
             onDownload={(text) => downloadReport(text, selectedProject?.title)}
           />
         )}
-        {/* Uncomment if ChatModal is ready: */}
-        {/* {modalType === "chat" && selectedProject && (<ChatModal key={`chat-${selectedProject.id}`} project={selectedProject} currentUser={currentUser} onClose={handleCloseModal}/>)} */}
       </AnimatePresence>
 
-      {/* Dropdown Click Away Listener */}
       {activeDropdown && (
         <div
           className="fixed inset-0 z-10 bg-transparent"
