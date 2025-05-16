@@ -1,5 +1,3 @@
-// backend/controllers/authController.js
-
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import asyncHandler from "express-async-handler";
@@ -9,21 +7,39 @@ const { User } = db; // Destructure the User model
 
 // Helper function to generate JWT
 const generateToken = (user) => {
-  const secret = process.env.JWT_SECRET || "fallback_secret_key_for_dev_only"; // Use environment variable with fallback
-  // Include role in the token payload for easy access control
+  const secret = process.env.JWT_SECRET || "fallback_secret_key_for_dev_only";
   return jwt.sign({ id: user.id, role: user.role }, secret, {
-    expiresIn: process.env.JWT_EXPIRATION || "7d", // Use environment variable with fallback
+    expiresIn: process.env.JWT_EXPIRATION || "7d",
   });
 };
 
+// Fields to be returned for user profile related endpoints
+const userProfileAttributes = [
+  "id",
+  "username",
+  "email",
+  "role",
+  "status",
+  "university",
+  "department",
+  "companyName",
+  "jobTitle",
+  "medicalSpecialty",
+  "hospitalName",
+  "profilePictureUrl",
+  "bio",
+  "createdAt",
+  "updatedAt",
+  // Add any other fields the profile page might display
+  // 'skillsNeeded' would be here if you had it
+];
+
 // --- User Registration ---
-// Creates user as 'pending', requires admin approval
 export const registerUser = asyncHandler(async (req, res) => {
   const { username, email, password, role, ...otherData } = req.body;
 
-  console.log("Registration attempt:", { username, email, role });
+  // console.log("Registration attempt:", { username, email, role });
 
-  // Prevent self-assigning admin role during public registration
   if (role && role.toLowerCase() === "admin") {
     res.status(403).json({
       success: false,
@@ -31,7 +47,6 @@ export const registerUser = asyncHandler(async (req, res) => {
     });
     return;
   }
-  // Basic validation
   if (!username || !email || !password) {
     res.status(400).json({
       success: false,
@@ -40,7 +55,6 @@ export const registerUser = asyncHandler(async (req, res) => {
     return;
   }
 
-  // Check if email already exists (case-insensitive)
   const existingUser = await User.findOne({
     where: { email: email.toLowerCase() },
   });
@@ -50,25 +64,20 @@ export const registerUser = asyncHandler(async (req, res) => {
   }
 
   try {
-    // Create User - status defaults to 'pending' via model
     const user = await User.create({
       username,
-      email: email.toLowerCase(), // Store consistently
-      password, // Hashing happens in the model's beforeSave hook
-      role: role || "user", // Default to 'user' if not provided
-      ...otherData, // Save other relevant signup form data (make sure keys match model fields)
+      email: email.toLowerCase(),
+      password,
+      role: role || "user",
+      status: "pending", // Explicitly set, though model might have default
+      ...otherData,
     });
 
-    console.log(
-      `New user registered (pending approval): ID=${user.id}, Email=${user.email}`
-    );
-
-    // Send Success Response (No Token - requires approval)
+    // console.log(`New user registered (pending approval): ID=${user.id}, Email=${user.email}`);
     res.status(201).json({
       success: true,
       message:
         "Registration successful! Your account is pending admin approval.",
-      // Do NOT return user data or token here
     });
   } catch (error) {
     console.error("Registration error:", error);
@@ -86,7 +95,6 @@ export const registerUser = asyncHandler(async (req, res) => {
 });
 
 // --- User Login ---
-// Authenticates, checks if status is 'approved', returns token and user data
 export const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
@@ -97,25 +105,20 @@ export const loginUser = asyncHandler(async (req, res) => {
     return;
   }
 
-  // Fetch user using the 'withPassword' scope to include the password hash
-  const user = await User.scope("withPassword").findOne({
+  const userWithPassword = await User.scope("withPassword").findOne({
     where: { email: email.toLowerCase() },
   });
 
-  // Check if user exists and if the password matches using the correct model method
-  // --- CORRECTED METHOD NAME ---
-  if (!user || !(await user.matchPassword(password))) {
-    // Use matchPassword
+  if (!userWithPassword || !(await userWithPassword.matchPassword(password))) {
     res
       .status(401)
-      .json({ success: false, message: "Invalid email or password" }); // Generic error
+      .json({ success: false, message: "Invalid email or password" });
     return;
   }
 
-  // Check Approval Status - User must be 'approved' to log in
-  if (user.status !== "approved") {
+  if (userWithPassword.status !== "approved") {
     let statusMessage = "Login failed. Account not active.";
-    switch (user.status) {
+    switch (userWithPassword.status) {
       case "pending":
         statusMessage = "Account is pending admin approval.";
         break;
@@ -126,43 +129,38 @@ export const loginUser = asyncHandler(async (req, res) => {
         statusMessage = "Account has been suspended.";
         break;
     }
-    console.warn(`Login blocked for user ${email}. Status: ${user.status}`);
-    res.status(403).json({ success: false, message: statusMessage }); // 403 Forbidden
+    // console.warn(`Login blocked for user ${email}. Status: ${userWithPassword.status}`);
+    res.status(403).json({ success: false, message: statusMessage });
     return;
   }
 
-  // If credentials are valid and status is approved, generate token
-  const token = generateToken(user);
-  console.log(
-    `User login successful: ID=${user.id}, Role=${user.role}, Status=${user.status}`
-  );
+  const token = generateToken(userWithPassword);
+  // console.log(`User login successful: ID=${userWithPassword.id}, Role=${userWithPassword.role}, Status=${userWithPassword.status}`);
 
-  // Return token and public user data (password excluded by default scope)
+  // Fetch the user again but with selected attributes for the response
+  const userForResponse = await User.findByPk(userWithPassword.id, {
+    attributes: userProfileAttributes,
+  });
+
+  if (!userForResponse) {
+    // Should not happen if login was successful
+    console.error(
+      `User ${userWithPassword.id} logged in but not found for response construction.`
+    );
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching user details post-login.",
+    });
+  }
+
   res.json({
     success: true,
     token,
-    user: {
-      id: user.id,
-      username: user.username,
-      email: user.email, // Consider if email should always be returned
-      role: user.role,
-      status: user.status,
-      // Add other non-sensitive fields the frontend might need immediately
-      university: user.university,
-      department: user.department,
-      companyName: user.companyName,
-      jobTitle: user.jobTitle,
-      medicalSpecialty: user.medicalSpecialty,
-      hospitalName: user.hospitalName,
-      bio: user.bio,
-      profilePictureUrl: user.profilePictureUrl,
-      // etc. based on your `publicUserFields` concept
-    },
+    user: userForResponse, // Send the user object with selected attributes
   });
 });
 
 // --- Admin login ---
-// Authenticates, checks if role is 'admin', DOES NOT check status
 export const loginAdminUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
@@ -173,26 +171,19 @@ export const loginAdminUser = asyncHandler(async (req, res) => {
     return;
   }
 
-  // Fetch user using the 'withPassword' scope
   const user = await User.scope("withPassword").findOne({
     where: { email: email.toLowerCase() },
   });
 
-  // Check credentials using the correct model method
-  // --- CORRECTED METHOD NAME ---
   if (!user || !(await user.matchPassword(password))) {
-    // Use matchPassword
     res
       .status(401)
-      .json({ success: false, message: "Invalid email or password" }); // Generic error
+      .json({ success: false, message: "Invalid email or password" });
     return;
   }
 
-  // Check if the user HAS the 'admin' role
   if (user.role !== "admin") {
-    console.warn(
-      `Non-admin login attempt blocked for ${email} on admin endpoint.`
-    );
+    // console.warn(`Non-admin login attempt blocked for ${email} on admin endpoint.`);
     res.status(403).json({
       success: false,
       message: "Access denied. Not an administrator.",
@@ -200,17 +191,14 @@ export const loginAdminUser = asyncHandler(async (req, res) => {
     return;
   }
 
-  // Admins bypass status check *on this specific endpoint*
-  // (Their status should ideally still be 'approved' in the DB for consistency)
-
   const token = generateToken(user);
-  console.log(`Admin login successful: ID=${user.id}, Email=${email}`);
+  // console.log(`Admin login successful: ID=${user.id}, Email=${email}`);
   res.status(200).json({
     success: true,
     message: "Admin login successful",
     token: token,
     user: {
-      // Return relevant admin user data
+      // Send relevant admin user data
       id: user.id,
       username: user.username,
       email: user.email,
@@ -220,103 +208,66 @@ export const loginAdminUser = asyncHandler(async (req, res) => {
 });
 
 // --- Get logged-in user profile ---
-// Uses the user data attached by the 'protect' middleware
 export const getMe = asyncHandler(async (req, res) => {
-  // req.user is populated by 'protect' middleware after verifying token
-  // It should already use the default scope (excluding password)
-  if (!req.user) {
-    // This case implies the 'protect' middleware failed or didn't attach the user
+  // req.user is populated by 'protect' middleware (should contain at least id and role)
+  if (!req.user || !req.user.id) {
+    // console.warn("[Backend getMe] No req.user or req.user.id found. Token might be invalid or protect middleware issue.");
     res.status(401).json({
       success: false,
-      message: "Not authorized or user data missing.",
+      message: "Not authorized, token invalid, or user ID missing from token.",
     });
     return;
   }
 
-  // Optional: You could re-fetch from DB if you need the absolute latest data
-  // const freshUser = await User.findByPk(req.user.id);
-  // if (!freshUser) {
-  //   res.status(404).json({ success: false, message: "User not found." });
-  //   return;
-  // }
-  // res.json({ success: true, data: freshUser });
+  try {
+    // Fetch the most up-to-date user information from the database
+    // using the predefined userProfileAttributes.
+    const freshUser = await User.findByPk(req.user.id, {
+      attributes: userProfileAttributes,
+    });
 
-  // Usually, returning req.user is sufficient
-  res.json({ success: true, data: req.user });
+    if (!freshUser) {
+      // console.warn(`[Backend getMe] User with ID ${req.user.id} from token not found in DB.`);
+      res.status(404).json({ success: false, message: "User not found." });
+      return;
+    }
+
+    // console.log("[Backend getMe] Sending fresh user data from DB:", freshUser.toJSON());
+    res.json({ success: true, data: freshUser }); // Send the fresh user data
+  } catch (error) {
+    console.error("[Backend getMe] Error fetching user profile:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Server error fetching profile." });
+  }
 });
 
-// --- Admin User Management Controllers ---
-// Note: These ideally belong in a separate adminController.js and adminRoutes.js
+// --- Admin User Management Controllers (Kept for completeness, but focus is on getMe/loginUser) ---
 
-/**
- * @desc    Get all users (Admin only)
- * @route   GET /api/admin/users (Example Route - adjust actual route)
- * @access  Private/Admin
- */
 export const getAllUsers = asyncHandler(async (req, res) => {
-  // Example attributes - adjust based on what admin needs
   const users = await User.findAll({
-    attributes: [
-      "id",
-      "username",
-      "email",
-      "role",
-      "createdAt",
-      "updatedAt",
-      "status",
-      "university",
-      "department",
-      "companyName",
-      "jobTitle",
-      "medicalSpecialty",
-      "hospitalName",
-    ],
+    attributes: userProfileAttributes, // Use consistent attributes
     order: [["createdAt", "DESC"]],
-    // Consider adding pagination here for large user bases
   });
   res.status(200).json({ success: true, count: users.length, data: users });
 });
 
-/**
- * @desc    Get users pending approval (Admin only)
- * @route   GET /api/admin/users/pending (Example Route - adjust actual route)
- * @access  Private/Admin
- */
 export const getPendingUsers = asyncHandler(async (req, res) => {
   const pendingUsers = await User.findAll({
     where: { status: "pending" },
-    // Select fields relevant for the approval decision
-    attributes: [
-      "id",
-      "username",
-      "email",
-      "role",
-      "createdAt",
-      "status",
-      "university",
-      "department",
-      "companyName",
-      "jobTitle",
-      "medicalSpecialty",
-      "hospitalName",
-    ],
-    order: [["createdAt", "ASC"]], // Show oldest first
+    attributes: userProfileAttributes, // Use consistent attributes
+    order: [["createdAt", "ASC"]],
   });
   res
     .status(200)
     .json({ success: true, count: pendingUsers.length, data: pendingUsers });
 });
 
-/**
- * @desc    Update user status (approve/reject/suspend) (Admin only)
- * @route   PATCH /api/admin/users/:userId/status (Example Route - adjust actual route)
- * @access  Private/Admin
- */
 export const updateUserStatus = asyncHandler(async (req, res) => {
   const { status } = req.body;
   const { userId } = req.params;
 
-  const allowedStatuses = ["approved", "rejected", "suspended", "pending"]; // Include 'pending' if admins can revert
+  const allowedStatuses = ["approved", "rejected", "suspended", "pending"];
   if (!status || !allowedStatuses.includes(status)) {
     res.status(400).json({
       success: false,
@@ -338,7 +289,6 @@ export const updateUserStatus = asyncHandler(async (req, res) => {
     return;
   }
 
-  // Prevent admin changing own status via this route for safety
   if (user.id.toString() === req.user.id.toString()) {
     res.status(400).json({
       success: false,
@@ -347,17 +297,10 @@ export const updateUserStatus = asyncHandler(async (req, res) => {
     return;
   }
 
-  // Update status and save
   try {
     user.status = status;
     await user.save();
-
-    console.log(
-      `Admin ${req.user.email} updated status of user ${user.email} (ID: ${userId}) to ${status}`
-    );
-    // TODO: Add email notification logic here (e.g., send approval/rejection email)
-
-    // Return limited data of the updated user
+    // console.log(`Admin ${req.user.email} updated status of user ${user.email} (ID: ${userId}) to ${status}`);
     res.status(200).json({
       success: true,
       message: `User "${user.username}" status updated to ${status}.`,

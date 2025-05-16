@@ -2,12 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import PropTypes from "prop-types";
 import { Link, NavLink } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-
-// Import your Notifications component
-// MAKE SURE this file exists and exports a valid React component.
-// e.g., in Notifications.jsx:
-// const Notifications = () => { /* ... your component ... */ }; export default Notifications;
-import Notifications from "./Notifications";
+import Notifications from "./Notifications"; // Ensure this component exists and is correctly imported
 
 // --- SVG Icon for Logo/Brand ---
 const BrandIcon = ({
@@ -23,7 +18,7 @@ const BrandIcon = ({
   </svg>
 );
 
-// --- Placeholder SVG Icons for Main Navigation (Replace with actual icons) ---
+// --- Placeholder SVG Icons for Main Navigation ---
 const ExploreIcon = ({ className = "w-5 h-5" }) => (
   <svg
     className={className}
@@ -85,7 +80,6 @@ const HelpIcon = ({ className = "w-5 h-5" }) => (
   </svg>
 );
 
-// --- Main Navigation Links Data ---
 const mainNavLinks = [
   { path: "/explore", label: "Explore", icon: <ExploreIcon /> },
   { path: "/publications", label: "Publications", icon: <PublicationsIcon /> },
@@ -96,9 +90,10 @@ const mainNavLinks = [
 const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
-
   const profileDropdownRef = useRef(null);
   const profileButtonRef = useRef(null);
+
+  // console.log("Navbar currentUser prop:", currentUser); // DEBUG: Check what Navbar receives
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -114,9 +109,7 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
     const handleEscapeKey = (event) => {
       if (event.key === "Escape") {
         setProfileDropdownOpen(false);
-        if (profileButtonRef.current) {
-          profileButtonRef.current.focus();
-        }
+        if (profileButtonRef.current) profileButtonRef.current.focus();
       }
     };
 
@@ -147,11 +140,8 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
         { type: "divider" },
         {
           action: () => {
-            if (typeof onLogout === "function") {
-              onLogout();
-            } else {
-              console.error("onLogout prop is not a function");
-            }
+            if (typeof onLogout === "function") onLogout();
+            else console.error("onLogout prop is not a function");
             setProfileDropdownOpen(false);
           },
           label: "Sign out",
@@ -166,24 +156,20 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
   const activeLinkClass = "text-sky-300 font-semibold bg-white/10";
   const inactiveLinkClass =
     "text-slate-300 hover:text-sky-300 hover:bg-white/5";
-
   const getNavLinkClass = ({ isActive }) =>
-    `${baseLinkClasses} ${isActive ? activeLinkClass : inactiveLinkClass}
-     after:content-[''] after:absolute after:left-1/2 after:right-1/2 after:bottom-0 after:h-0.5 
-     after:bg-gradient-to-r after:from-sky-400 after:to-pink-500
-     after:transition-all after:duration-300 ${
-       isActive
-         ? "after:left-0 after:right-0"
-         : "group-hover:after:left-[25%] group-hover:after:right-[25%] group-focus-visible:after:left-[25%] group-focus-visible:after:right-[25%]"
-     }`;
-
+    `${baseLinkClasses} ${
+      isActive ? activeLinkClass : inactiveLinkClass
+    } after:content-[''] after:absolute after:left-1/2 after:right-1/2 after:bottom-0 after:h-0.5 after:bg-gradient-to-r after:from-sky-400 after:to-pink-500 after:transition-all after:duration-300 ${
+      isActive
+        ? "after:left-0 after:right-0"
+        : "group-hover:after:left-[25%] group-hover:after:right-[25%] group-focus-visible:after:left-[25%] group-focus-visible:after:right-[25%]"
+    }`;
   const mobileNavLinkClass = ({ isActive }) =>
-    `block px-4 py-3 rounded-md text-base font-medium transition-colors flex items-center
-     ${
-       isActive
-         ? "bg-sky-600 text-white shadow-md"
-         : "text-slate-200 hover:bg-purple-700 hover:text-white"
-     }`;
+    `block px-4 py-3 rounded-md text-base font-medium transition-colors flex items-center ${
+      isActive
+        ? "bg-sky-600 text-white shadow-md"
+        : "text-slate-200 hover:bg-purple-700 hover:text-white"
+    }`;
 
   const toggleMobileMenu = () => setMobileMenuOpen((prev) => !prev);
   const closeMobileMenu = () => setMobileMenuOpen(false);
@@ -311,7 +297,9 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
               aria-label="Homepage"
             >
               <BrandIcon />
-              <span className="ml-2 text-xl font-bold text-slate-200 group-hover:text-sky-300 transition-colors"></span>
+              <span className="ml-2 text-xl font-bold text-slate-200 group-hover:text-sky-300 transition-colors">
+                {/* Your Brand Name Here */}
+              </span>
             </Link>
           </div>
 
@@ -349,11 +337,12 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                 <>
                   {Notifications && typeof Notifications === "function" ? (
                     <div className="mr-3">
-                      <Notifications />
+                      {" "}
+                      <Notifications />{" "}
                     </div>
                   ) : process.env.NODE_ENV === "development" ? (
                     <div className="mr-3 text-xs text-red-400">
-                      Notifications component missing or invalid.
+                      Notifications component missing.
                     </div>
                   ) : null}
 
@@ -376,12 +365,21 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                       <img
                         className="h-8 w-8 rounded-full object-cover"
                         src={
-                          currentUser.profilePictureUrl ||
+                          currentUser.profilePictureUrl || // Uses the actual URL if available
                           `https://ui-avatars.com/api/?name=${encodeURIComponent(
                             currentUser.fullName || currentUser.username || "U"
                           )}&background=6366f1&color=fff&size=128&font-size=0.5&bold=true`
                         }
-                        alt="User profile"
+                        alt={`${
+                          currentUser.username || "User"
+                        }'s profile picture`}
+                        onError={(e) => {
+                          // Fallback if image fails to load
+                          e.target.onerror = null;
+                          e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                            currentUser.fullName || currentUser.username || "U"
+                          )}&background=6366f1&color=fff&size=128&font-size=0.5&bold=true`;
+                        }}
                       />
                     </motion.button>
                     <AnimatePresence>
@@ -426,15 +424,13 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                                   className="border-slate-700 my-1"
                                 />
                               );
-
                             const itemBaseClass =
                               "block w-full text-left px-4 py-2.5 text-sm rounded-md mx-1 my-0.5 transition-colors focus:outline-none";
-
                             if (item.type === "link") {
                               return (
                                 <NavLink
                                   to={item.path}
-                                  key={item.path || `profile-link-${index}`} // Fallback key
+                                  key={item.path || `profile-link-${index}`}
                                   role="menuitem"
                                   tabIndex={-1}
                                   onClick={closeProfileDropdown}
@@ -456,7 +452,7 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                               return (
                                 <button
                                   onClick={item.action}
-                                  key={item.label || `profile-button-${index}`} // Fallback key
+                                  key={item.label || `profile-button-${index}`}
                                   role="menuitem"
                                   tabIndex={-1}
                                   className={`${itemBaseClass} ${itemSpecificClass}`}
@@ -549,12 +545,21 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                     <img
                       className="h-10 w-10 rounded-full object-cover ring-2 ring-purple-500/70"
                       src={
-                        currentUser.profilePictureUrl ||
+                        currentUser.profilePictureUrl || // Uses the actual URL if available
                         `https://ui-avatars.com/api/?name=${encodeURIComponent(
                           currentUser.fullName || currentUser.username || "U"
                         )}&background=818cf8&color=fff&size=128`
                       }
-                      alt="User"
+                      alt={`${
+                        currentUser.username || "User"
+                      }'s profile picture`}
+                      onError={(e) => {
+                        // Fallback if image fails to load
+                        e.target.onerror = null;
+                        e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                          currentUser.fullName || currentUser.username || "U"
+                        )}&background=818cf8&color=fff&size=128`;
+                      }}
                     />
                   </div>
                   <div className="ml-3">
@@ -574,14 +579,12 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                       (item) => item.type === "link" || item.type === "button"
                     )
                     .map((item, index) => {
-                      // Added index for fallback key
                       const mobileItemBaseClass =
                         "block w-full text-left px-4 py-3 rounded-md text-base font-medium transition-colors flex items-center";
-
                       if (item.type === "link") {
                         return (
                           <NavLink
-                            key={`mobile-profile-link-${item.path || index}`} // Fallback key
+                            key={`mobile-profile-link-${item.path || index}`}
                             to={item.path}
                             className={({ isActive }) =>
                               `${mobileItemBaseClass} ${
@@ -601,7 +604,7 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                           : "text-slate-200 hover:bg-purple-700 hover:text-white";
                         return (
                           <button
-                            key={`mobile-profile-button-${item.label || index}`} // Fallback key
+                            key={`mobile-profile-button-${item.label || index}`}
                             onClick={() => {
                               item.action();
                               closeMobileMenu();
@@ -627,18 +630,18 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
 Navbar.propTypes = {
   isLoggedIn: PropTypes.bool,
   currentUser: PropTypes.shape({
-    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]), // .isRequired removed as a test, though ideally ID is required
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     fullName: PropTypes.string,
     username: PropTypes.string,
     email: PropTypes.string,
-    profilePictureUrl: PropTypes.string,
+    profilePictureUrl: PropTypes.string, // This is where the URL comes from
   }),
-  onLogout: PropTypes.func.isRequired, // This IS required. Ensure it's a function.
+  onLogout: PropTypes.func.isRequired,
 };
 
 Navbar.defaultProps = {
   isLoggedIn: false,
-  currentUser: null, // If currentUser is null, properties like .id will not be accessed due to `isLoggedIn && currentUser` check
+  currentUser: null,
 };
 
 export default Navbar;

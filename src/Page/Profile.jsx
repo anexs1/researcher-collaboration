@@ -18,7 +18,7 @@ import Notification from "../Component/Common/Notification";
 import ErrorMessage from "../Component/Common/ErrorMessage";
 import { Link } from "react-router-dom";
 
-// Icons
+// Icons - Keep these if other fields use them
 import {
   FaUser,
   FaEnvelope,
@@ -40,7 +40,7 @@ const API_BASE_URL =
 const MAX_IMAGE_SIZE_MB = 5;
 const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
 
-// Default Profile Data
+// Default Profile Data - skillsNeeded removed
 const defaultUserProfileData = {
   id: null,
   username: "",
@@ -53,13 +53,12 @@ const defaultUserProfileData = {
   companyName: "",
   jobTitle: "",
   medicalSpecialty: "",
-  hospitalName: "",
-  skillsNeeded: "[]",
+  hospitalName: "", // skillsNeeded removed
   createdAt: null,
   updatedAt: null,
 };
 
-// Profile Field Configuration (Ensure this matches your needs)
+// Profile Field Configuration - skillsSection removed
 const profileFieldConfig = {
   basicInfo: [
     {
@@ -129,17 +128,7 @@ const profileFieldConfig = {
       editable: true,
     },
   ],
-  skillsSection: [
-    // Ensure backend handles skillsNeeded as JSON string or parses it
-    {
-      label: "Skills",
-      name: "skillsNeeded",
-      type: "textarea",
-      placeholder: 'Enter skills as JSON array string e.g., ["React", "Node"]',
-      Icon: FaInfoCircle,
-      editable: true,
-    },
-  ],
+  // skillsSection removed
   socialLinks: [
     {
       label: "LinkedIn",
@@ -176,7 +165,7 @@ const profileFieldConfig = {
   ],
 };
 
-// Custom Hooks
+// Custom Hooks (Identical, no changes needed here)
 function useNotificationHandler() {
   const [notification, setNotification] = useState({
     message: "",
@@ -184,12 +173,10 @@ function useNotificationHandler() {
     show: false,
   });
   const timeoutRef = useRef(null);
-
   const closeNotification = useCallback(() => {
     clearTimeout(timeoutRef.current);
     setNotification((prev) => ({ ...prev, show: false }));
   }, []);
-
   const showNotification = useCallback(
     (message, type = "success", duration = 5000) => {
       clearTimeout(timeoutRef.current);
@@ -198,7 +185,6 @@ function useNotificationHandler() {
     },
     [closeNotification]
   );
-
   useEffect(() => () => clearTimeout(timeoutRef.current), []);
   return { notification, showNotification, closeNotification };
 }
@@ -210,34 +196,26 @@ function useUserProfileData(targetUserId, currentUser) {
   const [fetchTrigger, setFetchTrigger] = useState(0);
   const loggedInUserId = currentUser?.id;
   const profileUserIdToFetch = targetUserId || loggedInUserId;
-
   const isOwnProfile = useMemo(
     () =>
       !!loggedInUserId &&
       String(profileUserIdToFetch) === String(loggedInUserId),
     [profileUserIdToFetch, loggedInUserId]
   );
-
   const refetch = useCallback(() => setFetchTrigger((c) => c + 1), []);
 
   useEffect(() => {
     let isMounted = true;
     if (!profileUserIdToFetch) {
-      console.warn("[ProfileData] No user ID to fetch.");
       setError("No user specified or logged in.");
       setIsLoading(false);
       setViewedUser(null);
       return;
     }
-    console.log(
-      `[ProfileData] Fetching profile for user ID: ${profileUserIdToFetch}, isOwnProfile: ${isOwnProfile}`
-    );
-
     const fetchProfile = async () => {
       setIsLoading(true);
       setError(null);
       setViewedUser(null);
-
       const fetchUrl = isOwnProfile
         ? `/api/auth/me`
         : `/api/users/public/${profileUserIdToFetch}`;
@@ -246,49 +224,15 @@ function useUserProfileData(targetUserId, currentUser) {
         baseURL: API_BASE_URL,
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-
       try {
-        console.log(
-          `[ProfileData] Calling API: GET ${API_BASE_URL}${fetchUrl}`
-        );
         const response = await apiClient.get(fetchUrl);
         const fetchedUser = response.data?.data || response.data;
-        console.log("[ProfileData] Raw fetched user data:", fetchedUser);
-
         if (!fetchedUser?.id)
           throw new Error("Invalid profile data received from API (no ID).");
 
-        let skillsString = fetchedUser.skillsNeeded; // Assume it's already a JSON string from backend or needs to be stringified if array
-        if (Array.isArray(fetchedUser.skillsNeeded)) {
-          try {
-            skillsString = JSON.stringify(fetchedUser.skillsNeeded);
-          } catch (e) {
-            console.error("Error stringifying skillsNeeded array:", e);
-            skillsString = "[]";
-          }
-        } else if (
-          typeof fetchedUser.skillsNeeded === "undefined" ||
-          fetchedUser.skillsNeeded === null
-        ) {
-          skillsString = "[]";
-        } else if (typeof fetchedUser.skillsNeeded !== "string") {
-          console.warn(
-            "skillsNeeded is not a string or array, attempting to stringify. Data:",
-            fetchedUser.skillsNeeded
-          );
-          try {
-            skillsString = JSON.stringify(fetchedUser.skillsNeeded);
-          } catch (e) {
-            // Best effort
-            skillsString = "[]";
-          }
-        }
+        // skillsNeeded processing removed
 
         let finalProfilePictureUrl = fetchedUser.profilePictureUrl;
-        console.log(
-          "[ProfileData] Original profilePictureUrl from API:",
-          finalProfilePictureUrl
-        );
         if (
           finalProfilePictureUrl &&
           !finalProfilePictureUrl.startsWith("http") &&
@@ -301,27 +245,18 @@ function useUserProfileData(targetUserId, currentUser) {
             ? finalProfilePictureUrl
             : `/${finalProfilePictureUrl}`;
           finalProfilePictureUrl = `${base}${path}`;
-          console.log(
-            "[ProfileData] Constructed full profilePictureUrl:",
-            finalProfilePictureUrl
-          );
         }
-
+        // Ensure all fields from defaultUserProfileData are present, even if not in fetchedUser
         const completeUserData = {
-          ...defaultUserProfileData,
-          ...fetchedUser,
+          ...defaultUserProfileData, // Start with all defined default fields
+          ...fetchedUser, // Overlay with fetched data
           profilePictureUrl: finalProfilePictureUrl,
           socialLinks: {
             ...defaultUserProfileData.socialLinks,
             ...(fetchedUser.socialLinks || {}),
           },
-          skillsNeeded: skillsString,
+          // skillsNeeded is no longer part of default or fetched data structure here
         };
-        console.log(
-          "[ProfileData] Processed complete user data for state:",
-          completeUserData
-        );
-
         if (isMounted) setViewedUser(completeUserData);
       } catch (err) {
         if (isMounted) {
@@ -341,13 +276,17 @@ function useUserProfileData(targetUserId, currentUser) {
         if (isMounted) setIsLoading(false);
       }
     };
-
     fetchProfile();
     return () => {
       isMounted = false;
     };
-  }, [profileUserIdToFetch, isOwnProfile, fetchTrigger]);
-
+  }, [
+    profileUserIdToFetch,
+    isOwnProfile,
+    fetchTrigger,
+    API_BASE_URL,
+    currentUser,
+  ]); // Added currentUser
   return { viewedUser, isOwnProfile, isLoading, error, refetch };
 }
 
@@ -360,9 +299,9 @@ export default function Profile({ currentUser }) {
   const [saveError, setSaveError] = useState("");
   const [profileFormData, setProfileFormData] = useState(
     defaultUserProfileData
-  );
+  ); // Uses updated default
   const [selectedImageFile, setSelectedImageFile] = useState(null);
-  const [imagePreviewUrl, setImagePreviewUrl] = useState(null); // This will hold blob URLs or final HTTP URLs
+  const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
 
   const { notification, showNotification, closeNotification } =
     useNotificationHandler();
@@ -375,13 +314,8 @@ export default function Profile({ currentUser }) {
   } = useUserProfileData(routeUserId, currentUser);
 
   useEffect(() => {
-    console.log(
-      "[ProfileEffect] ViewedUser changed or isEditing toggled. ViewedUser:",
-      viewedUser,
-      "isEditing:",
-      isEditing
-    );
     if (viewedUser) {
+      // Spread default to ensure all keys exist, then viewedUser
       setProfileFormData({
         ...defaultUserProfileData,
         ...viewedUser,
@@ -389,107 +323,61 @@ export default function Profile({ currentUser }) {
           ...defaultUserProfileData.socialLinks,
           ...(viewedUser.socialLinks || {}),
         },
-        // skillsNeeded should already be a string from useUserProfileData
       });
-
       if (isEditing) {
-        // In edit mode, if a local preview (blob) exists, keep it. Otherwise, use server URL.
         if (!imagePreviewUrl || !imagePreviewUrl.startsWith("blob:")) {
-          console.log(
-            "[ProfileEffect Editing] Setting imagePreviewUrl from viewedUser.profilePictureUrl:",
-            viewedUser.profilePictureUrl
-          );
           setImagePreviewUrl(viewedUser.profilePictureUrl || null);
-        } else {
-          console.log(
-            "[ProfileEffect Editing] Keeping existing blob imagePreviewUrl:",
-            imagePreviewUrl
-          );
         }
       } else {
-        // In view mode (or after save/cancel), always display the definitive profile picture from server.
-        console.log(
-          "[ProfileEffect ViewMode] Setting imagePreviewUrl from viewedUser.profilePictureUrl:",
-          viewedUser.profilePictureUrl
-        );
         setImagePreviewUrl(viewedUser.profilePictureUrl || null);
-        // Clean up any selected file if we are moving out of edit mode or data refreshed
         if (selectedImageFile) {
-          console.log("[ProfileEffect ViewMode] Clearing selectedImageFile.");
           setSelectedImageFile(null);
         }
-        // Revoke old blob if it's not the current server URL (which shouldn't be a blob)
         if (
           imagePreviewUrl &&
           imagePreviewUrl.startsWith("blob:") &&
           imagePreviewUrl !== viewedUser.profilePictureUrl
         ) {
-          console.log(
-            "[ProfileEffect ViewMode] Revoking old blob URL:",
-            imagePreviewUrl
-          );
           URL.revokeObjectURL(imagePreviewUrl);
         }
       }
     } else {
-      // No viewedUser, reset form and image
       setProfileFormData(defaultUserProfileData);
       if (imagePreviewUrl && imagePreviewUrl.startsWith("blob:"))
         URL.revokeObjectURL(imagePreviewUrl);
       setImagePreviewUrl(null);
       setSelectedImageFile(null);
     }
-  }, [isEditing, viewedUser]); // Removed selectedImageFile, imagePreviewUrl to simplify and rely on primary sources
+  }, [isEditing, viewedUser, imagePreviewUrl, selectedImageFile]);
 
-  // Cleanup effect for blob URLs when component unmounts
   useEffect(() => {
-    const currentImagePreview = imagePreviewUrl; // Capture value at time of effect
+    const currentImagePreview = imagePreviewUrl;
     return () => {
       if (currentImagePreview && currentImagePreview.startsWith("blob:")) {
-        console.log(
-          "[ProfileEffect Unmount/Cleanup] Revoking blob URL:",
-          currentImagePreview
-        );
         URL.revokeObjectURL(currentImagePreview);
       }
     };
-  }, [imagePreviewUrl]); // Runs when imagePreviewUrl changes or unmount
+  }, [imagePreviewUrl]);
 
   const handleEditClick = useCallback(() => {
     if (isOwnProfile) {
       setIsEditing(true);
       setSaveError("");
       closeNotification();
-      // Form data and imagePreviewUrl will be set by the useEffect based on viewedUser
-      console.log("[ProfileEvent] Edit clicked.");
     }
   }, [isOwnProfile, closeNotification]);
-
   const handleCancelEdit = useCallback(() => {
     setIsEditing(false);
     setSaveError("");
-    // Revoke current blob URL if one was created for preview
     if (imagePreviewUrl && imagePreviewUrl.startsWith("blob:")) {
-      console.log("[ProfileEvent Cancel] Revoking blob URL:", imagePreviewUrl);
       URL.revokeObjectURL(imagePreviewUrl);
     }
     setSelectedImageFile(null);
-    // The main useEffect will reset imagePreviewUrl to viewedUser.profilePictureUrl
-    // and profileFormData based on viewedUser.
-    console.log("[ProfileEvent] Cancel edit clicked.");
-  }, [imagePreviewUrl]); // Add imagePreviewUrl as it's used
-
+  }, [imagePreviewUrl]);
   const handleImageFileChange = useCallback(
     (event) => {
       const file = event.target.files?.[0];
       if (!file) return;
-      console.log(
-        "[ProfileEvent] Image file selected:",
-        file.name,
-        file.type,
-        file.size
-      );
-
       if (!file.type.startsWith("image/")) {
         showNotification(
           "Please select a valid image file (PNG, JPG, GIF, WEBP).",
@@ -506,62 +394,41 @@ export default function Profile({ currentUser }) {
         event.target.value = null;
         return;
       }
-
       if (imagePreviewUrl?.startsWith("blob:")) {
-        // Revoke previous blob if any
-        console.log(
-          "[ProfileEvent ImageChange] Revoking old blob URL:",
-          imagePreviewUrl
-        );
         URL.revokeObjectURL(imagePreviewUrl);
       }
-
       const newBlobUrl = URL.createObjectURL(file);
       setSelectedImageFile(file);
       setImagePreviewUrl(newBlobUrl);
-      console.log(
-        "[ProfileEvent ImageChange] New blob URL created:",
-        newBlobUrl
-      );
-      event.target.value = null; // Allows selecting the same file again
+      event.target.value = null;
     },
     [showNotification, imagePreviewUrl]
   );
-
   const triggerImageUpload = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
-
   const handleFieldChange = useCallback((e) => {
     const { name, value } = e.target;
     const keys = name.split(".");
     setProfileFormData((prev) => {
       let newFormData;
       if (keys.length === 1) newFormData = { ...prev, [name]: value };
-      else if (keys.length === 2 && keys[0] === "socialLinks") {
+      else if (keys.length === 2 && keys[0] === "socialLinks")
         newFormData = {
           ...prev,
           socialLinks: { ...prev.socialLinks, [keys[1]]: value },
         };
-      } else newFormData = prev;
-      // console.log("[ProfileEvent] Field changed:", name, value, "New form data:", newFormData);
+      else newFormData = prev;
       return newFormData;
     });
   }, []);
 
   const handleProfileSave = useCallback(async () => {
     if (!isOwnProfile || !isEditing) return;
-    console.log(
-      "[ProfileEvent] Save clicked. Current form data:",
-      profileFormData,
-      "Selected image:",
-      selectedImageFile?.name
-    );
 
     setIsSaving(true);
     setSaveError("");
     closeNotification();
-
     const token = localStorage.getItem("authToken");
     if (!token) {
       showNotification("Authentication error. Please log in again.", "error");
@@ -570,8 +437,9 @@ export default function Profile({ currentUser }) {
     }
 
     const formDataToSubmit = new FormData();
-    // Append all fields from profileFormData EXCEPT non-editable, id, and profilePictureUrl (handled by file)
+
     Object.keys(profileFormData).forEach((key) => {
+      // Exclude non-editable fields, ID, and skillsNeeded (since it's removed)
       if (
         [
           "id",
@@ -580,6 +448,7 @@ export default function Profile({ currentUser }) {
           "profilePictureUrl",
           "createdAt",
           "updatedAt",
+          "skillsNeeded",
         ].includes(key)
       )
         return;
@@ -589,24 +458,6 @@ export default function Profile({ currentUser }) {
           "socialLinksJson",
           JSON.stringify(profileFormData.socialLinks || {})
         );
-      } else if (key === "skillsNeeded") {
-        try {
-          JSON.parse(profileFormData.skillsNeeded || "[]"); // Validate JSON
-          formDataToSubmit.append(
-            "skillsNeeded",
-            profileFormData.skillsNeeded || "[]"
-          );
-        } catch (e) {
-          console.error(
-            "Invalid JSON for skillsNeeded:",
-            profileFormData.skillsNeeded
-          );
-          setSaveError(
-            "Invalid format for 'Skills'. Must be a valid JSON array string e.g., [\"Skill1\"]."
-          );
-          setIsSaving(false);
-          return; // Stop submission
-        }
       } else if (
         profileFormData[key] !== null &&
         typeof profileFormData[key] !== "undefined"
@@ -615,48 +466,34 @@ export default function Profile({ currentUser }) {
       }
     });
 
-    if (selectedImageFile) {
+    if (selectedImageFile)
       formDataToSubmit.append(
         "profileImageFile",
         selectedImageFile,
         selectedImageFile.name
       );
-    }
-
-    // For debugging: Log FormData contents (not straightforward for files, but text fields)
-    // for (let [key, value] of formDataToSubmit.entries()) { console.log(`[Save FormData] ${key}: ${value}`); }
 
     try {
       const apiClient = axios.create({
         baseURL: API_BASE_URL,
         headers: { Authorization: `Bearer ${token}` },
       });
-      console.log(
-        `[ProfileSave] Calling API: PUT ${API_BASE_URL}/api/users/profile`
-      );
       const response = await apiClient.put(
         `/api/users/profile`,
         formDataToSubmit
       );
       const updatedUser = response.data?.data || response.data;
-      console.log("[ProfileSave] API response data:", updatedUser);
-
       if (!updatedUser?.id)
         throw new Error("Invalid API response after update (no user ID).");
-
       setIsEditing(false);
-      // selectedImageFile is cleared by the main useEffect when isEditing becomes false, after data refetches.
-      // imagePreviewUrl will be updated by the main useEffect after refetchProfileData updates viewedUser.
       showNotification("Profile updated successfully!", "success");
-      refetchProfileData(); // This is key to get the new profilePictureUrl from server
+      refetchProfileData();
     } catch (err) {
       let message = "Failed to update profile.";
       if (err instanceof AxiosError && err.response?.data?.message)
         message = err.response.data.message;
       else if (err.response?.data?.errors)
-        message = err.response.data.errors
-          .map((e) => e.msg)
-          .join(", "); // For express-validator
+        message = err.response.data.errors.map((e) => e.msg).join(", ");
       else if (err instanceof Error) message = err.message;
       console.error("[ProfileSave] Error saving profile:", err.response || err);
       setSaveError(message);
@@ -672,11 +509,13 @@ export default function Profile({ currentUser }) {
     showNotification,
     closeNotification,
     refetchProfileData,
+    API_BASE_URL,
   ]);
 
+  // --- JSX (Rendering Logic - identical styling to previous version) ---
   if (isLoadingProfile) {
     return (
-      <div className="flex justify-center items-center min-h-[calc(100vh-160px)] w-full bg-gray-100 p-4">
+      <div className="flex justify-center items-center min-h-[calc(100vh-160px)] w-full bg-slate-50 dark:bg-slate-900 p-4 transition-colors duration-300">
         <LoadingSpinner size="lg" message="Loading profile..." />
       </div>
     );
@@ -684,41 +523,45 @@ export default function Profile({ currentUser }) {
 
   if (fetchProfileError && !viewedUser) {
     return (
-      <div className="container mx-auto max-w-2xl px-4 py-10 text-center bg-gray-100">
-        <ErrorMessage
-          title="Error Loading Profile"
-          message={fetchProfileError}
-          onRetry={refetchProfileData}
-        />
-        <Link
-          to="/dashboard"
-          className="mt-4 inline-block text-indigo-600 hover:underline"
-        >
-          Go to Dashboard
-        </Link>
+      <div className="container mx-auto max-w-3xl px-4 py-12 text-center bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
+        <div className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow-xl">
+          <ErrorMessage
+            title="Error Loading Profile"
+            message={fetchProfileError}
+            onRetry={refetchProfileData}
+          />
+          <Link
+            to="/dashboard"
+            className="mt-6 inline-flex items-center px-6 py-2.5 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-150"
+          >
+            Go to Dashboard
+          </Link>
+        </div>
       </div>
     );
   }
 
   if (!viewedUser) {
     return (
-      <div className="container mx-auto max-w-2xl px-4 py-10 text-center bg-gray-100">
-        <ErrorMessage
-          title="Profile Unavailable"
-          message="Could not load profile data for the specified user."
-        />
-        <Link
-          to="/dashboard"
-          className="mt-4 inline-block text-indigo-600 hover:underline"
-        >
-          Go to Dashboard
-        </Link>
+      <div className="container mx-auto max-w-3xl px-4 py-12 text-center bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
+        <div className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow-xl">
+          <ErrorMessage
+            title="Profile Unavailable"
+            message="Could not load profile data for the specified user."
+          />
+          <Link
+            to="/dashboard"
+            className="mt-6 inline-flex items-center px-6 py-2.5 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-150"
+          >
+            Go to Dashboard
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-gray-100 min-h-screen py-8 sm:py-12">
+    <div className="bg-slate-50 dark:bg-slate-900 min-h-screen py-8 sm:py-12 transition-colors duration-300">
       <input
         type="file"
         ref={fileInputRef}
@@ -727,14 +570,15 @@ export default function Profile({ currentUser }) {
         style={{ display: "none" }}
         id="profileImageUploadInput"
       />
-      <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className="container mx-auto max-w-screen-xl px-4 sm:px-6 lg:px-8">
         <AnimatePresence>
           {notification.show && (
             <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="fixed top-5 right-5 z-[100] w-full max-w-sm sm:max-w-md"
+              initial={{ opacity: 0, y: -50, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+              className="fixed top-6 right-6 z-[100] w-full max-w-md"
             >
               <Notification
                 message={notification.message}
@@ -745,19 +589,21 @@ export default function Profile({ currentUser }) {
           )}
         </AnimatePresence>
 
-        <div className="space-y-6">
-          <ProfileHeader
-            username={viewedUser.username}
-            isOwnProfile={isOwnProfile}
-            isEditing={isEditing}
-            isSaving={isSaving}
-            onEdit={handleEditClick}
-            onSave={handleProfileSave}
-            onCancel={handleCancelEdit}
-          />
+        <div className="space-y-8">
+          <div className="bg-white dark:bg-slate-800 shadow-xl rounded-xl transition-colors duration-300">
+            <ProfileHeader
+              username={viewedUser.username}
+              isOwnProfile={isOwnProfile}
+              isEditing={isEditing}
+              isSaving={isSaving}
+              onEdit={handleEditClick}
+              onSave={handleProfileSave}
+              onCancel={handleCancelEdit}
+            />
+          </div>
 
           {isEditing && saveError && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-700">
+            <div className="mb-6 p-4 bg-red-100 dark:bg-red-900/40 border-l-4 border-red-500 dark:border-red-600 text-red-700 dark:text-red-300 rounded-md shadow-md transition-colors duration-300">
               <ErrorMessage
                 message={saveError}
                 onClose={() => setSaveError("")}
@@ -765,46 +611,49 @@ export default function Profile({ currentUser }) {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 lg:gap-8 items-start">
-            <div className="md:col-span-1 lg:col-span-1 md:sticky md:top-6 bg-white shadow-xl rounded-lg p-6">
-              <ProfileSidebar
-                user={viewedUser} // Pass the fully processed viewedUser
-                imagePreview={imagePreviewUrl} // This is critical, should be blob or full HTTP URL
-                isEditing={isEditing}
-                isOwnProfile={isOwnProfile}
-                isUploading={isSaving && !!selectedImageFile}
-                onTriggerUpload={triggerImageUpload}
-              />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            <div className="lg:col-span-4 xl:col-span-3 md:sticky md:top-10">
+              <div className="bg-white dark:bg-slate-800 shadow-2xl rounded-xl p-6 md:p-8 transition-colors duration-300">
+                <ProfileSidebar
+                  user={viewedUser}
+                  imagePreview={imagePreviewUrl}
+                  isEditing={isEditing}
+                  isOwnProfile={isOwnProfile}
+                  isUploading={isSaving && !!selectedImageFile}
+                  onTriggerUpload={triggerImageUpload}
+                />
+              </div>
             </div>
 
-            <div className="md:col-span-2 lg:col-span-3 space-y-6 bg-white shadow-xl rounded-lg p-6 sm:p-8">
-              <ProfileContent
-                profileFormData={profileFormData} // Form data for inputs
-                isEditing={isEditing}
-                isSaving={isSaving}
-                handleFieldChange={handleFieldChange}
-                fieldConfig={profileFieldConfig}
-                // Pass viewedUser if ProfileContent needs to display non-editable original data alongside form fields
-                viewedUserOriginalData={viewedUser}
-              />
-              {isEditing && (
-                <div className="flex justify-end space-x-3 pt-6 border-t border-gray-300">
-                  <button
-                    onClick={handleCancelEdit}
-                    disabled={isSaving}
-                    className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleProfileSave}
-                    disabled={isSaving}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition-colors"
-                  >
-                    {isSaving ? <LoadingSpinner size="sm" /> : "Save Changes"}
-                  </button>
-                </div>
-              )}
+            <div className="lg:col-span-8 xl:col-span-9 space-y-8">
+              <div className="bg-white dark:bg-slate-800 shadow-2xl rounded-xl p-6 md:p-8 transition-colors duration-300">
+                <ProfileContent
+                  profileFormData={profileFormData}
+                  isEditing={isEditing}
+                  isSaving={isSaving}
+                  handleFieldChange={handleFieldChange}
+                  fieldConfig={profileFieldConfig} // Uses updated config without skills
+                  viewedUserOriginalData={viewedUser}
+                />
+                {isEditing && (
+                  <div className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-4 pt-8 mt-8 border-t border-slate-200 dark:border-slate-700 transition-colors duration-300">
+                    <button
+                      onClick={handleCancelEdit}
+                      disabled={isSaving}
+                      className="w-full sm:w-auto flex items-center justify-center px-6 py-3 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold rounded-lg shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 dark:focus:ring-offset-slate-900 transition-all duration-150 ease-in-out disabled:opacity-70"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleProfileSave}
+                      disabled={isSaving}
+                      className="w-full sm:w-auto flex items-center justify-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-slate-900 transition-all duration-150 ease-in-out disabled:opacity-70"
+                    >
+                      {isSaving ? <LoadingSpinner size="sm" /> : "Save Changes"}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
