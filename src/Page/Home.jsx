@@ -69,7 +69,10 @@ const ResearcherCard = ({ researcher }) => (
   >
     <div className="w-20 h-20 rounded-full bg-gray-200 overflow-hidden mx-auto mb-3">
       <img
-        src={researcher.image || "/placeholder-image.jpg"}
+        src={
+          researcher.image ||
+          "http://localhost:5000/uploads/project_files/basha.jpg"
+        }
         alt={researcher.name}
         className="w-full h-full object-cover"
         onError={(e) => (e.target.src = "/placeholder-image.jpg")}
@@ -232,6 +235,8 @@ const Home = () => {
       title: "Web Develeoper and Lecture at Arbaminch University , UoG",
       quote:
         "The collaboration tools saved countless hours coordinating our interdisciplinary team. Highly recommended.",
+
+      image: "chala.jpg", // Placeholder user image
     },
   ];
 
