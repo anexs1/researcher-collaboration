@@ -1,5 +1,3 @@
-// backend/controllers/projectController.js
-
 import asyncHandler from "express-async-handler";
 import db from "../models/index.js";
 import { Op, literal } from "sequelize";
@@ -277,12 +275,10 @@ export const getMyProjects = asyncHandler(async (req, res) => {
       .json({ success: true, count: count, data: processedProjects });
   } catch (error) {
     console.error(`Error in getMyProjects for User ${userId}:`, error);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: error.message || "Server error retrieving user's projects.",
-      });
+    res.status(500).json({
+      success: false,
+      message: error.message || "Server error retrieving user's projects.",
+    });
   }
 });
 
@@ -353,12 +349,10 @@ export const getProjectById = asyncHandler(async (req, res) => {
     );
     const statusCode = res.statusCode !== 200 ? res.statusCode : 500;
     if (!res.headersSent) {
-      res
-        .status(statusCode)
-        .json({
-          success: false,
-          message: error.message || "Server error retrieving project details.",
-        });
+      res.status(statusCode).json({
+        success: false,
+        message: error.message || "Server error retrieving project details.",
+      });
     }
   }
 });
@@ -549,7 +543,7 @@ export const updateProject = asyncHandler(async (req, res) => {
       lock: transaction.LOCK.UPDATE,
     });
     if (!project) {
-      await transaction.commit();
+      await transaction.commit(); // or rollback() if preferred when not found before lock
       res.status(404);
       throw new Error("Project not found.");
     }
@@ -661,7 +655,7 @@ export const updateProject = asyncHandler(async (req, res) => {
     if (newImageUrl !== null) updates.imageUrl = newImageUrl;
 
     if (Object.keys(updates).length === 0 && !req.file) {
-      await transaction.rollback();
+      await transaction.rollback(); // Rollback if no updates and no file
       const currentProject = await Project.findByPk(projectId, {
         attributes: projectDetailSelectFields,
         include: [
@@ -679,13 +673,11 @@ export const updateProject = asyncHandler(async (req, res) => {
         );
         projectJson.status = canon || projectJson.status;
       }
-      return res
-        .status(200)
-        .json({
-          success: true,
-          message: "No changes detected.",
-          data: projectJson,
-        });
+      return res.status(200).json({
+        success: true,
+        message: "No changes detected.",
+        data: projectJson,
+      });
     }
     await project.update(updates, { transaction });
     await transaction.commit();
@@ -721,13 +713,11 @@ export const updateProject = asyncHandler(async (req, res) => {
       );
       projectJson.status = canon || projectJson.status;
     }
-    res
-      .status(200)
-      .json({
-        success: true,
-        message: "Project updated successfully.",
-        data: projectJson,
-      });
+    res.status(200).json({
+      success: true,
+      message: "Project updated successfully.",
+      data: projectJson,
+    });
   } catch (error) {
     if (
       transaction &&
@@ -777,7 +767,7 @@ export const deleteProject = asyncHandler(async (req, res) => {
       attributes: ["id", "ownerId", "imageUrl"],
     });
     if (!project) {
-      await transaction.commit();
+      await transaction.commit(); // or rollback()
       res.status(404);
       throw new Error("Project not found.");
     }
@@ -867,13 +857,11 @@ export const getProjectRequests = asyncHandler(async (req, res) => {
       ],
       order: [["createdAt", "DESC"]],
     });
-    res
-      .status(200)
-      .json({
-        success: true,
-        count: pendingRequests.length,
-        data: pendingRequests.map((r) => r.toJSON()),
-      });
+    res.status(200).json({
+      success: true,
+      count: pendingRequests.length,
+      data: pendingRequests.map((r) => r.toJSON()),
+    });
   } catch (error) {
     console.error(
       `Error in getProjectRequests for Project ${projectIdParam}:`,
@@ -991,14 +979,19 @@ export const getProjectMembers = asyncHandler(async (req, res) => {
   }
 });
 
+// ========================================================================== //
+// ==================== MODIFIED FUNCTION STARTS HERE ======================= //
+// ========================================================================== //
 export const getProjectsByUserId = asyncHandler(async (req, res) => {
   const targetUserIdParam = req.params.userId;
-  const currentLoggedInUserId = req.user?.id;
+  const currentLoggedInUserId = req.user?.id; // Assuming req.user is populated by auth middleware
   const targetUserId = parseInt(targetUserIdParam, 10);
+
   if (isNaN(targetUserId) || targetUserId <= 0) {
     res.status(400);
     throw new Error("Invalid User ID format provided.");
   }
+
   try {
     const targetUserExists = await User.findByPk(targetUserId, {
       attributes: ["id", "username"],
@@ -1007,9 +1000,17 @@ export const getProjectsByUserId = asyncHandler(async (req, res) => {
       res.status(404);
       throw new Error(`User with ID ${targetUserId} not found.`);
     }
-    const { page = 1, limit = 9, status: projectStatusQuery } = req.query;
+
+    const {
+      page = 1,
+      limit = 9,
+      status: projectStatusQuery,
+      search, // Destructure search from req.query
+    } = req.query;
+
     const parsedLimit = parseInt(limit, 10);
     const parsedPage = parseInt(page, 10);
+
     if (
       isNaN(parsedLimit) ||
       isNaN(parsedPage) ||
@@ -1019,12 +1020,15 @@ export const getProjectsByUserId = asyncHandler(async (req, res) => {
       res.status(400);
       throw new Error("Invalid pagination parameters.");
     }
+
     const offset = (parsedPage - 1) * parsedLimit;
+
     const projectWhereConditions = { ownerId: targetUserId };
+
+    // Status filtering logic
     if (projectStatusQuery === "archived") {
       projectWhereConditions.status = "Archived";
     } else if (projectStatusQuery && projectStatusQuery !== "all") {
-      // Normalize incoming status for query
       const allowedDbStatuses = Project.getAttributes().status?.values || [];
       const canonicalQueryStatus = allowedDbStatuses.find(
         (s) => s.toLowerCase() === projectStatusQuery.toLowerCase()
@@ -1040,9 +1044,23 @@ export const getProjectsByUserId = asyncHandler(async (req, res) => {
       projectWhereConditions.status = { [Op.ne]: "Archived" };
     }
 
+    // Search logic for project title
+    if (search && search.trim() !== "") {
+      const likeOperator = Op.like; // For MySQL, this is usually case-insensitive based on collation
+      projectWhereConditions[Op.or] = [
+        { title: { [likeOperator]: `%${search.trim()}%` } },
+        // If you want to search description too:
+        // { description: { [likeOperator]: `%${search.trim()}%` } },
+      ];
+      console.log(
+        `[Ctrl-getProjectsByUserId] Applied search term: "${search.trim()}" to user ${targetUserId}'s projects`
+      );
+    }
+
     const includeClauses = [
       { model: User, as: "owner", attributes: userPublicSelectFields },
     ];
+
     if (currentLoggedInUserId) {
       includeClauses.push(
         {
@@ -1061,6 +1079,7 @@ export const getProjectsByUserId = asyncHandler(async (req, res) => {
         }
       );
     }
+
     const { count, rows: projects } = await Project.findAndCountAll({
       where: projectWhereConditions,
       attributes: projectListSelectFields,
@@ -1070,22 +1089,24 @@ export const getProjectsByUserId = asyncHandler(async (req, res) => {
       offset: offset,
       distinct: true,
     });
+
     const processedProjects = projects.map((p) => {
       const projectJson = p.toJSON();
       projectJson.currentCollaborators =
         parseInt(projectJson.currentCollaborators, 10) || 0;
       if (projectJson.status) {
-        // Normalize status for response
         const allowed = Project.getAttributes().status?.values || [];
         const canon = allowed.find(
           (s) => s.toLowerCase() === projectJson.status.toLowerCase()
         );
         projectJson.status = canon || projectJson.status;
       }
+
       projectJson.currentUserMembershipStatus = null;
       if (currentLoggedInUserId) {
         const membership = projectJson.currentUserSpecificMembership;
         const request = projectJson.currentUserSpecificRequest;
+
         if (
           membership &&
           (membership.status === "active" || membership.status === "approved")
@@ -1099,6 +1120,7 @@ export const getProjectsByUserId = asyncHandler(async (req, res) => {
       delete projectJson.currentUserSpecificRequest;
       return projectJson;
     });
+
     res.status(200).json({
       success: true,
       pagination: {
@@ -1111,17 +1133,19 @@ export const getProjectsByUserId = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     console.error(
-      `Error in getProjectsByUserId (Owned Only) for User ${targetUserId}:`,
+      `Error in getProjectsByUserId for User ${targetUserIdParam}:`,
       error
     );
     const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
     const message = error.message || "Server error retrieving user's projects.";
-    if (!res.headersSent)
+    if (!res.headersSent) {
       res.status(statusCode).json({ success: false, message });
+    }
   }
 });
 
 export const adminGetAllProjects = asyncHandler(async (req, res) => {
+  // This function remains unchanged.
   console.warn("API: adminGetAllProjects invoked but not fully implemented.");
   res
     .status(501)

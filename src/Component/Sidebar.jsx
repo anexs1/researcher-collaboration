@@ -9,33 +9,37 @@ import {
   FaSignOutAlt,
   FaPlusSquare,
   FaRocket,
-  FaEnvelope, // <<< Added Messages icon
+  FaEnvelope,
 } from "react-icons/fa";
 
 // --- Menu Items Array ---
 const menuItems = [
   { path: "/profile", label: "Profile", Icon: FaUser },
-  { path: "/explore", label: "Explore", Icon: FaBook }, // Consider specific Explore icon if available
+  { path: "/explore", label: "Explore", Icon: FaBook },
   { path: "/publications", label: "Publications", Icon: FaBook },
   { path: "/publications/new", label: "Post Publication", Icon: FaPlusSquare },
   { path: "/projects", label: "Projects", Icon: FaFolderOpen },
-  { path: "/projects/new", label: "New Project", Icon: FaRocket }, // Corrected label casing
-  { path: "/messages", label: "Messages", Icon: FaEnvelope }, // <<< Added Messages Link
+  { path: "/projects/new", label: "New Project", Icon: FaRocket },
+  { path: "/messages", label: "Messages", Icon: FaEnvelope },
 ];
 
 // --- Styling Classes ---
 const commonLinkClasses =
   "flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 ease-in-out group";
-const activeLinkClasses =
-  "bg-indigo-100 text-indigo-700 font-semibold shadow-sm";
+
+const activeLinkClasses = "bg-indigo-600 text-white font-semibold shadow-sm";
+
+// UPDATED: Inactive link style with LIGHT BLUE hover background
 const inactiveLinkClasses =
-  "text-gray-600 hover:bg-gray-200 hover:text-gray-900";
+  "text-gray-700 hover:bg-blue-600 hover:text-white-700"; // Light blue hover BG
+
+// UPDATED: Icon styles with hover color matching text hover color
 const iconClasses =
-  "mr-3 h-5 w-5 flex-shrink-0 text-gray-400 group-hover:text-gray-600 transition-colors";
-const activeIconClasses = "text-indigo-600";
+  "mr-3 h-5 w-5 flex-shrink-0 text-gray-400 group-hover:text-white-700 transition-colors"; // Icon turns indigo on hover
+
+const activeIconClasses = "text-white"; // Icon is white when link is active
 
 function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
-  // Helper function to get initials safely
   const getInitials = (user) => {
     const first = user?.firstName || "";
     const last = user?.lastName || "";
@@ -46,7 +50,6 @@ function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
 
   const userInitials = currentUser ? getInitials(currentUser) : "?";
   const profilePictureUrl = currentUser?.profilePictureUrl;
-  // Prioritize username display if first/last name missing
   const userName = currentUser
     ? currentUser.firstName && currentUser.lastName
       ? `${currentUser.firstName} ${currentUser.lastName}`
@@ -60,21 +63,13 @@ function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
     "Researcher";
 
   return (
-    // --- Main Sidebar Container ---
-    // - `w-64`: Fixed width
-    // - `h-screen`: Full viewport height
-    // - `sticky top-0`: Keeps it fixed during page scroll
-    // - `flex flex-col`: Arranges children (header, nav, footer) vertically
-    // - `border-r`, `bg-white`, `shadow-lg`: Styling
-    // - `flex-shrink-0`: Prevents shrinking if parent is flex container
-    // - `overflow-y-auto`: Allows the *entire* sidebar to scroll *if* its content exceeds screen height (fallback)
-    <div className="bg-white border-r border-gray-200 h-screen w-64 flex flex-col shadow-lg flex-shrink-0 sticky top-0 overflow-y-auto">
+    // UPDATED: Main Sidebar Container background to bg-slate-100
+    <div className="bg-slate-100 border-r border-gray-200 h-screen w-64 flex flex-col shadow-lg flex-shrink-0 sticky top-0 overflow-y-auto">
       {/* Profile Header Section */}
       {isLoggedIn && currentUser && (
-        // - `flex-shrink-0`: Prevents header from shrinking when nav grows
+        // Using bg-slate-100 (same as sidebar) for profile header bg, border-b provides separation
         <div className="p-4 border-b border-gray-200 flex-shrink-0">
           <Link to="/profile" className="block group text-center">
-            {/* Avatar */}
             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full mx-auto mb-2 sm:mb-3 flex items-center justify-center bg-gradient-to-br from-indigo-200 to-purple-200 text-indigo-700 overflow-hidden border-2 border-white shadow-md group-hover:scale-105 transform transition-transform duration-200 relative">
               {profilePictureUrl ? (
                 <img
@@ -90,7 +85,6 @@ function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
                   }}
                 />
               ) : null}
-              {/* Initials Fallback */}
               <div
                 className="initials-fallback absolute inset-0 flex items-center justify-center bg-gradient-to-br from-indigo-200 to-purple-200"
                 style={{ display: profilePictureUrl ? "none" : "flex" }}
@@ -100,14 +94,12 @@ function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
                 </span>
               </div>
             </div>
-            {/* User Name */}
             <h3
               className="text-sm sm:text-md font-semibold text-gray-800 group-hover:text-indigo-600 transition-colors truncate"
               title={userName}
             >
               {userName}
             </h3>
-            {/* User Headline */}
             <p
               className="text-xs text-gray-500 group-hover:text-gray-700 transition-colors mt-0.5 sm:mt-1 truncate"
               title={userHeadline}
@@ -119,14 +111,12 @@ function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
       )}
 
       {/* Navigation Section */}
-      {/* - `flex-grow`: Takes up available vertical space between header and footer */}
-      {/* - `overflow-y-auto`: Allows *only this section* to scroll if menu items exceed space */}
       <nav
         className={`flex-grow px-2 sm:px-3 overflow-y-auto ${
           isLoggedIn && currentUser ? "pt-4" : "pt-6"
         }`}
       >
-        <p className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+        <p className="px-3 text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">
           Navigation
         </p>
         <ul>
@@ -139,7 +129,7 @@ function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
                     isActive ? activeLinkClasses : inactiveLinkClasses
                   }`
                 }
-                end // Use `end` for exact matching
+                end
               >
                 {({ isActive }) => (
                   <>
@@ -159,11 +149,9 @@ function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
       </nav>
 
       {/* Settings/Logout Section */}
-      {/* - `mt-auto`: Pushes this section to the bottom */}
-      {/* - `flex-shrink-0`: Prevents footer from shrinking */}
       {isLoggedIn && (
+        // Using bg-slate-100 (same as sidebar) for footer bg, border-t provides separation
         <div className="mt-auto p-3 border-t border-gray-200 flex-shrink-0">
-          {/* Settings Link */}
           <Link
             to="/settings/account"
             className={`${commonLinkClasses} ${inactiveLinkClasses} w-full mb-1`}
@@ -172,7 +160,6 @@ function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
             <span className="ml-1">Settings</span>
           </Link>
 
-          {/* Logout Button */}
           {handleLogout && (
             <button
               onClick={handleLogout}

@@ -182,57 +182,56 @@ const Home = () => {
   const researchers = [
     {
       id: 1,
-      name: "Dr. Almaz Bekele",
-      title: "Lead Researcher",
-      institution: "Addis Ababa University",
+      name: "Mr. Basha Kasim",
+      title: "Networking and System Admin",
+      institution: "Arbaminch University",
       linkedin: "https://linkedin.com", // Added full links
       twitter: "https://twitter.com",
-      image: "https://randomuser.me/api/portraits/women/68.jpg", // Placeholder user image
+      image: "http://localhost:5000/uploads/project_files/basha.jpg", // Placeholder user image
     },
     {
       id: 2,
-      name: "Prof. Tesfaye Lemma",
-      title: "Professor of AgriTech",
+      name: "Mr. Behayilu M.",
+      title: "Lecturer and Web Developer",
       institution: "Arba Minch University",
       linkedin: "https://linkedin.com",
       twitter: "https://twitter.com",
-      image: "https://randomuser.me/api/portraits/men/75.jpg",
+      image: "http://localhost:5000/uploads/project_files/behayilu (2).jpg",
     },
     {
       id: 3,
-      name: "Dr. Sara Gebre",
-      title: "Postdoctoral Fellow",
-      institution: "Hawassa University", // Changed for variety
+      name: "Mr. Chala Semeon",
+      title: "Lecturer",
+      institution: "Arbaminch University",
       linkedin: "https://linkedin.com",
       twitter: "https://twitter.com",
-      image: "https://randomuser.me/api/portraits/women/78.jpg",
+      image: "http://localhost:5000/uploads/project_files/chala.jpg",
     },
   ];
 
   const testimonials = [
     {
       id: 1,
-      name: "Dr. Amanuel Tesfaye",
-      title: "Researcher, AAU",
-      quote:
-        "This platform transformed how I find collaborators. Essential tool for modern research!",
-      image: "https://randomuser.me/api/portraits/men/32.jpg",
-    },
-    {
-      id: 2,
-      name: "Prof. Mulu Alemayehu",
-      title: "Professor, UoG",
+      name: "Mr.Behayilu M.",
+      title: "Web Develeoper and Lecture at Arbaminch University , UoG",
       quote:
         "The collaboration tools saved countless hours coordinating our interdisciplinary team. Highly recommended.",
-      image: "https://randomuser.me/api/portraits/women/45.jpg",
     },
     {
       id: 3,
-      name: "Dr. Anuwar Addisu", // Changed to Dr. for variety
-      title: "Data Scientist, MoSHE", // Changed for variety
+      name: "Mr.Basha Kasim", // Changed to Dr. for variety
+      title:
+        "Networking and System Admin Lecture at Arbaminch UV, COE at Bayra Digix HUB", // Changed for variety
       quote:
         "It's a great platform for researchers to collaborate, share knowledge, and push the boundaries of science.",
-      image: "https://randomuser.me/api/portraits/men/55.jpg",
+      image: "basha.jpg", // Placeholder user image
+    },
+    {
+      id: 4,
+      name: "Mr.Chala Semeon ",
+      title: "Web Develeoper and Lecture at Arbaminch University , UoG",
+      quote:
+        "The collaboration tools saved countless hours coordinating our interdisciplinary team. Highly recommended.",
     },
   ];
 
@@ -240,25 +239,25 @@ const Home = () => {
   const platformStats = [
     {
       icon: <FaUsers />,
-      value: "1,200+",
+      value: "30+",
       label: "Active Researchers",
       color: "from-teal-500 to-cyan-500",
     },
     {
       icon: <FaProjectDiagram />,
-      value: "350+",
+      value: "15+",
       label: "Projects Hosted",
       color: "from-purple-500 to-indigo-500",
     },
     {
       icon: <FaBookOpen />,
-      value: "2,500+",
+      value: "40+",
       label: "Publications Shared",
       color: "from-orange-500 to-amber-500",
     },
     {
       icon: <FaHandsHelping />,
-      value: "800+",
+      value: "80+",
       label: "Collaborations Formed",
       color: "from-green-500 to-lime-500",
     },
@@ -464,117 +463,91 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Testimonials Section */}
-      <section className="py-16 bg-blue-50">
+      <section className="py-20 bg-gradient-to-br from-blue-50 to-white">
         <div className="container mx-auto px-6">
           <motion.div
             initial="hidden"
             whileInView="visible"
             variants={containerVariants}
-            viewport={{ once: true, amount: 0.2 }}
-            className="text-center"
+            viewport={{ once: true, amount: 0.3 }}
+            className="text-center mb-12"
           >
             <motion.h2
               variants={itemVariants}
-              className="text-3xl font-bold mb-12 text-gray-800"
+              className="text-4xl font-extrabold text-gray-800 mb-4"
             >
               What Our Users Say
             </motion.h2>
-
-            <div className="relative h-72 md:h-64 overflow-hidden">
-              {" "}
-              {/* Adjusted height and added overflow */}
-              <AnimatePresence mode="wait">
-                {testimonials.map(
-                  (testimonial, index) =>
-                    activeTestimonial === index && (
-                      <motion.div
-                        key={testimonial.id}
-                        initial={{ opacity: 0, x: 50 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -50 }}
-                        transition={{ duration: 0.5 }}
-                        className="absolute inset-0 flex flex-col items-center justify-center p-4"
-                      >
-                        <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-gray-200 overflow-hidden flex-shrink-0 mb-4 shadow-lg">
-                          <img
-                            src={testimonial.image || "/placeholder-image.jpg"}
-                            alt={testimonial.name}
-                            className="w-full h-full object-cover"
-                            onError={(e) =>
-                              (e.target.src = "/placeholder-image.jpg")
-                            }
-                          />
-                        </div>
-                        <div className="max-w-xl relative text-center">
-                          <FaQuoteLeft className="absolute -top-2 -left-2 md:-top-4 md:-left-4 text-blue-200 text-2xl md:text-3xl opacity-70" />
-                          <blockquote className="text-md md:text-lg italic text-gray-700 mb-3">
-                            "{testimonial.quote}"
-                          </blockquote>
-                          <div>
-                            <p className="font-semibold text-gray-800">
-                              {testimonial.name}
-                            </p>
-                            <p className="text-blue-600 text-sm">
-                              {testimonial.title}
-                            </p>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )
-                )}
-              </AnimatePresence>
-            </div>
-
-            <div className="flex justify-center gap-2.5 mt-8">
-              {testimonials.map((_, index) => (
-                <button
-                  key={index}
-                  onClick={() => setActiveTestimonial(index)}
-                  className={`w-2.5 h-2.5 rounded-full transition-all duration-300 focus:outline-none ${
-                    activeTestimonial === index
-                      ? "bg-blue-600 scale-125"
-                      : "bg-gray-300 hover:bg-gray-400"
-                  }`}
-                  aria-label={`View testimonial ${index + 1}`}
-                />
-              ))}
-            </div>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-20 bg-gradient-to-r from-blue-800 to-blue-600 text-white">
-        <div className="container mx-auto px-6 text-center">
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            variants={fadeIn}
-            viewport={{ once: true, amount: 0.2 }}
-          >
-            <h2 className="text-3xl md:text-4xl font-bold mb-6">
-              Ready to Supercharge Your Collaboration?
-            </h2>
-            <p className="text-lg mb-10 max-w-2xl mx-auto opacity-90">
-              Join thousands of users leveraging collaboration to achieve
-              breakthroughs.
+            <p className="text-gray-600 max-w-xl mx-auto">
+              Real feedback from real researchers who are using our platform to
+              connect and innovate together.
             </p>
-            <div className="flex flex-col sm:flex-row justify-center gap-4">
-              <button
-                onClick={() => navigate("/signup")}
-                className="bg-white text-blue-800 font-semibold py-3 px-8 rounded-lg hover:bg-gray-100 transition-colors shadow-md"
-              >
-                Get Started Free
-              </button>
-              <button
-                onClick={() => navigate("/contact")}
-                className="bg-transparent border-2 border-white text-white font-semibold py-3 px-8 rounded-lg hover:bg-white/10 transition-colors"
-              >
-                Contact Us
-              </button>
-            </div>
           </motion.div>
+
+          <div className="relative h-80 md:h-72 overflow-hidden">
+            <AnimatePresence mode="wait">
+              {testimonials.map(
+                (testimonial, index) =>
+                  activeTestimonial === index && (
+                    <motion.div
+                      key={testimonial.id}
+                      initial={{ opacity: 0, y: 40 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -40 }}
+                      transition={{ duration: 0.6 }}
+                      className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center px-4"
+                    >
+                      <div className="w-24 h-24 md:w-28 md:h-28 rounded-full bg-white overflow-hidden shadow-xl border-4 border-white ring-2 ring-blue-200">
+                        <img
+                          src={
+                            testimonial.image
+                              ? `http://localhost:5000/uploads/project_files/${testimonial.image}`
+                              : "http://localhost:5000/uploads/project_files/behayilu (2).jpg"
+                          }
+                          alt={testimonial.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src =
+                              "http://localhost:5000/uploads/project_files/basha.jpg";
+                          }}
+                        />
+                      </div>
+
+                      <FaQuoteLeft className="text-blue-300 text-3xl mb-2 opacity-60" />
+
+                      <blockquote className="text-lg italic text-gray-700 max-w-2xl">
+                        “{testimonial.quote}”
+                      </blockquote>
+
+                      <div className="mt-2">
+                        <h4 className="text-lg font-semibold text-gray-800">
+                          {testimonial.name}
+                        </h4>
+                        <span className="text-sm text-blue-600">
+                          {testimonial.title}
+                        </span>
+                      </div>
+                    </motion.div>
+                  )
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Optional: Add navigation buttons */}
+          <div className="flex justify-center mt-8 space-x-4">
+            {testimonials.map((_, index) => (
+              <button
+                key={index}
+                className={`w-3 h-3 rounded-full ${
+                  activeTestimonial === index
+                    ? "bg-blue-600"
+                    : "bg-blue-200 hover:bg-blue-400"
+                }`}
+                onClick={() => setActiveTestimonial(index)}
+              ></button>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -623,7 +596,6 @@ const Home = () => {
                     Researchers
                   </Link>
                 </li>
-                {/* <li><Link to="/resources" className="hover:text-white transition-colors">Resources</Link></li> */}
               </ul>
             </div>
             <div>
@@ -647,14 +619,7 @@ const Home = () => {
                     Contact
                   </Link>
                 </li>
-                <li>
-                  <Link
-                    to="/faq"
-                    className="hover:text-white transition-colors"
-                  >
-                    FAQ
-                  </Link>
-                </li>
+
                 <li>
                   <Link
                     to="/terms"
