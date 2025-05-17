@@ -218,8 +218,8 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
   };
 
   return (
-    <nav className="bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 fixed w-full z-50 top-0 shadow-xl select-none backdrop-blur-md border-b border-purple-800/50">
-      <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">
+    <nav className="bg-gradient-to-r from-[#1a2a6c] via-[#b21f1f] to-[#fdbb2d] shadow-lg backdrop-blur-md bg-opacity-60 border-b border-white/10 sticky top-0 z-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
             <div className="flex sm:hidden mr-2">
