@@ -1,4 +1,3 @@
-// backend/config/socketSetup.js
 import { Server as SocketIOServer } from "socket.io";
 import jwt from "jsonwebtoken";
 import db from "../models/index.js"; // Adjust path if necessary
@@ -32,26 +31,23 @@ export const initSocketIO = (httpServer) => {
   if (!httpServer)
     throw new Error("FATAL ERROR: Valid httpServer instance was not provided.");
   if (!User || !Message || !Project || !Member) {
-    // Added Message, Project, Member check
     throw new Error(
       "FATAL ERROR: One or more required models (User, Message, Project, Member) are not loaded correctly."
     );
   }
 
-  console.log(`Configuring Socket.IO for origin: ${frontendUrl}`);
   try {
     io = new SocketIOServer(httpServer, {
       cors: {
         origin: frontendUrl,
         methods: ["GET", "POST"],
         credentials: true,
-      }, // Added credentials: true
+      },
     });
     if (!io)
       throw new Error(
         "Socket.IO server instance creation returned null/undefined."
       );
-    console.log("Socket.IO Server instance created successfully.");
   } catch (creationError) {
     console.error(
       "!!! FAILED TO CREATE Socket.IO Server instance !!!",
@@ -64,34 +60,26 @@ export const initSocketIO = (httpServer) => {
 
   io.use(async (socket, next) => {
     const token = socket.handshake.auth.token;
-    console.log(
-      `[Socket Middleware] Attempt: Socket ${
-        socket.id
-      }. Token present: ${!!token}`
-    );
     if (!token)
       return next(new Error("Authentication error: No token provided."));
     try {
       const decoded = jwt.verify(token, jwtSecret);
       const user = await User.findByPk(decoded.id, {
         attributes: ["id", "username", "profilePictureUrl", "role"],
-      }); // Added profilePictureUrl, role
+      });
       if (!user)
         return next(
           new Error(`Authentication error: User ${decoded.id} not found.`)
         );
 
-      socket.user = user.toJSON(); // Store full user object (or selected fields)
-      socket.userId = user.id.toString(); // For consistency with previous logic if still used elsewhere
-      socket.username = user.username; // For logging
+      socket.user = user.toJSON();
+      socket.userId = user.id.toString();
+      socket.username = user.username;
 
       if (!userSockets.has(socket.userId))
         userSockets.set(socket.userId, new Set());
       userSockets.get(socket.userId).add(socket.id);
       logUserSockets("Socket Middleware - Add");
-      console.log(
-        `[Socket Auth OK] Socket ${socket.id} -> User ${socket.userId} (${socket.username})`
-      );
       next();
     } catch (err) {
       console.error(
@@ -108,7 +96,7 @@ export const initSocketIO = (httpServer) => {
   });
 
   io.on("connection", (socket) => {
-    const userId = socket.user.id.toString(); // Ensure string
+    const userId = socket.user.id.toString();
     const username = socket.user.username;
 
     if (!userId) {
@@ -118,10 +106,6 @@ export const initSocketIO = (httpServer) => {
       socket.disconnect(true);
       return;
     }
-    console.log(
-      `✅ [Socket Connected] User: ${username} (ID: ${userId}), Socket ID: ${socket.id}`
-    );
-    logUserSockets("Socket Connected - Map State");
 
     socket.on("joinChatRoom", async ({ roomName }, callback) => {
       if (!roomName || !roomName.startsWith("project-")) {
@@ -140,7 +124,6 @@ export const initSocketIO = (httpServer) => {
       }
 
       try {
-        // Authorization: Check if user is member or owner of the project
         const project = await Project.findByPk(projectId);
         if (!project) {
           if (typeof callback === "function")
@@ -162,9 +145,6 @@ export const initSocketIO = (httpServer) => {
         }
 
         socket.join(roomName);
-        console.log(
-          `[Socket Event: joinChatRoom] User ${userId} (${username}) joined room: ${roomName}`
-        );
         if (typeof callback === "function")
           callback({ success: true, message: `Joined room ${roomName}` });
       } catch (error) {
@@ -180,9 +160,6 @@ export const initSocketIO = (httpServer) => {
     socket.on("leaveChatRoom", ({ roomName }) => {
       if (roomName) {
         socket.leave(roomName);
-        console.log(
-          `[Socket Event: leaveChatRoom] User ${userId} (${username}) left room: ${roomName}`
-        );
       }
     });
 
@@ -198,17 +175,12 @@ export const initSocketIO = (httpServer) => {
       }
     });
 
-    // --- ⭐ THIS IS THE CRUCIAL HANDLER THAT WAS MISSING/INCOMPLETE ⭐ ---
     socket.on("sendMessage", async (data, callback) => {
-      console.log(
-        `[Socket Event: sendMessage] Received from User ID ${userId} (${username}):`,
-        JSON.stringify(data).substring(0, 200)
-      );
       try {
         const {
           projectId,
           content,
-          roomName, // Should match `project-${projectId}`
+          roomName,
           messageType = "text",
           fileName,
           fileUrl,
@@ -217,9 +189,6 @@ export const initSocketIO = (httpServer) => {
         } = data;
 
         if (!projectId || !roomName) {
-          console.error(
-            "[Socket sendMessage] Error: Missing projectId or roomName."
-          );
           if (typeof callback === "function")
             callback({
               success: false,
@@ -228,10 +197,6 @@ export const initSocketIO = (httpServer) => {
           return;
         }
         if (!content && messageType === "text") {
-          // For text messages, content is required
-          console.error(
-            "[Socket sendMessage] Error: Missing content for text message."
-          );
           if (typeof callback === "function")
             callback({
               success: false,
@@ -240,22 +205,15 @@ export const initSocketIO = (httpServer) => {
           return;
         }
 
-        // Optional: Re-verify user's permission to send to this project/room
-        // (Can be skipped if joinChatRoom authorization is deemed sufficient for the session)
-
         let newMessageData = {
           projectId: parseInt(projectId, 10),
-          senderId: parseInt(userId, 10), // Ensure senderId is an integer if DB expects it
+          senderId: parseInt(userId, 10),
           content: content,
           messageType: messageType,
         };
 
         if (messageType === "file") {
           if (!fileName || !fileUrl || !mimeType || fileSize === undefined) {
-            // fileSize can be 0
-            console.error(
-              "[Socket sendMessage] Error: Missing required file metadata for file message type."
-            );
             if (typeof callback === "function")
               callback({ success: false, error: "Incomplete file metadata." });
             return;
@@ -268,11 +226,10 @@ export const initSocketIO = (httpServer) => {
 
         const newMessage = await Message.create(newMessageData);
 
-        // Use socket.user which was populated by the auth middleware
         const senderDetails = {
           id: socket.user.id,
           username: socket.user.username,
-          profilePictureUrl: socket.user.profilePictureUrl, // Make sure this is fetched in auth middleware
+          profilePictureUrl: socket.user.profilePictureUrl,
         };
 
         const messageToSendToClients = {
@@ -281,19 +238,12 @@ export const initSocketIO = (httpServer) => {
         };
 
         io.to(roomName).emit("newMessage", messageToSendToClients);
-        console.log(
-          `[Socket Event: newMessage] Broadcasted to room ${roomName}.`
-        );
 
-        // Send acknowledgment back to the client
         if (typeof callback === "function") {
-          console.log(
-            "[Socket sendMessage] Sending SUCCESS acknowledgment to client."
-          );
           callback({
             success: true,
             message: "Message processed and broadcasted by server.",
-            sentMessage: messageToSendToClients, // Send the confirmed message back
+            sentMessage: messageToSendToClients,
           });
         }
       } catch (error) {
@@ -302,9 +252,6 @@ export const initSocketIO = (httpServer) => {
           error
         );
         if (typeof callback === "function") {
-          console.log(
-            "[Socket sendMessage] Sending FAILURE acknowledgment to client."
-          );
           callback({
             success: false,
             error: "Server failed to process message. Please try again.",
@@ -312,35 +259,14 @@ export const initSocketIO = (httpServer) => {
         }
       }
     });
-    // --- ⭐ END OF sendMessage HANDLER ⭐ ---
 
     socket.on("disconnect", (reason) => {
-      console.log(
-        `🔌 [Socket Disconnected] User: ${username} (ID: ${userId}), Socket ID: ${socket.id}, Reason: ${reason}`
-      );
-      logUserSockets(`Disconnect - Before User ${userId}, Socket ${socket.id}`);
       if (userSockets.has(userId)) {
         const userSocketSet = userSockets.get(userId);
-        const deleted = userSocketSet.delete(socket.id);
-        console.log(
-          `[Disconnect] Deleted Socket ${socket.id} from User ${userId} Set: ${deleted}. Set size: ${userSocketSet.size}`
-        );
+        userSocketSet.delete(socket.id);
         if (userSocketSet.size === 0) {
           userSockets.delete(userId);
-          console.log(
-            `[Disconnect] User ${userId} (${username}) removed from map.`
-          );
-          logUserSockets(`Disconnect - After User ${userId} Removed`);
-        } else {
-          logUserSockets(
-            `Disconnect - After Socket ${socket.id} Removed for User ${userId}`
-          );
         }
-      } else {
-        console.warn(
-          `[Disconnect] User ${userId} NOT in map (Socket ${socket.id}).`
-        );
-        logUserSockets(`Disconnect - User ${userId} Not Found`);
       }
     });
 
@@ -353,16 +279,10 @@ export const initSocketIO = (httpServer) => {
     });
   });
 
-  console.log("💬 WebSocket server initialization completed successfully.");
   return io;
 };
 
 export const emitToUser = (targetUserId, eventName, data) => {
-  console.log(
-    `[emitToUser] Prep: '${eventName}' to User ${targetUserId}. Data: ${JSON.stringify(
-      data
-    ).substring(0, 100)}...`
-  );
   if (!io) {
     console.error("[emitToUser] WARN: Socket.IO 'io' not initialized.");
     return false;
@@ -372,25 +292,10 @@ export const emitToUser = (targetUserId, eventName, data) => {
     return false;
   }
   const userIdStr = targetUserId.toString();
-  logUserSockets(`emitToUser - Check map for User ${userIdStr}`);
   const userSocketIds = userSockets.get(userIdStr);
-  console.log(
-    `[emitToUser] Lookup for User ${userIdStr}:`,
-    userSocketIds ? `Found Set(${userSocketIds.size})` : "Not Found"
-  );
   if (userSocketIds && userSocketIds.size > 0) {
-    const socketIdArray = Array.from(userSocketIds);
-    console.log(
-      `[emitToUser] Emitting '${eventName}' to User ${userIdStr} via Sockets: [${socketIdArray.join(
-        ", "
-      )}]`
-    );
-    io.to(socketIdArray).emit(eventName, data);
+    io.to(Array.from(userSocketIds)).emit(eventName, data);
     return true;
-  } else {
-    console.log(
-      `[emitToUser] Notice: User ${userIdStr} not connected for '${eventName}'.`
-    );
-    return false;
   }
+  return false;
 };
