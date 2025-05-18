@@ -1,11 +1,27 @@
-// src/Component/Chat/MemberListModal.jsx
 import React from "react";
-import { FaTimes, FaUserCircle, FaCrown, FaUser } from "react-icons/fa"; // Added icons
+import { FaTimes, FaCrown } from "react-icons/fa"; // FaUserCircle and FaUser were not used, removed for cleanliness
 import { motion, AnimatePresence } from "framer-motion";
-import LoadingSpinner from "../Common/LoadingSpinner"; // Adjust path if needed
-import ErrorMessage from "../Common/ErrorMessage"; // Adjust path if needed
+import LoadingSpinner from "../Common/LoadingSpinner";
+import ErrorMessage from "../Common/ErrorMessage";
 
-// Animation variants for the modal
+// --- START: Image URL Helper (Ideally import this from a shared utils file) ---
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+
+const getFullImageUrl = (relativePath) => {
+  if (!relativePath) {
+    return null;
+  }
+  if (relativePath.startsWith('http://') || relativePath.startsWith('https://')) {
+    return relativePath;
+  }
+  const base = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+  const path = relativePath.startsWith('/') ? relativePath : `/${relativePath}`;
+  return `${base}${path}`;
+};
+// --- END: Image URL Helper ---
+
+
 const backdropVariants = {
   hidden: { opacity: 0 },
   visible: { opacity: 1 },
@@ -26,12 +42,12 @@ const modalVariants = {
 function MemberListModal({
   isOpen,
   onClose,
-  members = [], // Default to empty array
+  members = [],
   isLoading,
   error,
   projectName = "Project Members",
-  onRetry, // Function to retry fetching members
-  currentUserId, // Pass current user ID to highlight them
+  onRetry,
+  currentUserId,
 }) {
   return (
     <AnimatePresence>
@@ -43,13 +59,11 @@ function MemberListModal({
           animate="visible"
           exit="exit"
         >
-          {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={onClose}
           ></div>
 
-          {/* Modal Content */}
           <motion.div
             className="relative bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-200"
             variants={modalVariants}
@@ -57,7 +71,6 @@ function MemberListModal({
             aria-modal="true"
             aria-labelledby="member-list-title"
           >
-            {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50">
               <h2
                 id="member-list-title"
@@ -75,7 +88,6 @@ function MemberListModal({
               </button>
             </div>
 
-            {/* Body */}
             <div className="p-5 max-h-[60vh] overflow-y-auto custom-scrollbar">
               {isLoading ? (
                 <div className="flex flex-col items-center justify-center py-10 text-gray-500">
@@ -86,7 +98,7 @@ function MemberListModal({
                 <ErrorMessage
                   title="Could not load members"
                   message={error}
-                  onRetry={onRetry} // Show retry button if function provided
+                  onRetry={onRetry}
                 />
               ) : members.length === 0 ? (
                 <p className="text-center text-gray-500 py-10 italic">
@@ -97,7 +109,13 @@ function MemberListModal({
                   {members.map((member) => {
                     const isCurrentUser =
                       member.id?.toString() === currentUserId?.toString();
-                    const isOwner = member.role === "Owner"; // Assuming role comes from backend
+                    const isOwner = member.role === "Owner";
+                    
+                    // Get the full display URL for the member's avatar
+                    const memberAvatarDisplayUrl = member.profilePictureUrl
+                      ? getFullImageUrl(member.profilePictureUrl)
+                      : null;
+
                     return (
                       <li
                         key={member.id}
@@ -107,13 +125,20 @@ function MemberListModal({
                             : "hover:bg-gray-100"
                         }`}
                       >
-                        {/* Avatar */}
                         <div className="flex-shrink-0 mr-3 relative">
-                          {member.profilePictureUrl ? (
+                          {/* === MEMBER AVATAR === */}
+                          {memberAvatarDisplayUrl ? (
                             <img
-                              src={member.profilePictureUrl}
-                              alt={member.username || "User"}
+                              src={memberAvatarDisplayUrl}
+                              alt={`${member.username || "User"}'s avatar`}
                               className="w-10 h-10 rounded-full object-cover border-2 border-white shadow"
+                              onError={(e) => {
+                                console.error(
+                                  `Error loading MEMBER avatar in modal. Original: ${member.profilePictureUrl}, Attempted: ${e.target.src}. Check /default-avatar.png.`, e
+                                );
+                                e.target.onerror = null; // Prevent infinite loop if fallback also fails
+                                e.target.src = "/default-avatar.png"; // Fallback to default avatar
+                              }}
                             />
                           ) : (
                             <div
@@ -126,14 +151,12 @@ function MemberListModal({
                               {(member.username || "?").charAt(0).toUpperCase()}
                             </div>
                           )}
-                          {/* Role Icon */}
                           {isOwner && (
                             <span className="absolute -bottom-1 -right-1 bg-yellow-500 text-white rounded-full p-0.5 border-2 border-white shadow">
                               <FaCrown size="0.6em" title="Project Owner" />
                             </span>
                           )}
                         </div>
-                        {/* Info */}
                         <div className="flex-grow overflow-hidden">
                           <p
                             className={`text-sm font-semibold truncate ${
@@ -155,11 +178,9 @@ function MemberListModal({
                               isOwner ? "text-yellow-700" : "text-gray-500"
                             }`}
                           >
-                            {member.role || "Member"} {/* Display Role */}
+                            {member.role || "Member"}
                           </p>
                         </div>
-                        {/* Optional: Action button (e.g., view profile) */}
-                        {/* <button className="ml-auto text-xs text-indigo-600 hover:underline">Profile</button> */}
                       </li>
                     );
                   })}

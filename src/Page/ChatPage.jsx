@@ -21,15 +21,15 @@ import {
   FaUsers,
   FaPaperclip,
   FaTimesCircle,
-  FaFileAlt, // Kept for potential use elsewhere
-  FaRegFileAlt, // Using a slightly different icon for attachment link
+  FaFileAlt,
+  FaRegFileAlt,
   FaRegFilePdf,
   FaRegFileImage,
   FaRegFileWord,
   FaRegFileArchive,
   FaRegFileAudio,
-  FaEye, // Icon for view action
-} from "react-icons/fa"; // Added more specific file icons and FaEye
+  FaEye,
+} from "react-icons/fa";
 import { AnimatePresence, motion } from "framer-motion";
 import { format, isToday, isYesterday, parseISO } from "date-fns";
 
@@ -37,14 +37,30 @@ import { format, isToday, isYesterday, parseISO } from "date-fns";
 import LoadingSpinner from "../Component/Common/LoadingSpinner";
 import ErrorMessage from "../Component/Common/ErrorMessage";
 import MemberListModal from "../Component/chat/MemberListModal";
-import AttachmentViewer from "../Component/Common/AttachmentViewer"; // <--- NEW IMPORT
+import AttachmentViewer from "../Component/Common/AttachmentViewer";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
-const SOCKET_TIMEOUT = 15000; // ms for socket emit with ack
+const SOCKET_TIMEOUT = 15000;
 const MAX_FILE_SIZE_MB = 10;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
-const TYPING_TIMEOUT_DURATION = 3000; // ms
+const TYPING_TIMEOUT_DURATION = 3000;
+
+// --- Helper to construct full image URL ---
+const getFullImageUrl = (relativePath) => {
+  if (!relativePath) {
+    // console.warn("getFullImageUrl called with empty path");
+    return null;
+  }
+  if (relativePath.startsWith('http://') || relativePath.startsWith('https://')) {
+    return relativePath; // It's already an absolute URL
+  }
+  // Ensure API_BASE_URL doesn't have a trailing slash if relativePath starts with one
+  const base = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+  const path = relativePath.startsWith('/') ? relativePath : `/${relativePath}`;
+  return `${base}${path}`;
+};
+
 
 const getRoomName = (projectId) => (projectId ? `project-${projectId}` : null);
 const formatMessageTime = (isoString) => {
@@ -73,7 +89,7 @@ const createAxiosInstance = (token) =>
     headers: { Authorization: `Bearer ${token}` },
   });
 
-// --- useChatData Hook (No changes needed in this hook for attachment viewing) ---
+// --- useChatData Hook (No changes needed in this hook for this issue) ---
 function useChatData(projectId, currentUser, scrollToBottom) {
   const [projectDetails, setProjectDetails] = useState(null);
   const [initialMessages, setInitialMessages] = useState([]);
@@ -133,37 +149,35 @@ function useChatData(projectId, currentUser, scrollToBottom) {
         historyResponse.value.data?.success
       ) {
         if (Array.isArray(historyResponse.value.data.data)) {
-          fetchedMsgs = historyResponse.value.data.data;
-          allowConnection = true; // Keep true if messages are successfully fetched
+          // Ensure sender objects in historical messages are complete
+          fetchedMsgs = historyResponse.value.data.data.map(msg => ({
+            ...msg,
+            sender: msg.sender || { id: msg.senderId, username: "Unknown User (History)" }
+          }));
+          allowConnection = true;
         } else {
           fetchedMsgs = [];
           if (!allowConnection)
-            // Only set error if project info also failed or if this is the primary failure
             errorMsg =
               historyResponse.value.data?.message || "Invalid history data.";
         }
       } else if (historyResponse.status === "rejected") {
         const err = historyResponse.reason;
-        // Only set allowConnection to false if history fails AND project info failed or was not sufficient
-        // If project info succeeded, we might still want to allow connection to an empty chat
-        // However, for a chat history failure that's critical (like 403), definitely disallow.
-
         if (err.response) {
           errorMsg =
             err.response.data?.message || `Error ${err.response.status}`;
           if (err.response.status === 403) {
             errorMsg = "Access Denied to this project chat.";
-            allowConnection = false; // Critical failure
+            allowConnection = false;
           } else if (err.response.status === 404) {
             errorMsg = "Project chat not found.";
-            // allowConnection might still be true if project info was found, implying an empty chat.
           } else if (err.response.status === 401) {
             errorMsg = "Authentication expired. Please log in.";
-            allowConnection = false; // Critical failure
+            allowConnection = false;
           }
         } else if (err.request) {
           errorMsg = "Network Error: Could not reach server for history.";
-          allowConnection = false; // Critical failure
+          allowConnection = false;
         } else {
           errorMsg = err.message || "Unknown error fetching history.";
           allowConnection = false;
@@ -171,7 +185,7 @@ function useChatData(projectId, currentUser, scrollToBottom) {
         fetchedMsgs = [];
       }
     } catch (err) {
-      allowConnection = false; // General catch implies critical failure
+      allowConnection = false;
       errorMsg = err.message || "Unexpected error during setup.";
       fetchedDetails = fetchedDetails || {
         id: projectId,
@@ -182,10 +196,9 @@ function useChatData(projectId, currentUser, scrollToBottom) {
       setProjectDetails(fetchedDetails);
       setInitialMessages(fetchedMsgs);
       setFetchError(errorMsg);
-      setCanAttemptConnect(allowConnection); // Based on whether crucial data was fetched
+      setCanAttemptConnect(allowConnection);
       setIsLoading(false);
       if (fetchedMsgs.length > 0 && allowConnection && !errorMsg) {
-        // Only scroll if data is good
         scrollToBottom("auto");
       }
     }
@@ -200,11 +213,12 @@ function useChatData(projectId, currentUser, scrollToBottom) {
     isLoading,
     fetchError,
     canAttemptConnect,
-    fetchInitialData, // Expose for potential manual refetch if needed
+    fetchInitialData,
   };
 }
 
-// --- useChatSocket Hook (No changes needed in this hook for attachment viewing) ---
+// --- useChatSocket Hook ---
+// Ensure backend sends full sender object: { id, username, profilePictureUrl }
 function useChatSocket(
   canAttemptConnect,
   currentUserId,
@@ -268,15 +282,19 @@ function useChatSocket(
       if (socketRef.current?.id === newSocket.id) socketRef.current = null;
     });
     newSocket.on("newMessage", (message) => {
+      // console.log("Raw socket message received:", JSON.stringify(message, null, 2));
       if (!message || !message.projectId || !message.id) return;
       if (message.projectId?.toString() === projectId?.toString()) {
         const msgWithSender = {
           ...message,
+          // CRITICAL: Ensure `message.sender` from socket includes `id`, `username`, and `profilePictureUrl`
           sender: message.sender || {
-            id: message.senderId,
-            username: "Unknown User",
+            id: message.senderId, // Fallback if full sender object is not provided by backend
+            username: "Unknown User (Socket)",
+            profilePictureUrl: null, // Explicitly null if not provided
           },
         };
+        // console.log("Processed msgWithSender for socket:", JSON.stringify(msgWithSender, null, 2));
         onNewMessageCallback(msgWithSender);
       }
     });
@@ -382,7 +400,7 @@ function useChatSocket(
   };
 }
 
-// --- useFileUpload Hook (No changes needed in this hook) ---
+// --- useFileUpload Hook (No changes needed) ---
 function useFileUpload(projectId) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -433,7 +451,7 @@ function useFileUpload(projectId) {
         { headers: { "Content-Type": "multipart/form-data" } }
       );
       if (response.data?.success && response.data.data) {
-        return response.data.data; // Should include fileUrl, fileName, mimeType, fileSize
+        return response.data.data;
       } else {
         throw new Error(
           response.data?.message || "File upload failed on server."
@@ -511,23 +529,21 @@ function useProjectMembers(projectId) {
   return { memberList, loadingMembers, membersError, fetchMembers };
 }
 
-// Helper to get file type from mimeType or fileName
+
 const getFileTypeFromMimeOrName = (mimeType, fileName) => {
   if (mimeType) {
-    if (mimeType.startsWith("image/")) return mimeType.split("/")[1]; // jpg, png, gif
+    if (mimeType.startsWith("image/")) return mimeType.split("/")[1];
     if (mimeType === "application/pdf") return "pdf";
     if (mimeType === "text/plain") return "txt";
     if (mimeType === "text/markdown") return "md";
-    // Add more mime type checks
   }
   if (fileName) {
     const ext = fileName.split(".").pop()?.toLowerCase();
     if (ext) return ext;
   }
-  return "unknown"; // Default if type cannot be determined
+  return "unknown";
 };
 
-// Helper to select an icon based on file type
 const FileTypeIcon = ({ fileType, className = "w-4 h-4 flex-shrink-0" }) => {
   const type = fileType?.toLowerCase();
   if (type === "pdf")
@@ -540,11 +556,16 @@ const FileTypeIcon = ({ fileType, className = "w-4 h-4 flex-shrink-0" }) => {
     return <FaRegFileArchive className={`${className} text-yellow-500`} />;
   if (["mp3", "wav", "ogg"].includes(type))
     return <FaRegFileAudio className={`${className} text-purple-500`} />;
-  return <FaRegFileAlt className={`${className} text-gray-500`} />; // Default icon
+  return <FaRegFileAlt className={`${className} text-gray-500`} />;
 };
 
 // --- Main ChatPage Component ---
 function ChatPage({ currentUser }) {
+  // Log currentUser prop for debugging
+  // console.log("ChatPage received currentUser:", JSON.stringify(currentUser, null, 2));
+  // console.log("Current user profile pic URL from prop:", currentUser?.profilePictureUrl);
+
+
   const { projectId: projectIdParam } = useParams();
   const navigate = useNavigate();
 
@@ -559,8 +580,7 @@ function ChatPage({ currentUser }) {
   const [newMessageInput, setNewMessageInput] = useState("");
   const [isSendingText, setIsSendingText] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
-
-  const [viewingAttachment, setViewingAttachment] = useState(null); // <--- STATE FOR ATTACHMENT VIEWER
+  const [viewingAttachment, setViewingAttachment] = useState(null);
 
   const messagesEndRef = useRef(null);
 
@@ -657,38 +677,35 @@ function ChatPage({ currentUser }) {
       }
 
       if (selectedFile) {
-        const uploadedFileData = await uploadFile(); // This now returns { fileUrl, fileName, mimeType, fileSize }
+        const uploadedFileData = await uploadFile();
         if (uploadedFileData) {
           const fileMessageData = {
             senderId: currentUserId,
             projectId,
             roomName,
             messageType: "file",
-            fileUrl: uploadedFileData.fileUrl, // URL to access/download the file from backend
+            fileUrl: uploadedFileData.fileUrl,
             fileName: uploadedFileData.fileName,
             mimeType: uploadedFileData.mimeType,
             fileSize: uploadedFileData.fileSize,
-            content: `File: ${uploadedFileData.fileName}`, // Fallback text content
+            content: `File: ${uploadedFileData.fileName}`,
           };
           try {
             if (!socket?.connected && !isConnected) {
               console.error(
                 "Socket disconnected just before emitting file message."
               );
-              // Set an error for the user or attempt re-queue
               return;
             }
             await emitSendMessageViaSocket(fileMessageData);
             clearSelectedFile();
           } catch (socketEmitError) {
-            // Error state should be set by emitSendMessageViaSocket
-            console.error(
+             console.error(
               "Failed to emit file message via socket:",
               socketEmitError
             );
           }
         } else {
-          // uploadError state from useFileUpload will be displayed
           console.error(
             "HTTP File upload failed, not emitting socket message. Upload error:",
             uploadError
@@ -750,15 +767,12 @@ function ChatPage({ currentUser }) {
     if (!selectedFile) emitStopTypingViaSocket();
   }, [selectedFile, emitStopTypingViaSocket]);
 
-  // --- ATTACHMENT VIEWER HANDLERS ---
   const openAttachmentViewer = (msg) => {
     if (msg.messageType === "file" && msg.fileUrl && msg.fileName) {
-      // Ensure the URL is absolute if it's relative from the backend
       const fullFileUrl = msg.fileUrl.startsWith("http")
         ? msg.fileUrl
-        : `${API_BASE_URL}${msg.fileUrl}`;
-      // (Backend should ideally always return absolute URLs for attachments)
-
+        : `${API_BASE_URL}${msg.fileUrl.startsWith('/') ? msg.fileUrl : '/' + msg.fileUrl}`;
+      
       const fileType = getFileTypeFromMimeOrName(msg.mimeType, msg.fileName);
       setViewingAttachment({
         url: fullFileUrl,
@@ -773,7 +787,6 @@ function ChatPage({ currentUser }) {
   const closeAttachmentViewer = () => {
     setViewingAttachment(null);
   };
-  // --- END ATTACHMENT VIEWER HANDLERS ---
 
   if (isLoadingData) {
     return (
@@ -896,10 +909,10 @@ function ChatPage({ currentUser }) {
           {socketConnectionError && (
             <ErrorMessage
               message={socketConnectionError}
-              isDismissible={true} // Allow dismissing socket errors
+              isDismissible={true}
               type="error"
               className="mb-3 sticky top-2 z-10 shadow-lg"
-              onClose={() => setSocketError(null)} // Make sure setSocketError is available if this is used
+              onClose={() => setSocketError(null)}
             />
           )}
           {!isLoadingData && messages.length === 0 && !fetchError && (
@@ -924,6 +937,15 @@ function ChatPage({ currentUser }) {
                 currentDateSeparator &&
                 currentDateSeparator !== prevDateSeparator;
               const isFileMessage = msg.messageType === "file";
+
+              // Construct avatar URLs
+              const senderAvatarDisplayUrl = msg.sender?.profilePictureUrl
+                ? getFullImageUrl(msg.sender.profilePictureUrl)
+                : null;
+              
+              const currentUserAvatarDisplayUrl = currentUser?.profilePictureUrl
+                ? getFullImageUrl(currentUser.profilePictureUrl)
+                : null;
 
               return (
                 <React.Fragment key={msg.id || `msg-fallback-${index}`}>
@@ -953,14 +975,18 @@ function ChatPage({ currentUser }) {
                         className="flex-shrink-0 self-start relative mt-1 group"
                         title={msg.sender?.username || `User ${msg.senderId}`}
                       >
-                        {msg.sender?.profilePictureUrl ? (
+                        {/* === SENDER AVATAR === */}
+                        {senderAvatarDisplayUrl ? (
                           <img
-                            src={msg.sender.profilePictureUrl}
+                            src={senderAvatarDisplayUrl}
                             alt={`${msg.sender.username || "User"}'s avatar`}
                             className="w-8 h-8 rounded-full object-cover border-2 border-white shadow"
                             onError={(e) => {
+                              console.error(
+                                `Error loading SENDER avatar. Original: ${msg.sender.profilePictureUrl}, Attempted: ${e.target.src}. Check /default-avatar.png.`, e
+                              );
                               e.target.onerror = null;
-                              e.target.src = "/default-avatar.png"; // Fallback avatar
+                              e.target.src = "/default-avatar.png";
                             }}
                           />
                         ) : (
@@ -977,13 +1003,13 @@ function ChatPage({ currentUser }) {
                           : "bg-white text-gray-800 border border-gray-200 rounded-r-xl shadow-sm"
                       }`}
                     >
-                      {!isCurrentUserSender && (
+                      {!isCurrentUserSender && msg.sender?.username && ( // Display username only if not current user AND username exists
                         <p className="text-xs font-bold mb-1 text-indigo-700">
-                          {msg.sender?.username || `User ${msg.senderId}`}
+                          {msg.sender.username}
                         </p>
                       )}
                       {isFileMessage ? (
-                        <button // <--- CHANGED FROM <a> TO <button>
+                        <button
                           onClick={() => openAttachmentViewer(msg)}
                           className={`inline-flex items-center gap-2 font-medium break-all ${
                             isCurrentUserSender
@@ -1028,12 +1054,16 @@ function ChatPage({ currentUser }) {
                         className="flex-shrink-0 self-start relative mt-1 group"
                         title={currentUser?.username || "You"}
                       >
-                        {currentUser?.profilePictureUrl ? (
+                        {/* === CURRENT USER AVATAR === */}
+                        {currentUserAvatarDisplayUrl ? (
                           <img
-                            src={currentUser.profilePictureUrl}
+                            src={currentUserAvatarDisplayUrl}
                             alt={`${currentUser.username || "Your"}'s avatar`}
                             className="w-8 h-8 rounded-full object-cover border-2 border-white shadow"
                             onError={(e) => {
+                              console.error(
+                                `Error loading CURRENT USER avatar. Original: ${currentUser.profilePictureUrl}, Attempted: ${e.target.src}. Check /default-avatar.png.`, e
+                              );
                               e.target.onerror = null;
                               e.target.src = "/default-avatar.png";
                             }}
@@ -1055,7 +1085,7 @@ function ChatPage({ currentUser }) {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
-                  className="text-left pl-12 pr-4 pt-1 pb-2" // Adjusted padding to align with messages
+                  className="text-left pl-12 pr-4 pt-1 pb-2"
                 >
                   <span className="text-xs italic text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full shadow-sm border border-gray-200">
                     {otherTypingUsernames.join(", ")}
@@ -1108,7 +1138,7 @@ function ChatPage({ currentUser }) {
                     message={uploadError}
                     type="error"
                     isDismissible={true}
-                    onClose={() => setUploadError(null)} // Ensure setUploadError exists if this hook is used
+                    onClose={() => setUploadError(null)}
                     className="text-xs"
                   />
                 </div>
@@ -1125,7 +1155,7 @@ function ChatPage({ currentUser }) {
               onChange={handleFileSelect}
               className="hidden"
               disabled={!isConnected || isProcessingSomething}
-              accept="image/*,application/pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,.zip,.rar,.mp3,.wav,.md,.json,.log" // Added more common types
+              accept="image/*,application/pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,.zip,.rar,.mp3,.wav,.md,.json,.log"
               aria-hidden="true"
             />
             <button
@@ -1192,7 +1222,6 @@ function ChatPage({ currentUser }) {
         currentUserId={currentUserId}
       />
 
-      {/* --- ATTACHMENT VIEWER MODAL --- */}
       <AnimatePresence>
         {viewingAttachment && (
           <AttachmentViewer
@@ -1203,7 +1232,6 @@ function ChatPage({ currentUser }) {
           />
         )}
       </AnimatePresence>
-      {/* --- END ATTACHMENT VIEWER MODAL --- */}
     </>
   );
 }
