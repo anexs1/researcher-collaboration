@@ -673,7 +673,7 @@ const Home = () => {
           </div>
           <div className="border-t border-gray-800 pt-8 text-sm text-center">
             © {new Date().getFullYear()} Researcher Collaboration Portal. All
-            rights reserved. Built with passion in Ethiopia.
+            rights reserved.
           </div>
         </div>
       </footer>
