@@ -195,17 +195,7 @@ const Notifications = () => {
               {" "}
               {renderNotificationItems()}{" "}
             </ul>
-            <div className="px-4 py-2 border-t border-gray-200 bg-gray-50 text-center">
-              {" "}
-              <Link
-                to="/profile/activity"
-                onClick={closeDropdown}
-                className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline"
-              >
-                {" "}
-                View All Activity{" "}
-              </Link>{" "}
-            </div>
+         
           </motion.div>
         )}
       </AnimatePresence>
