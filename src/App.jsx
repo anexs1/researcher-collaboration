@@ -1,3 +1,4 @@
+// App.jsx
 import React, {
   useEffect,
   useState,
@@ -42,7 +43,7 @@ import useAuth from "./hooks/useAuth";
 // --- Page Imports ---
 import Home from "./Page/Home";
 import ExplorePage from "./Page/ExplorePage";
-import UserProjectsPage from "./Page/UserProjectsPage"; // <<<--- NEW IMPORT
+import UserProjectsPage from "./Page/UserProjectsPage";
 import SignupPage from "./Page/SignupPage";
 import LoginPage from "./Page/LoginPage";
 import Profile from "./Page/Profile";
@@ -68,7 +69,7 @@ import AdminChatPage from "./Page/Admin/AdminChatPage";
 import AdminPublicationManagementPage from "./Page/Admin/AdminPublicationManagementPage";
 import AdminSinglePublicationDetailPage from "./Page/Admin/AdminSinglePublicationDetailPage";
 import AdminProjectListPage from "./Page/Admin/AdminProjectListPage";
-import ProjectDetailPage from "./Page/ProjectDetailPage";
+import ProjectDetailPage from "./Page/ProjectDetailPage"; // <--- ENSURE THIS IS IMPORTED
 import AdminContactSubmissionsPage from "./Page/Admin/AdminContactSubmissionsPage";
 
 // --- Slate JS related imports (Needed if DocumentEditorComponent is defined in this file) ---
@@ -150,9 +151,6 @@ const SocketManager = ({ token, API_BASE }) => {
         console.log(
           `🔌 Socket Disconnected: ${newSocket.id}, Reason: ${reason}`
         );
-        // if (socketRef.current && socketRef.current.id === newSocket.id) { // This line might be problematic if socketRef.current is already null
-        //   socketRef.current = null;
-        // }
       });
       newSocket.on("connect_error", (error) =>
         console.error(
@@ -188,11 +186,10 @@ function debounce(func, delay) {
 const DocumentEditorComponent = ({ documentId, currentUser }) => {
   const editor = useMemo(() => withReact(createEditor()), []);
   const initialSlateValue = useMemo(
-    // Type: Descendant[] if you import Descendant
     () => [{ type: "paragraph", children: [{ text: "" }] }],
     []
   );
-  const [currentDocContent, setCurrentDocContent] = useState(initialSlateValue); // Type: Descendant[]
+  const [currentDocContent, setCurrentDocContent] = useState(initialSlateValue);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [docTitle, setDocTitle] = useState("No Document Selected");
@@ -233,15 +230,15 @@ const DocumentEditorComponent = ({ documentId, currentUser }) => {
           setDocTitle(response.data.data.title || "Untitled Document");
         } else {
           setError(response.data.message || "Failed to load document content.");
-          setCurrentDocContent(initialSlateValue); // Reset on failure
+          setCurrentDocContent(initialSlateValue);
         }
       })
       .catch((err) => {
         setError(err.response?.data?.message || "Error loading document.");
-        setCurrentDocContent(initialSlateValue); // Reset on error
+        setCurrentDocContent(initialSlateValue);
       })
       .finally(() => setLoading(false));
-  }, [documentId, initialSlateValue, currentUser]); // Added initialSlateValue to dependencies
+  }, [documentId, initialSlateValue, currentUser]);
 
   const debouncedSave = useCallback(
     debounce((newValueToSave) => {
@@ -265,7 +262,7 @@ const DocumentEditorComponent = ({ documentId, currentUser }) => {
           setError(err.response?.data?.message || "Error saving document.");
         });
     }, 2000),
-    [documentId, currentUser?.id] // API_BASE_URL_DOCS could be added if it can change, but usually it's static
+    [documentId, currentUser?.id]
   );
 
   const handleEditorChange = (newValue) => {
@@ -291,18 +288,18 @@ const DocumentEditorComponent = ({ documentId, currentUser }) => {
           <span className="ml-3 text-gray-600">Loading document...</span>
         </div>
       )}
-      {!loading && ( // Only render Slate when not loading
+      {!loading && (
         <Slate
           editor={editor}
           value={currentDocContent}
-          key={documentId || "editor-no-doc"} // Key change forces re-render if documentId changes
+          key={documentId || "editor-no-doc"}
           onChange={handleEditorChange}
         >
           <Editable
             placeholder="Start typing..."
             className="prose max-w-none p-3 border border-gray-300 rounded-md min-h-[300px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             spellCheck
-            autoFocus={!!documentId} // Only autoFocus if a document is selected
+            autoFocus={!!documentId}
             readOnly={!documentId || loading || !currentUser?.id}
           />
         </Slate>
@@ -322,22 +319,22 @@ const DocumentPageWrapper = ({ currentUser }) => {
   const getApiClient = useCallback(() => {
     const token = localStorage.getItem("authToken");
     return axios.create({
-      baseURL: API_BASE_URL_DOCS, // Ensure this is the correct API base for documents
+      baseURL: API_BASE_URL_DOCS,
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
-  }, []); // API_BASE_URL_DOCS is static, no need to list as dep
+  }, []);
 
   const fetchUserDocuments = useCallback(() => {
     if (!currentUser?.id) {
       setErrorDocs("Please log in to view documents.");
       setDocsList([]);
-      setIsLoadingDocs(false); // Ensure loading is stopped
+      setIsLoadingDocs(false);
       return;
     }
     setIsLoadingDocs(true);
     setErrorDocs("");
     getApiClient()
-      .get("/api/documents") // Assuming this is your endpoint to get user's documents
+      .get("/api/documents")
       .then((res) => {
         if (res.data.success && Array.isArray(res.data.data)) {
           setDocsList(res.data.data);
@@ -353,7 +350,7 @@ const DocumentPageWrapper = ({ currentUser }) => {
         setDocsList([]);
       })
       .finally(() => setIsLoadingDocs(false));
-  }, [currentUser, getApiClient]); // Removed API_BASE_URL_DOCS as it's static
+  }, [currentUser, getApiClient]);
 
   useEffect(() => {
     fetchUserDocuments();
@@ -370,15 +367,14 @@ const DocumentPageWrapper = ({ currentUser }) => {
     }
     try {
       const response = await getApiClient().post("/api/documents", {
-        // Endpoint to create document
         title: newDocTitle,
       });
       if (response.data.success && response.data.data) {
         const newDoc = response.data.data;
         alert(`Document "${newDoc.title}" created successfully!`);
-        fetchUserDocuments(); // Refresh list
-        setCurrentDocumentId(newDoc.id); // Optionally open the new document
-        setNewDocTitle(""); // Clear input
+        fetchUserDocuments();
+        setCurrentDocumentId(newDoc.id);
+        setNewDocTitle("");
       } else {
         alert(
           `Failed to create document: ${
@@ -395,7 +391,6 @@ const DocumentPageWrapper = ({ currentUser }) => {
     }
   };
   if (!currentUser) {
-    // Check if currentUser object exists
     return (
       <div className="container mx-auto p-8 text-center">
         <p className="text-xl text-gray-700">
@@ -414,6 +409,11 @@ const DocumentPageWrapper = ({ currentUser }) => {
   return (
     <div className="container mx-auto p-4 md:p-8">
       <div className="bg-white p-6 rounded-lg shadow mb-8">
+        {/* Document related UI - this part seems incomplete in your original snippet
+           For brevity, I'm keeping it as is, but you'd normally have
+           a list of documents here and a way to select currentDocumentId,
+           and the DocumentEditorComponent would be rendered here too.
+        */}
         <p className="text-gray-600">
           Create, manage, and collaborate on your research documents.
         </p>
@@ -425,7 +425,31 @@ const DocumentPageWrapper = ({ currentUser }) => {
             placeholder="New document title..."
             className="flex-grow px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
           />
+          {/* Add a button here to call handleCreateDocument */}
+           <button
+            onClick={handleCreateDocument}
+            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+          >
+            Create Document
+          </button>
         </div>
+         {/* Example of listing documents and the editor */}
+        <div className="mt-4">
+          <h3 className="text-xl font-semibold mb-2">Your Documents</h3>
+          {isLoadingDocs && <p>Loading documents list...</p>}
+          {errorDocs && <p className="text-red-500">{errorDocs}</p>}
+          {!isLoadingDocs && !errorDocs && docsList.length === 0 && <p>No documents yet. Create one above!</p>}
+          <ul>
+            {docsList.map(doc => (
+              <li key={doc.id} onClick={() => setCurrentDocumentId(doc.id)} className="cursor-pointer p-2 hover:bg-gray-100">
+                {doc.title}
+              </li>
+            ))}
+          </ul>
+        </div>
+        {currentDocumentId && (
+            <DocumentEditorComponent documentId={currentDocumentId} currentUser={currentUser} />
+        )}
       </div>
     </div>
   );
@@ -509,12 +533,10 @@ function App() {
             path="/explore"
             element={<ExplorePage currentUser={currentUser} />}
           />
-          {/* VVVVVV --- NEW ROUTE ADDED HERE --- VVVVVV */}
           <Route
-            path="/users/:userId/projects"
+            path="/users/:userId/projects" // This was already here
             element={<UserProjectsPage />}
           />
-          {/* ^^^^^^ --- NEW ROUTE ADDED HERE --- ^^^^^^ */}
           <Route path="/aboutus" element={<AboutUs />} />
           <Route
             path="/publications"
@@ -525,13 +547,15 @@ function App() {
             element={<PublicationDetailPage currentUser={currentUser} />}
           />
           <Route
-            path="/projects"
+            path="/projects" // General projects listing page
             element={<Projects currentUser={currentUser} />}
           />
+          {/* VVVVVV --- THIS IS THE KEY ROUTE FOR PROJECT DETAILS --- VVVVVV */}
           <Route
             path="/projects/:projectId"
             element={<ProjectDetailPage currentUser={currentUser} />}
           />
+          {/* ^^^^^^ --- THIS IS THE KEY ROUTE FOR PROJECT DETAILS --- ^^^^^^ */}
           <Route path="/help-center" element={<HelpCenterPage />} />
 
           {/* --- Auth Routes --- */}
@@ -640,7 +664,7 @@ function App() {
                   currentUser?.id ? (
                     <Navigate to={`/profile/${currentUser.id}`} replace />
                   ) : (
-                    <Navigate to="/explore" replace /> // Fallback if no currentUser.id
+                    <Navigate to="/explore" replace />
                   )
                 }
               />
@@ -768,7 +792,7 @@ const ConditionalNavbar = ({ isLoggedIn, currentUser, onLogout }) => {
   const isAdminPath = location.pathname.startsWith("/admin");
 
   if (isAdminPath && isLoggedIn && currentUser?.role === "admin") {
-    return null;
+    return null; // Admin layout handles its own navigation/header
   }
   return (
     <Navbar
