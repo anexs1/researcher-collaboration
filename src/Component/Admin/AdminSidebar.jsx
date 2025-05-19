@@ -32,12 +32,7 @@ const AdminSidebar = ({ onLogout }) => {
     },
     // ------------------------------------
 
-    {
-      to: "/help-center",
-      icon: <FaQuestionCircle />,
-      label: "View User Help Center",
-      target: "_blank",
-    },
+
     { to: "/admin/settings", icon: <FaCog />, label: "Settings" },
   ];
 
