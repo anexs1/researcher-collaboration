@@ -277,7 +277,11 @@ const Home = () => {
   }, [testimonials.length]);
 
   return (
-    <div className="bg-gray-50">
+    // Removed bg-gray-50 from the root div. Each section below defines its own background.
+    // If the page needs a default background for areas between sections (unlikely with this structure)
+    // or if the parent rendering Home doesn't provide one, this might need adjustment or
+    // ensuring all areas are covered by sections.
+    <div>
       {/* Hero Section */}
       <section className="relative bg-gradient-to-r from-blue-800 to-blue-600 text-white pt-24 pb-32 overflow-hidden">
         <div className="absolute inset-0 opacity-10 bg-[url('/pattern.svg')]"></div>{" "}
@@ -325,6 +329,8 @@ const Home = () => {
       </section>
 
       {/* Trusted By Section */}
+      {/* This section has -mt-16, pulling it up into the hero section's bottom padding area. */}
+      {/* Its background is bg-white. */}
       <motion.section
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -372,9 +378,8 @@ const Home = () => {
       </motion.section>
 
       {/* Features Section */}
+      {/* This section explicitly uses bg-gray-50. */}
       <section className="py-16 bg-gray-50">
-        {" "}
-        {/* Changed background for consistency */}
         <div className="container mx-auto px-6">
           <motion.div
             initial="hidden"
@@ -411,6 +416,7 @@ const Home = () => {
       </section>
 
       {/* --- NEW: Platform Impact at a Glance Section --- */}
+      {/* This section uses bg-white. */}
       <section className="py-16 bg-white">
         <div className="container mx-auto px-6">
           <motion.div
@@ -442,6 +448,7 @@ const Home = () => {
       {/* --- End of Platform Impact Section --- */}
 
       {/* Featured Collaborators Section */}
+      {/* This section explicitly uses bg-gray-50. */}
       <section className="py-16 bg-gray-50">
         <div className="container mx-auto px-6">
           <motion.div
@@ -468,6 +475,8 @@ const Home = () => {
         </div>
       </section>
 
+      {/* Testimonials Section */}
+      {/* This section uses its own gradient background. */}
       <section className="py-20 bg-gradient-to-br from-blue-50 to-white">
         <div className="container mx-auto px-6">
           <motion.div
@@ -557,6 +566,7 @@ const Home = () => {
       </section>
 
       {/* Footer */}
+      {/* Footer has its own bg-gray-900. */}
       <footer className="bg-gray-900 text-gray-400 py-12">
         <div className="container mx-auto px-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
