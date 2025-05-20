@@ -6,7 +6,7 @@ import Notifications from "./Notifications"; // Ensure this component exists and
 
 // --- SVG Icon for Logo/Brand ---
 const BrandIcon = ({
-  className = "h-8 w-auto text-sky-400 group-hover:text-sky-300 transition-colors group-hover:scale-105",
+  className = "h-8 w-auto text-teal-400 group-hover:text-teal-300 transition-all duration-300 group-hover:scale-105 group-focus-visible:ring-2 group-focus-visible:ring-teal-500 group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-slate-900 rounded-sm",
 }) => (
   <svg
     className={className}
@@ -93,8 +93,6 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
   const profileDropdownRef = useRef(null);
   const profileButtonRef = useRef(null);
 
-  // console.log("Navbar currentUser prop:", currentUser); // DEBUG: Check what Navbar receives
-
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
@@ -152,14 +150,14 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
     : [];
 
   const baseLinkClasses =
-    "relative px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 group flex items-center";
-  const activeLinkClass = "text-sky-300 font-semibold bg-white/10";
+    "relative px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 group flex items-center";
+  const activeLinkClass = "text-teal-400 font-semibold bg-slate-700/50";
   const inactiveLinkClass =
-    "text-slate-300 hover:text-sky-300 hover:bg-white/5";
+    "text-slate-300 hover:text-teal-300 hover:bg-slate-700/40";
   const getNavLinkClass = ({ isActive }) =>
     `${baseLinkClasses} ${
       isActive ? activeLinkClass : inactiveLinkClass
-    } after:content-[''] after:absolute after:left-1/2 after:right-1/2 after:bottom-0 after:h-0.5 after:bg-gradient-to-r after:from-sky-400 after:to-pink-500 after:transition-all after:duration-300 ${
+    } after:content-[''] after:absolute after:left-1/2 after:right-1/2 after:bottom-0 after:h-0.5 after:bg-gradient-to-r after:from-teal-500 after:to-cyan-500 after:transition-all after:duration-300 ${
       isActive
         ? "after:left-0 after:right-0"
         : "group-hover:after:left-[25%] group-hover:after:right-[25%] group-focus-visible:after:left-[25%] group-focus-visible:after:right-[25%]"
@@ -167,8 +165,8 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
   const mobileNavLinkClass = ({ isActive }) =>
     `block px-4 py-3 rounded-md text-base font-medium transition-colors flex items-center ${
       isActive
-        ? "bg-sky-600 text-white shadow-md"
-        : "text-slate-200 hover:bg-purple-700 hover:text-white"
+        ? "bg-teal-600 text-white shadow-lg"
+        : "text-slate-200 hover:bg-slate-700 hover:text-teal-300"
     }`;
 
   const toggleMobileMenu = () => setMobileMenuOpen((prev) => !prev);
@@ -218,7 +216,7 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
   };
 
   return (
-    <nav className="bg-gradient-to-r from-[#1a2a6c] via-[#b21f1f] to-[#fdbb2d] shadow-lg backdrop-blur-md bg-opacity-60 border-b border-white/10 sticky top-0 z-50">
+    <nav className="bg-gradient-to-br from-indigo-900 via-blue-950 to-slate-900 shadow-xl backdrop-blur-lg bg-opacity-80 border-b border-slate-700/50 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
@@ -226,7 +224,7 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
               <button
                 onClick={toggleMobileMenu}
                 type="button"
-                className="inline-flex items-center justify-center p-2 rounded-md text-slate-400 hover:text-white hover:bg-purple-700/50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-pink-500"
+                className="inline-flex items-center justify-center p-2 rounded-md text-slate-300 hover:text-slate-100 hover:bg-slate-700/70 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-teal-500"
                 aria-controls="mobile-menu"
                 aria-expanded={mobileMenuOpen}
               >
@@ -297,7 +295,7 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
               aria-label="Homepage"
             >
               <BrandIcon />
-              <span className="ml-2 text-xl font-bold text-slate-200 group-hover:text-sky-300 transition-colors">
+              <span className="ml-3 text-xl font-bold text-slate-100 group-hover:text-teal-300 transition-colors">
                 {/* Your Brand Name Here */}
               </span>
             </Link>
@@ -318,7 +316,7 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                       React.isValidElement(link.icon) &&
                       React.cloneElement(link.icon, {
                         className:
-                          `w-5 h-5 mr-1.5 group-hover:text-sky-300 transition-colors ${
+                          `w-5 h-5 mr-1.5 group-hover:text-teal-300 transition-colors ${
                             link.icon.props.className || ""
                           }`.trim(),
                       })}
@@ -329,7 +327,7 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
             </div>
 
             {mainNavLinks.length > 0 && (
-              <div className="hidden sm:block sm:ml-3 sm:mr-1 sm:border-l sm:border-purple-700/60 sm:h-6"></div>
+              <div className="hidden sm:block sm:ml-3 sm:mr-1 sm:border-l sm:border-slate-600/60 sm:h-6"></div>
             )}
 
             <div className="flex items-center ml-2">
@@ -341,7 +339,7 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                       <Notifications />{" "}
                     </div>
                   ) : process.env.NODE_ENV === "development" ? (
-                    <div className="mr-3 text-xs text-red-400">
+                    <div className="mr-3 text-xs text-yellow-400">
                       Notifications component missing.
                     </div>
                   ) : null}
@@ -351,13 +349,13 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                       ref={profileButtonRef}
                       type="button"
                       onClick={toggleProfileDropdown}
-                      className="flex text-sm bg-white/10 rounded-full focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 focus:ring-offset-slate-900 p-0.5 hover:ring-2 hover:ring-sky-400 transition-all"
+                      className="flex text-sm bg-slate-700/50 rounded-full focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 focus:ring-offset-slate-900 p-0.5 hover:ring-2 hover:ring-teal-400 transition-all"
                       id="user-menu-button"
                       aria-expanded={profileDropdownOpen}
                       aria-haspopup="true"
                       whileHover={{
                         scale: 1.05,
-                        boxShadow: "0px 0px 12px rgb(56, 189, 248, 0.7)",
+                        boxShadow: "0px 0px 12px rgb(20, 184, 166, 0.6)", // Teal shadow
                       }}
                       whileTap={{ scale: 0.95 }}
                     >
@@ -365,20 +363,19 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                       <img
                         className="h-8 w-8 rounded-full object-cover"
                         src={
-                          currentUser.profilePictureUrl || // Uses the actual URL if available
+                          currentUser.profilePictureUrl ||
                           `https://ui-avatars.com/api/?name=${encodeURIComponent(
                             currentUser.fullName || currentUser.username || "U"
-                          )}&background=6366f1&color=fff&size=128&font-size=0.5&bold=true`
+                          )}&background=0f766e&color=fff&size=128&font-size=0.5&bold=true` // Teal-700 background
                         }
                         alt={`${
                           currentUser.username || "User"
                         }'s profile picture`}
                         onError={(e) => {
-                          // Fallback if image fails to load
                           e.target.onerror = null;
                           e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
                             currentUser.fullName || currentUser.username || "U"
-                          )}&background=6366f1&color=fff&size=128&font-size=0.5&bold=true`;
+                          )}&background=0f766e&color=fff&size=128&font-size=0.5&bold=true`;
                         }}
                       />
                     </motion.button>
@@ -389,7 +386,7 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                           initial="hidden"
                           animate="visible"
                           exit="exit"
-                          className="absolute right-0 mt-2.5 w-64 origin-top-right rounded-lg bg-slate-800/95 backdrop-blur-sm py-1 shadow-2xl ring-1 ring-purple-700/50 focus:outline-none z-30 border border-purple-700/30"
+                          className="absolute right-0 mt-2.5 w-64 origin-top-right rounded-lg bg-slate-800/90 backdrop-blur-md py-1 shadow-2xl ring-1 ring-slate-700/60 focus:outline-none z-30 border border-slate-700/40"
                           role="menu"
                           aria-orientation="vertical"
                           aria-labelledby="user-menu-button"
@@ -437,8 +434,8 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                                   className={({ isActive }) =>
                                     `${itemBaseClass} ${
                                       isActive
-                                        ? "bg-sky-500 text-white font-semibold shadow-md"
-                                        : "text-slate-300 hover:bg-sky-600/70 hover:text-white focus-visible:bg-sky-600/70 focus-visible:text-white"
+                                        ? "bg-teal-600 text-white font-semibold shadow-md"
+                                        : "text-slate-300 hover:bg-teal-700/70 hover:text-slate-100 focus-visible:bg-teal-700/70 focus-visible:text-slate-100"
                                     }`
                                   }
                                 >
@@ -447,8 +444,8 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                               );
                             } else if (item.type === "button") {
                               const itemSpecificClass = item.isDestructive
-                                ? "text-rose-400 hover:bg-rose-600/70 hover:text-white focus-visible:bg-rose-600/70 focus-visible:text-white"
-                                : "text-slate-300 hover:bg-sky-600/70 hover:text-white focus-visible:bg-sky-600/70 focus-visible:text-white";
+                                ? "text-rose-400 hover:bg-rose-500/60 hover:text-rose-100 focus-visible:bg-rose-500/60 focus-visible:text-rose-100"
+                                : "text-slate-300 hover:bg-teal-700/70 hover:text-slate-100 focus-visible:bg-teal-700/70 focus-visible:text-slate-100";
                               return (
                                 <button
                                   onClick={item.action}
@@ -473,13 +470,13 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                 <div className="hidden sm:flex sm:items-center sm:space-x-2 ml-3">
                   <NavLink
                     to="/login"
-                    className={`${baseLinkClasses} ${inactiveLinkClass} hover:!bg-purple-600/30`}
+                    className={`${baseLinkClasses} ${inactiveLinkClass} hover:!bg-slate-700/50 hover:text-teal-400`}
                   >
                     Log In
                   </NavLink>
                   <NavLink
                     to="/signup"
-                    className={`${baseLinkClasses} bg-gradient-to-r from-pink-500 to-rose-500 text-white hover:from-pink-600 hover:to-rose-600 active:scale-95 shadow-lg hover:shadow-pink-500/40`}
+                    className={`${baseLinkClasses} bg-gradient-to-r from-teal-500 to-cyan-600 text-white hover:from-teal-600 hover:to-cyan-700 active:scale-95 shadow-lg hover:shadow-teal-500/40`}
                   >
                     Sign Up
                   </NavLink>
@@ -498,7 +495,7 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
             initial="closed"
             animate="open"
             exit="closed"
-            className="sm:hidden absolute inset-x-0 top-16 bg-slate-900/95 shadow-xl py-3 z-40 border-t border-purple-800/60 backdrop-blur-md overflow-y-auto max-h-[calc(100vh-4rem)]"
+            className="sm:hidden absolute inset-x-0 top-16 bg-slate-800/95 shadow-2xl py-3 z-40 border-t border-slate-700/60 backdrop-blur-lg overflow-y-auto max-h-[calc(100vh-4rem)]"
             id="mobile-menu"
           >
             <div className="space-y-1 px-3 pt-2 pb-3">
@@ -521,44 +518,43 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
               ))}
             </div>
             {!isLoggedIn && (
-              <div className="border-t border-purple-700/50 pt-4 pb-3 px-3 space-y-2">
+              <div className="border-t border-slate-700/50 pt-4 pb-3 px-3 space-y-2">
                 <NavLink
                   to="/login"
                   onClick={closeMobileMenu}
-                  className={`block w-full text-center ${baseLinkClasses} ${inactiveLinkClass} hover:!bg-purple-700`}
+                  className={`block w-full text-center ${baseLinkClasses} ${inactiveLinkClass} hover:!bg-slate-700 hover:text-teal-300`}
                 >
                   Log In
                 </NavLink>
                 <NavLink
                   to="/signup"
                   onClick={closeMobileMenu}
-                  className={`block text-center ${baseLinkClasses} bg-gradient-to-r from-pink-500 to-rose-500 text-white hover:from-pink-600 hover:to-rose-600 active:scale-95 shadow-md`}
+                  className={`block text-center ${baseLinkClasses} bg-gradient-to-r from-teal-500 to-cyan-600 text-white hover:from-teal-600 hover:to-cyan-700 active:scale-95 shadow-md`}
                 >
                   Sign Up
                 </NavLink>
               </div>
             )}
             {isLoggedIn && currentUser && (
-              <div className="border-t border-purple-700/50 pt-4 pb-3 px-3">
+              <div className="border-t border-slate-700/50 pt-4 pb-3 px-3">
                 <div className="flex items-center px-2 mb-3">
                   <div className="flex-shrink-0">
                     <img
-                      className="h-10 w-10 rounded-full object-cover ring-2 ring-purple-500/70"
+                      className="h-10 w-10 rounded-full object-cover ring-2 ring-teal-500/60"
                       src={
-                        currentUser.profilePictureUrl || // Uses the actual URL if available
+                        currentUser.profilePictureUrl ||
                         `https://ui-avatars.com/api/?name=${encodeURIComponent(
                           currentUser.fullName || currentUser.username || "U"
-                        )}&background=818cf8&color=fff&size=128`
+                        )}&background=0f766e&color=fff&size=128` // Teal-700 background
                       }
                       alt={`${
                         currentUser.username || "User"
                       }'s profile picture`}
                       onError={(e) => {
-                        // Fallback if image fails to load
                         e.target.onerror = null;
                         e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
                           currentUser.fullName || currentUser.username || "U"
-                        )}&background=818cf8&color=fff&size=128`;
+                        )}&background=0f766e&color=fff&size=128`;
                       }}
                     />
                   </div>
@@ -589,8 +585,8 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                             className={({ isActive }) =>
                               `${mobileItemBaseClass} ${
                                 isActive
-                                  ? "bg-sky-600 text-white"
-                                  : "text-slate-200 hover:bg-purple-700 hover:text-white"
+                                  ? "bg-teal-600 text-white"
+                                  : "text-slate-200 hover:bg-slate-700 hover:text-teal-300"
                               }`
                             }
                             onClick={closeMobileMenu}
@@ -600,8 +596,8 @@ const Navbar = ({ isLoggedIn, currentUser, onLogout }) => {
                         );
                       } else if (item.type === "button") {
                         const mobileItemSpecificClass = item.isDestructive
-                          ? "text-rose-400 hover:bg-rose-600/80 hover:text-white"
-                          : "text-slate-200 hover:bg-purple-700 hover:text-white";
+                          ? "text-rose-400 hover:bg-rose-500/70 hover:text-rose-100"
+                          : "text-slate-200 hover:bg-slate-700 hover:text-teal-300";
                         return (
                           <button
                             key={`mobile-profile-button-${item.label || index}`}
@@ -634,7 +630,7 @@ Navbar.propTypes = {
     fullName: PropTypes.string,
     username: PropTypes.string,
     email: PropTypes.string,
-    profilePictureUrl: PropTypes.string, // This is where the URL comes from
+    profilePictureUrl: PropTypes.string,
   }),
   onLogout: PropTypes.func.isRequired,
 };

@@ -8,7 +8,7 @@ import {
   FaChartBar,
   FaUserClock,
   FaSignOutAlt,
-  FaComments, // Icon for Contact Submissions (or choose another)
+  FaComments, 
   FaQuestionCircle,
 } from "react-icons/fa";
 
@@ -23,11 +23,9 @@ const AdminSidebar = ({ onLogout }) => {
     },
     { to: "/admin/chat", icon: <FaComments />, label: "Platform Chat" }, // Assuming this is different
     { to: "/admin/reports", icon: <FaChartBar />, label: "Reports" },
-
-    // +++ CONTACT SUBMISSIONS MANAGEMENT LINK +++
     {
-      to: "/admin/contact-submissions", // New route for managing submissions
-      icon: <FaComments style={{ transform: "scaleX(-1)" }} />, // Example: Flipped chat icon or a dedicated "envelope" icon
+      to: "/admin/contact-submissions", 
+      icon: <FaComments style={{ transform: "scaleX(-1)" }} />, 
       label: "Support Inbox",
     },
     // ------------------------------------
