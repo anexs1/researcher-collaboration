@@ -1,4 +1,4 @@
-// App.jsx
+
 import React, {
   useEffect,
   useState,
@@ -17,18 +17,18 @@ import {
 } from "react-router-dom";
 import { io } from "socket.io-client";
 import { motion, AnimatePresence } from "framer-motion";
-import "./index.css"; // This should contain your Tailwind directives
+import "./index.css"; 
 
 import axios from "axios";
 
-// --- Context Imports ---
+
 import { useNotifications } from "./context/NotificationContext";
 
-// --- Layout Imports ---
+
 import AdminLayout from "./Layout/AdminLayout";
 import UserLayout from "./Layout/UserLayout";
 
-// --- Component Imports ---
+
 import Navbar from "./Component/Navbar";
 import NormalizeURL from "./Component/NormalizeURL";
 import AcademicSignupForm from "./Component/AcademicSignupForm";
@@ -69,10 +69,9 @@ import AdminChatPage from "./Page/Admin/AdminChatPage";
 import AdminPublicationManagementPage from "./Page/Admin/AdminPublicationManagementPage";
 import AdminSinglePublicationDetailPage from "./Page/Admin/AdminSinglePublicationDetailPage";
 import AdminProjectListPage from "./Page/Admin/AdminProjectListPage";
-import ProjectDetailPage from "./Page/ProjectDetailPage"; // <--- ENSURE THIS IS IMPORTED
+import ProjectDetailPage from "./Page/ProjectDetailPage"; 
 import AdminContactSubmissionsPage from "./Page/Admin/AdminContactSubmissionsPage";
 
-// --- Slate JS related imports (Needed if DocumentEditorComponent is defined in this file) ---
 import { Slate, Editable, withReact } from "slate-react";
 import { createEditor } from "slate";
 
@@ -308,7 +307,7 @@ const DocumentEditorComponent = ({ documentId, currentUser }) => {
   );
 };
 
-// +++ DOCUMENT PAGE WRAPPER +++
+
 const DocumentPageWrapper = ({ currentUser }) => {
   const [currentDocumentId, setCurrentDocumentId] = useState(null);
   const [newDocTitle, setNewDocTitle] = useState("");
@@ -409,11 +408,7 @@ const DocumentPageWrapper = ({ currentUser }) => {
   return (
     <div className="container mx-auto p-4 md:p-8">
       <div className="bg-white p-6 rounded-lg shadow mb-8">
-        {/* Document related UI - this part seems incomplete in your original snippet
-           For brevity, I'm keeping it as is, but you'd normally have
-           a list of documents here and a way to select currentDocumentId,
-           and the DocumentEditorComponent would be rendered here too.
-        */}
+
         <p className="text-gray-600">
           Create, manage, and collaborate on your research documents.
         </p>
@@ -425,7 +420,7 @@ const DocumentPageWrapper = ({ currentUser }) => {
             placeholder="New document title..."
             className="flex-grow px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
           />
-          {/* Add a button here to call handleCreateDocument */}
+
            <button
             onClick={handleCreateDocument}
             className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
@@ -455,7 +450,7 @@ const DocumentPageWrapper = ({ currentUser }) => {
   );
 };
 
-// --- Main App Component ---
+
 function App() {
   const { user: currentUser, token, login, logout } = useAuth();
   const [isAdmin, setIsAdmin] = useState(null);
@@ -550,12 +545,12 @@ function App() {
             path="/projects" // General projects listing page
             element={<Projects currentUser={currentUser} />}
           />
-          {/* VVVVVV --- THIS IS THE KEY ROUTE FOR PROJECT DETAILS --- VVVVVV */}
+
           <Route
             path="/projects/:projectId"
             element={<ProjectDetailPage currentUser={currentUser} />}
           />
-          {/* ^^^^^^ --- THIS IS THE KEY ROUTE FOR PROJECT DETAILS --- ^^^^^^ */}
+
           <Route path="/help-center" element={<HelpCenterPage />} />
 
           {/* --- Auth Routes --- */}

@@ -1,19 +1,14 @@
-// src/Page/Admin/AdminSettingsPage.jsx
-// VERSION WITHOUT BACKEND INTERACTION FOR SETTINGS
 
 import React, { useState, useEffect, useCallback } from "react";
-// Removed axios as it's no longer needed for this page's core functionality
-// Removed useNavigate if not used for other actions
-// Removed useConfirm hook
+
 
 import AdminPageHeader from "../../Component/Admin/AdminPageHeader"; // Verify path
-import LoadingSpinner from "../../Component/Common/LoadingSpinner"; // Keep for potential future use? (Optional)
-import ErrorMessage from "../../Component/Common/ErrorMessage"; // Keep for potential future use? (Optional)
-import Notification from "../../Component/Common/Notification"; // Keep for potential future use? (Optional)
-import { motion, AnimatePresence } from "framer-motion"; // Keep for animations
+import LoadingSpinner from "../../Component/Common/LoadingSpinner"; 
+import ErrorMessage from "../../Component/Common/ErrorMessage"; 
+import Notification from "../../Component/Common/Notification"; 
+import { motion, AnimatePresence } from "framer-motion"; 
 
-// NOTE: API_BASE_URL is no longer needed for settings operations on this page
-// const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 const AdminSettingsPage = () => {
   // Default settings structure - these are now the *only* source

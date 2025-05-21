@@ -22,16 +22,13 @@ function TutorialItem({ item }) {
         <h3 className="text-xl sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-sky-600 to-blue-700 mb-3">
           {item.title}
         </h3>
-        {/* Using @tailwindcss/typography for nice default text styling */}
         <div className="prose prose-slate max-w-none text-slate-600 leading-relaxed">
-          {/* If content is markdown, parse it. If it's HTML, use dangerouslySetInnerHTML with sanitization. */}
           <p>{item.content}</p>
         </div>
       </div>
       {embedUrl && (
         <div className="bg-slate-100 p-1">
           {" "}
-          {/* Optional: slight border/padding around video */}
           <div className="aspect-w-16 aspect-h-9">
             <iframe
               src={embedUrl}

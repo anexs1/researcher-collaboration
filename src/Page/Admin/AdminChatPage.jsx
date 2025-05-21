@@ -114,8 +114,7 @@ function AdminProjectChatViewer({ currentUser }) {
           console.log("ADMIN: Found projects directly in response.data.data (Array)");
           projectsArray = response.data.data;
         } else if (response.data.data && typeof response.data.data === 'object') {
-          // Defensive check: if response.data.data is an object,
-          // try to find an array within it (e.g., response.data.data.projects)
+
           console.warn("ADMIN: response.data.data is an OBJECT, not an Array. Inspecting its keys...");
           const keysInDataObject = Object.keys(response.data.data);
           console.log("ADMIN: Keys in response.data.data object:", keysInDataObject);
@@ -127,10 +126,7 @@ function AdminProjectChatViewer({ currentUser }) {
             }
           }
           if (!projectsArray) {
-             // Common case: if data is an object, but pagination is sibling to data array.
-             // So, if response.data looks like { success: true, data: [...], pagination: {...} }
-             // This case is already handled by Array.isArray(response.data.data) directly.
-             // This else-if is for cases like { success: true, data: { projects: [...], otherInfo: "..." } }
+    
             console.error("ADMIN: response.data.data was an object, but no array found within its properties.");
           }
         }

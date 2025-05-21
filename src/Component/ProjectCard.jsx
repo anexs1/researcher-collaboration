@@ -18,7 +18,6 @@ const ProjectCard = ({ project }) => {
     <div className="bg-white rounded-xl shadow-lg overflow-hidden flex flex-col h-full hover:shadow-2xl transition-shadow duration-300 ease-in-out">
       <Link to={`/projects/${project.id}`} className="block aspect-video_">
         {" "}
-        {/* aspect-video might be too restrictive if images vary */}
         <img
           src={projectImageUrl}
           alt={project.title || "Project Image"}

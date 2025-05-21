@@ -125,11 +125,10 @@ const StatisticCard = ({ icon, value, label, color }) => (
     </p>
   </motion.div>
 );
-// --- End of StatisticCard Component ---
 
 const Home = () => {
   const navigate = useNavigate();
-  // const [searchQuery, setSearchQuery] = useState(""); // State remains, though input field removed from this component
+
   const [activeTestimonial, setActiveTestimonial] = useState(0);
 
   const features = [
@@ -277,10 +276,7 @@ const Home = () => {
   }, [testimonials.length]);
 
   return (
-    // Removed bg-gray-50 from the root div. Each section below defines its own background.
-    // If the page needs a default background for areas between sections (unlikely with this structure)
-    // or if the parent rendering Home doesn't provide one, this might need adjustment or
-    // ensuring all areas are covered by sections.
+
     <div>
       {/* Hero Section */}
       <section className="relative bg-gradient-to-r from-blue-800 to-blue-600 text-white pt-24 pb-32 overflow-hidden">
@@ -328,9 +324,7 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Trusted By Section */}
-      {/* This section has -mt-16, pulling it up into the hero section's bottom padding area. */}
-      {/* Its background is bg-white. */}
+
       <motion.section
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -342,7 +336,7 @@ const Home = () => {
             TRUSTED BY LEADING INSTITUTIONS
           </p>
           <div className="flex flex-wrap justify-center items-center gap-x-8 gap-y-4 md:gap-x-12 opacity-70">
-            {/* Replace with actual logos if available */}
+
             <img
               src="/logos/aau-logo.png"
               alt="AAU Logo"
@@ -377,8 +371,7 @@ const Home = () => {
         </div>
       </motion.section>
 
-      {/* Features Section */}
-      {/* This section explicitly uses bg-gray-50. */}
+
       <section className="py-16 bg-gray-50">
         <div className="container mx-auto px-6">
           <motion.div
@@ -415,8 +408,6 @@ const Home = () => {
         </div>
       </section>
 
-      {/* --- NEW: Platform Impact at a Glance Section --- */}
-      {/* This section uses bg-white. */}
       <section className="py-16 bg-white">
         <div className="container mx-auto px-6">
           <motion.div
@@ -445,10 +436,7 @@ const Home = () => {
           </motion.div>
         </div>
       </section>
-      {/* --- End of Platform Impact Section --- */}
 
-      {/* Featured Collaborators Section */}
-      {/* This section explicitly uses bg-gray-50. */}
       <section className="py-16 bg-gray-50">
         <div className="container mx-auto px-6">
           <motion.div
@@ -572,7 +560,7 @@ const Home = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
             <div>
               <h3 className="text-lg text-white font-semibold mb-4">
-                Researcher Portal
+                Researcher  collaboration Portal
               </h3>
               <p className="text-sm leading-relaxed">
                 Connecting innovators across Ethiopia and beyond to foster
@@ -614,9 +602,7 @@ const Home = () => {
               </ul>
             </div>
             <div>
-              <h3 className="text-lg text-white font-semibold mb-4">
-                Platform
-              </h3>
+   
               <ul className="space-y-2 text-sm">
                 <li>
                   <Link
@@ -643,20 +629,11 @@ const Home = () => {
                     Terms of Service
                   </Link>
                 </li>
-                <li>
-                  <Link
-                    to="/privacy"
-                    className="hover:text-white transition-colors"
-                  >
-                    Privacy Policy
-                  </Link>
-                </li>
+    
               </ul>
             </div>
             <div>
-              <h3 className="text-lg text-white font-semibold mb-4">
-                Connect With Us
-              </h3>
+
               <div className="flex space-x-4 mb-4">
                 <a
                   href="https://twitter.com"

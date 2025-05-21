@@ -316,8 +316,7 @@ const AdminProjectListPage = () => {
         </span>
       ),
     },
-    // Add more project-specific columns like 'memberCount', 'lastActivity', etc.
-    // { key: "memberCount", label: "Members", sortable: true, render: (proj) => <span className="text-sm text-gray-600">{proj.members?.length ?? 0}</span> },
+  
     {
       key: "createdAt",
       label: "Created",

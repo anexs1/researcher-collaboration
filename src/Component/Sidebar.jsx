@@ -29,15 +29,13 @@ const commonLinkClasses =
 
 const activeLinkClasses = "bg-indigo-600 text-white font-semibold shadow-sm";
 
-// UPDATED: Inactive link style with LIGHT BLUE hover background
 const inactiveLinkClasses =
   "text-gray-700 hover:bg-blue-600 hover:text-white-700"; // Light blue hover BG
 
-// UPDATED: Icon styles with hover color matching text hover color
 const iconClasses =
   "mr-3 h-5 w-5 flex-shrink-0 text-gray-400 group-hover:text-white-700 transition-colors"; // Icon turns indigo on hover
 
-const activeIconClasses = "text-white"; // Icon is white when link is active
+const activeIconClasses = "text-white"; 
 
 function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
   const getInitials = (user) => {
@@ -63,11 +61,8 @@ function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
     "Researcher";
 
   return (
-    // UPDATED: Main Sidebar Container background to bg-slate-100
     <div className="bg-slate-100 border-r border-gray-200 h-screen w-64 flex flex-col shadow-lg flex-shrink-0 sticky top-0 overflow-y-auto">
-      {/* Profile Header Section */}
       {isLoggedIn && currentUser && (
-        // Using bg-slate-100 (same as sidebar) for profile header bg, border-b provides separation
         <div className="p-4 border-b border-gray-200 flex-shrink-0">
           <Link to="/profile" className="block group text-center">
             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full mx-auto mb-2 sm:mb-3 flex items-center justify-center bg-gradient-to-br from-indigo-200 to-purple-200 text-indigo-700 overflow-hidden border-2 border-white shadow-md group-hover:scale-105 transform transition-transform duration-200 relative">
@@ -148,9 +143,7 @@ function Sidebar({ isLoggedIn, handleLogout, currentUser }) {
         </ul>
       </nav>
 
-      {/* Settings/Logout Section */}
       {isLoggedIn && (
-        // Using bg-slate-100 (same as sidebar) for footer bg, border-t provides separation
         <div className="mt-auto p-3 border-t border-gray-200 flex-shrink-0">
           <Link
             to="/settings/account"
