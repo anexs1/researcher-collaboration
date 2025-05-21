@@ -3,11 +3,11 @@ import asyncHandler from "express-async-handler";
 import db from "../models/index.js";
 import { Op } from "sequelize";
 import fs from "fs"; // For file system operations like unlinking on error
-import path from "path"; // Often useful, though not strictly for fileUrl here
-
+import path from "path";
+import { getIo } from "../socketManager.js";
 const { User, Project, Member, Message } = db;
 
-// --- Helper: Check if user is member of a project ---
+// --- Helper: Check if user is member of a project (for non-admin functions) ---
 const isUserMemberOfProject = async (userId, projectId) => {
   if (!userId || !projectId || !Project || !Member) {
     console.error(
@@ -40,16 +40,20 @@ const isUserMemberOfProject = async (userId, projectId) => {
   }
 };
 
-// --- getProjectChatList function (Using your existing logic) ---
+// --- Helper: Get Socket.IO room name for a project ---
+const getRoomName = (projectId) => (projectId ? `project-${projectId}` : null);
+
+// --- getProjectChatList function (Your existing logic) ---
 export const getProjectChatList = asyncHandler(async (req, res) => {
   const currentUserId = req.user?.id;
   if (!currentUserId) {
     res.status(401);
     throw new Error("Authentication required.");
   }
-  if (!Project || !Member) {
+  // Ensure all necessary models are available
+  if (!Project || !Member || !Message || !User) {
     console.error(
-      "[MessagingController] Server Config Error: Project/Member model not loaded for getProjectChatList."
+      "[MessagingController] Server Config Error: Project, Member, Message, or User model not loaded for getProjectChatList."
     );
     res.status(500);
     throw new Error("Server configuration error regarding database models.");
@@ -95,22 +99,26 @@ export const getProjectChatList = asyncHandler(async (req, res) => {
             "fileName",
             "senderId",
           ],
-          include: [{ model: User, as: "sender", attributes: ["username"] }],
+          include: [{ model: User, as: "sender", attributes: ["username"] }], // Ensure alias 'sender' is correct
         });
 
         let lastMessageSnippet = "No messages yet...";
+        let lastMessageSenderUsername = null;
         if (lastMessage) {
+          lastMessageSenderUsername =
+            lastMessage.sender?.username || `User ${lastMessage.senderId}`;
           if (lastMessage.messageType === "file") {
             lastMessageSnippet = `File: ${
               lastMessage.fileName || "attachment"
             }`;
           } else {
-            lastMessageSnippet = lastMessage.content;
+            lastMessageSnippet = lastMessage.content || ""; // Handle null content
           }
-          if (lastMessage.senderId !== currentUserId && lastMessage.sender) {
-            lastMessageSnippet = `${lastMessage.sender.username}: ${lastMessageSnippet}`;
-          } else if (lastMessage.senderId === currentUserId) {
+          if (lastMessage.senderId === currentUserId) {
             lastMessageSnippet = `You: ${lastMessageSnippet}`;
+          } else if (lastMessage.sender) {
+            // Only prepend if sender info exists
+            lastMessageSnippet = `${lastMessageSenderUsername}: ${lastMessageSnippet}`;
           }
         }
 
@@ -122,12 +130,23 @@ export const getProjectChatList = asyncHandler(async (req, res) => {
           projectName: project.title,
           lastMessageSnippet:
             lastMessageSnippet.substring(0, 50) +
-            (lastMessageSnippet.length > 50 ? "..." : ""), // Truncate snippet
+            (lastMessageSnippet.length > 50 ? "..." : ""),
           lastMessageAt: lastMessage ? lastMessage.createdAt : null,
+          lastMessageSenderUsername: lastMessage
+            ? lastMessageSenderUsername
+            : null,
           unreadCount: unreadCount,
         };
       })
     );
+    // Sort by lastMessageAt descending, projects with no messages last
+    projectChatList.sort((a, b) => {
+      if (a.lastMessageAt && b.lastMessageAt)
+        return new Date(b.lastMessageAt) - new Date(a.lastMessageAt);
+      if (a.lastMessageAt) return -1;
+      if (b.lastMessageAt) return 1;
+      return (a.projectName || "").localeCompare(b.projectName || ""); // Fallback sort by name
+    });
 
     res.status(200).json({ success: true, data: projectChatList });
   } catch (error) {
@@ -145,7 +164,7 @@ export const getProjectChatList = asyncHandler(async (req, res) => {
   }
 });
 
-// --- getProjectChatHistory function (Using your existing logic) ---
+// --- getProjectChatHistory function (Your existing logic, with pagination and sender fallback) ---
 export const getProjectChatHistory = asyncHandler(async (req, res) => {
   const currentUserId = req.user?.id;
   const projectIdParam = req.params.projectId;
@@ -174,28 +193,57 @@ export const getProjectChatHistory = asyncHandler(async (req, res) => {
       );
     }
 
-    const limit = parseInt(req.query.limit, 10) || 50;
-    const offset = parseInt(req.query.offset, 10) || 0;
+    const { page = 1, limit = 50 } = req.query; // Use page for more standard pagination
+    const parsedPage = parseInt(page, 10);
+    const parsedLimit = parseInt(limit, 10);
 
-    if (limit <= 0 || offset < 0) {
+    if (
+      isNaN(parsedPage) ||
+      isNaN(parsedLimit) ||
+      parsedLimit <= 0 ||
+      parsedPage <= 0
+    ) {
       res.status(400);
-      throw new Error("Invalid pagination parameters (limit/offset).");
+      throw new Error("Invalid pagination parameters.");
     }
+    const offset = (parsedPage - 1) * parsedLimit;
 
-    const messages = await Message.findAll({
+    const { count, rows: messages } = await Message.findAndCountAll({
       where: { projectId: projectId },
       include: [
         {
           model: User,
           as: "sender",
           attributes: ["id", "username", "profilePictureUrl"],
+          required: false, // Keep false in case sender user was deleted
         },
       ],
-      order: [["createdAt", "ASC"]],
-      limit: limit,
+      order: [["createdAt", "ASC"]], // Chat history usually ASC
+      limit: parsedLimit,
       offset: offset,
+      distinct: true,
     });
-    res.status(200).json({ success: true, data: messages });
+
+    const formattedMessages = messages.map((msgInstance) => {
+      const msg = msgInstance.toJSON();
+      if (!msg.sender) {
+        // Handle case where sender might be null (e.g., user deleted)
+        msg.sender = {
+          id: msg.senderId,
+          username: `User ${msg.senderId || "Unknown"}`,
+          profilePictureUrl: null,
+        };
+      }
+      return msg;
+    });
+
+    res.status(200).json({
+      success: true,
+      messages: formattedMessages, // Frontend expects 'messages' for chat history
+      currentPage: parsedPage,
+      totalPages: Math.ceil(count / parsedLimit),
+      count: count,
+    });
   } catch (error) {
     console.error(
       `[MessagingController] Error in getProjectChatHistory for project ${projectId}, user ${currentUserId}:`,
@@ -213,9 +261,8 @@ export const getProjectChatHistory = asyncHandler(async (req, res) => {
   }
 });
 
-// --- File Upload Controller ---
+// --- File Upload Controller (Your existing logic) ---
 export const uploadProjectFile = asyncHandler(async (req, res, next) => {
-  // Added next for cleaner error passing
   const currentUserId = req.user?.id;
   const projectIdParam = req.params.projectId;
 
@@ -273,7 +320,7 @@ export const uploadProjectFile = asyncHandler(async (req, res, next) => {
     }
 
     const file = req.file;
-    const fileUrl = `/uploads/project_files/${file.filename}`;
+    const fileUrl = `/uploads/project_files/${file.filename}`; // Ensure this path is served statically
 
     console.log(
       `[MessagingController] File processed: ${file.originalname}, Saved as: ${file.filename}, URL: ${fileUrl} for project ${projectId}`
@@ -290,7 +337,6 @@ export const uploadProjectFile = asyncHandler(async (req, res, next) => {
       },
     });
   } catch (error) {
-    // Catch errors from isUserMemberOfProject or other async operations
     console.error(
       "[MessagingController] Error during uploadProjectFile processing:",
       error
@@ -305,7 +351,151 @@ export const uploadProjectFile = asyncHandler(async (req, res, next) => {
         );
       }
     }
-    // Pass error to the global error handler
     next(Object.assign(error, { status: error.status || 500 }));
   }
+});
+
+// --- ADMIN-SPECIFIC MESSAGING FUNCTIONS ---
+
+/**
+ * @desc    Admin: Get messages for a specific project
+ * @route   GET /api/admin-messages/project/:projectId (This route needs to be defined in your admin routes)
+ * @access  Private (Admin)
+ */
+export const adminGetProjectMessages = asyncHandler(async (req, res) => {
+  const projectId = req.params.projectId;
+  const { page = 1, limit = 50 } = req.query;
+  // Admin role is assumed to be checked by `isAdmin` middleware
+
+  if (!projectId) {
+    res.status(400);
+    throw new Error("Project ID is required.");
+  }
+
+  const parsedPage = parseInt(page, 10);
+  const parsedLimit = parseInt(limit, 10);
+  const offset = (parsedPage - 1) * parsedLimit;
+
+  if (
+    isNaN(parsedPage) ||
+    isNaN(parsedLimit) ||
+    parsedLimit <= 0 ||
+    parsedPage <= 0
+  ) {
+    res.status(400);
+    throw new Error("Invalid pagination parameters.");
+  }
+
+  try {
+    const { count, rows: messages } = await Message.findAndCountAll({
+      where: { projectId: projectId },
+      include: [
+        {
+          model: User,
+          as: "sender", // This 'as' alias must match your Message model association
+          attributes: ["id", "username", "profilePictureUrl"],
+          required: false, // false to keep messages even if sender user is deleted
+        },
+      ],
+      order: [["createdAt", "ASC"]],
+      limit: parsedLimit,
+      offset: offset,
+      distinct: true,
+    });
+
+    const formattedMessages = messages.map((msgInstance) => {
+      const msg = msgInstance.toJSON();
+      if (!msg.sender) {
+        // Handle case where sender might be null
+        msg.sender = {
+          id: msg.senderId,
+          username: `User ${msg.senderId || "Unknown"}`,
+          profilePictureUrl: null,
+        };
+      }
+      return msg;
+    });
+
+    res.status(200).json({
+      success: true,
+      messages: formattedMessages, // Frontend AdminProjectChatViewer expects 'messages'
+      currentPage: parsedPage,
+      totalPages: Math.ceil(count / parsedLimit),
+      count: count,
+    });
+  } catch (error) {
+    console.error(
+      `ADMIN MSG CTRL: Error fetching messages for project ${projectId}:`,
+      error
+    );
+    res.status(500);
+    throw new Error(
+      process.env.NODE_ENV === "development"
+        ? error.message
+        : "Server error: Could not fetch project messages."
+    );
+  }
+});
+
+/**
+ * @desc    Admin: Delete a message
+ * @route   DELETE /api/admin-messages/:messageId (This route needs to be defined in your admin routes)
+ * @access  Private (Admin)
+ */
+export const adminDeleteMessage = asyncHandler(async (req, res) => {
+  const messageId = req.params.messageId;
+  const adminUser = req.user; // From 'protect' and 'isAdmin' middleware
+
+  // Admin role is assumed to be checked by `isAdmin` middleware.
+  // `protect` ensures req.user exists.
+  if (!adminUser || !adminUser.id) {
+    res.status(401);
+    throw new Error("Not authorized or user information missing.");
+  }
+  console.log(
+    `ADMIN MSG CTRL: Admin ${adminUser.id} (Role: ${adminUser.role}) attempting to delete message ${messageId}`
+  );
+
+  const message = await Message.findByPk(messageId);
+
+  if (!message) {
+    res.status(404);
+    throw new Error("Message not found.");
+  }
+
+  const projectId = message.projectId; // Get projectId BEFORE destroying the message
+
+  await message.destroy(); // Deletes the message from the database
+
+  console.log(
+    `ADMIN MSG CTRL: Message ${messageId} (Project ID: ${projectId}) deleted by Admin ${adminUser.id}.`
+  );
+
+  const io = getIo(); // Get the shared io instance from socketManager.js
+  if (io && projectId) {
+    const roomName = getRoomName(projectId);
+    if (roomName) {
+      io.to(roomName).emit("messageDeleted", {
+        messageId: messageId,
+        projectId: projectId,
+        deletedBy: adminUser.id,
+      });
+      console.log(
+        `ADMIN MSG CTRL: Emitted 'messageDeleted' to room ${roomName} for message ${messageId}`
+      );
+    } else {
+      console.warn(
+        `ADMIN MSG CTRL: Could not determine room name for project ID ${projectId}. Socket event not sent.`
+      );
+    }
+  } else {
+    if (!io) console.warn("ADMIN MSG CTRL: Socket.io instance not available.");
+    if (!projectId)
+      console.warn("ADMIN MSG CTRL: ProjectId not available from message.");
+    console.warn("ADMIN MSG CTRL: Cannot emit 'messageDeleted'.");
+  }
+
+  res
+    .status(200)
+    .json({ success: true, message: "Message deleted successfully by admin." });
 });
