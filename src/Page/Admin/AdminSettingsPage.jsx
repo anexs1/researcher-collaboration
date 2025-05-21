@@ -22,8 +22,6 @@ const AdminSettingsPage = () => {
     themeColor: "#3b82f6", // Default blue
   };
 
-  // --- State ---
-  // Settings state now initialized directly with defaults
   const [settings, setSettings] = useState({ ...defaultSettingsState });
   // Removed initialSettings, loading, saving states
   const [error, setError] = useState(null); // Kept for potential future non-API errors
