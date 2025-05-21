@@ -789,3 +789,57 @@ textarea.form-input {
 .form-input {
   @apply block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:bg-gray-100;
 }
+
+@layer base {
+  :root {
+    --primary-theme-color: #4f46e5; /* Default Indigo, will be updated by JS */
+  }
+  /* Example for dark mode based on data attribute */
+  body[data-theme-mode="dark"] {
+    background-color: #1f2937; /* Dark gray */
+    color: #f3f4f6; /* Light gray text */
+  }
+  body[data-theme-mode="dark"] .bg-white {
+    background-color: #374151; /* Darker cards */
+    border-color: #4b5563;
+  }
+  body[data-theme-mode="dark"] .text-gray-900 { color: #f9fafb; }
+  body[data-theme-mode="dark"] .text-gray-800 { color: #f3f4f6; }
+  body[data-theme-mode="dark"] .text-gray-700 { color: #d1d5db; }
+  body[data-theme-mode="dark"] .text-gray-600 { color: #9ca3af; }
+  body[data-theme-mode="dark"] .text-gray-500 { color: #6b7280; }
+  body[data-theme-mode="dark"] .border-gray-200 { border-color: #4b5563; }
+  body[data-theme-mode="dark"] .border-gray-300 { border-color: #6b7280; }
+  body[data-theme-mode="dark"] .bg-gray-50 { background-color: #111827; } /* Darkest page bg */
+  body[data-theme-mode="dark"] .bg-gray-100 { background-color: #1f2937; }
+  body[data-theme-mode="dark"] .admin-input, 
+  body[data-theme-mode="dark"] .admin-select,
+  body[data-theme-mode="dark"] .admin-textarea {
+    background-color: #4b5563;
+    border-color: #6b7280;
+    color: #f3f4f6;
+  }
+  body[data-theme-mode="dark"] .admin-input:focus,
+  body[data-theme-mode="dark"] .admin-select:focus,
+  body[data-theme-mode="dark"] .admin-textarea:focus {
+    border-color: var(--primary-theme-color);
+    box-shadow: 0 0 0 1px var(--primary-theme-color);
+  }
+   body[data-theme-mode="dark"] .admin-checkbox {
+    border-color: #6b7280;
+    color: var(--primary-theme-color); /* Check color */
+  }
+  body[data-theme-mode="dark"] .admin-checkbox:focus {
+    ring: var(--primary-theme-color);
+  }
+}
+
+
+@layer components {
+  .admin-input, .admin-select, .admin-textarea {
+    @apply mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[var(--primary-theme-color)] focus:ring-[var(--primary-theme-color)] sm:text-sm transition-colors;
+  }
+  .admin-checkbox {
+    @apply h-4 w-4 rounded border-gray-300 text-[var(--primary-theme-color)] focus:ring-[var(--primary-theme-color)] transition-colors;
+  }
+}
