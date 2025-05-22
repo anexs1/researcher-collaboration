@@ -409,9 +409,6 @@ export const emitToUser = (targetUserId, eventName, data) => {
   const userSocketIds = userSockets.get(userIdStr); // Get the Set of socket IDs
 
   if (userSocketIds && userSocketIds.size > 0) {
-    // Emit to each specific socket ID connected for that user
-    // This is more precise than joining a user-specific room if you only want to target current sockets.
-    // Or, you can use ioInstance.to(`user-${userIdStr}`).emit(eventName, data); if users join `user-${userId}` rooms.
     const socketIdsArray = Array.from(userSocketIds);
     ioInstance.to(socketIdsArray).emit(eventName, data); // <<<< MODIFIED: Use ioInstance
     console.log(
