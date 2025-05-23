@@ -41,8 +41,6 @@ ensureUploadsDirExists(PROJECT_UPLOADS_DIR).catch((err) =>
   console.error("Failed to ensure initial project uploads directory:", err)
 );
 
-// --- Field Definitions with CORRECTED literal subquery for MySQL ---
-// Make sure `project_members`, `project_id`, `status` and `${Project.name}` (resolves to `Project` or `Projects` table name) are correct.
 const projectListSelectFields = [
   "id",
   "title",
@@ -88,7 +86,7 @@ const projectDetailSelectFields = [
     "currentCollaborators",
   ],
 ];
-const userPublicSelectFields = ["id", "username", "profilePictureUrl"];
+const userPublicSelectFields = ["id", "username", "profilePictureUrl", "email"]; // Added email based on your log
 
 // --- Controller Functions ---
 export const getAllProjects = asyncHandler(async (req, res) => {
@@ -97,7 +95,6 @@ export const getAllProjects = asyncHandler(async (req, res) => {
     const { status, search, page = 1, limit = 9 } = req.query;
     const where = {};
     if (status && status !== "all" && status !== "archived") {
-      // Normalize incoming status for query if necessary, or ensure frontend sends canonical
       const allowedDbStatuses = Project.getAttributes().status?.values || [];
       const canonicalQueryStatus = allowedDbStatuses.find(
         (s) => s.toLowerCase() === status.toLowerCase()
@@ -105,7 +102,6 @@ export const getAllProjects = asyncHandler(async (req, res) => {
       if (canonicalQueryStatus) {
         where.status = canonicalQueryStatus;
       } else if (status !== "all") {
-        // If status is some other invalid value, don't filter by it or error
         console.warn(
           `getAllProjects: Invalid status query parameter received: ${status}`
         );
@@ -113,7 +109,6 @@ export const getAllProjects = asyncHandler(async (req, res) => {
     } else if (status === "archived") {
       where.status = "Archived";
     } else if (status !== "all") {
-      // Default: exclude archived if status is not 'all' or specific
       where.status = { [Op.ne]: "Archived" };
     }
 
@@ -179,7 +174,6 @@ export const getAllProjects = asyncHandler(async (req, res) => {
       const projectJson = p.toJSON();
       projectJson.currentCollaborators =
         parseInt(projectJson.currentCollaborators, 10) || 0;
-      // Normalize status before sending to frontend
       if (projectJson.status) {
         const allowedDbStatuses = Project.getAttributes().status?.values || [];
         const canonicalStatus = allowedDbStatuses.find(
@@ -299,7 +293,7 @@ export const getProjectById = asyncHandler(async (req, res) => {
       ],
     });
     if (!project) {
-      res.status(404); // Set status before throwing for the catch block
+      res.status(404);
       throw new Error("Project not found.");
     }
 
@@ -307,13 +301,12 @@ export const getProjectById = asyncHandler(async (req, res) => {
     projectJson.currentCollaborators =
       parseInt(projectJson.currentCollaborators, 10) || 0;
 
-    // Normalize status being sent to frontend
     if (projectJson.status) {
       const allowedDbStatuses = Project.getAttributes().status?.values || [];
       const canonicalStatus = allowedDbStatuses.find(
         (s) => s.toLowerCase() === projectJson.status.toLowerCase()
       );
-      projectJson.status = canonicalStatus || projectJson.status; // Send canonical if found
+      projectJson.status = canonicalStatus || projectJson.status;
     }
 
     projectJson.currentUserMembershipStatus = null;
@@ -406,8 +399,7 @@ export const createProject = asyncHandler(async (req, res) => {
     throw new Error("Required collaborators must be a non-negative number.");
   }
 
-  // Normalize incoming status for creation
-  let canonicalCreateStatus = "Planning"; // Default
+  let canonicalCreateStatus = "Planning";
   const allowedDbStatusesCreate = Project.getAttributes().status?.values || [];
   if (status) {
     const foundStatus = allowedDbStatusesCreate.find(
@@ -453,7 +445,7 @@ export const createProject = asyncHandler(async (req, res) => {
         description: description.trim(),
         ownerId,
         requiredCollaborators: collaborators,
-        status: canonicalCreateStatus, // Use normalized status
+        status: canonicalCreateStatus,
         category: category || null,
         duration: duration || null,
         funding: funding || null,
@@ -486,7 +478,6 @@ export const createProject = asyncHandler(async (req, res) => {
     projectJson.currentCollaborators =
       parseInt(projectJson.currentCollaborators, 10) || 0;
     if (projectJson.status) {
-      // Normalize status for response consistency
       const canonicalRespStatus = allowedDbStatusesCreate.find(
         (s) => s.toLowerCase() === projectJson.status.toLowerCase()
       );
@@ -543,7 +534,7 @@ export const updateProject = asyncHandler(async (req, res) => {
       lock: transaction.LOCK.UPDATE,
     });
     if (!project) {
-      await transaction.commit(); // or rollback() if preferred when not found before lock
+      await transaction.commit();
       res.status(404);
       throw new Error("Project not found.");
     }
@@ -655,7 +646,7 @@ export const updateProject = asyncHandler(async (req, res) => {
     if (newImageUrl !== null) updates.imageUrl = newImageUrl;
 
     if (Object.keys(updates).length === 0 && !req.file) {
-      await transaction.rollback(); // Rollback if no updates and no file
+      await transaction.rollback();
       const currentProject = await Project.findByPk(projectId, {
         attributes: projectDetailSelectFields,
         include: [
@@ -666,7 +657,6 @@ export const updateProject = asyncHandler(async (req, res) => {
       projectJson.currentCollaborators =
         parseInt(projectJson.currentCollaborators, 10) || 0;
       if (projectJson.status) {
-        // Normalize status for response
         const allowed = Project.getAttributes().status?.values || [];
         const canon = allowed.find(
           (s) => s.toLowerCase() === projectJson.status.toLowerCase()
@@ -706,7 +696,6 @@ export const updateProject = asyncHandler(async (req, res) => {
     projectJson.currentCollaborators =
       parseInt(projectJson.currentCollaborators, 10) || 0;
     if (projectJson.status) {
-      // Normalize status for response
       const allowed = Project.getAttributes().status?.values || [];
       const canon = allowed.find(
         (s) => s.toLowerCase() === projectJson.status.toLowerCase()
@@ -738,7 +727,7 @@ export const updateProject = asyncHandler(async (req, res) => {
         );
       }
     }
-    console.error(`Error updating project ${projectIdParam}:`, error); // Log actual error
+    console.error(`Error updating project ${projectIdParam}:`, error);
     const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
     const message = error.message || "Server error updating project.";
     if (!res.headersSent)
@@ -767,7 +756,7 @@ export const deleteProject = asyncHandler(async (req, res) => {
       attributes: ["id", "ownerId", "imageUrl"],
     });
     if (!project) {
-      await transaction.commit(); // or rollback()
+      await transaction.commit();
       res.status(404);
       throw new Error("Project not found.");
     }
@@ -979,12 +968,9 @@ export const getProjectMembers = asyncHandler(async (req, res) => {
   }
 });
 
-// ========================================================================== //
-// ==================== MODIFIED FUNCTION STARTS HERE ======================= //
-// ========================================================================== //
 export const getProjectsByUserId = asyncHandler(async (req, res) => {
   const targetUserIdParam = req.params.userId;
-  const currentLoggedInUserId = req.user?.id; // Assuming req.user is populated by auth middleware
+  const currentLoggedInUserId = req.user?.id;
   const targetUserId = parseInt(targetUserIdParam, 10);
 
   if (isNaN(targetUserId) || targetUserId <= 0) {
@@ -1005,7 +991,7 @@ export const getProjectsByUserId = asyncHandler(async (req, res) => {
       page = 1,
       limit = 9,
       status: projectStatusQuery,
-      search, // Destructure search from req.query
+      search,
     } = req.query;
 
     const parsedLimit = parseInt(limit, 10);
@@ -1022,10 +1008,8 @@ export const getProjectsByUserId = asyncHandler(async (req, res) => {
     }
 
     const offset = (parsedPage - 1) * parsedLimit;
-
     const projectWhereConditions = { ownerId: targetUserId };
 
-    // Status filtering logic
     if (projectStatusQuery === "archived") {
       projectWhereConditions.status = "Archived";
     } else if (projectStatusQuery && projectStatusQuery !== "all") {
@@ -1044,13 +1028,10 @@ export const getProjectsByUserId = asyncHandler(async (req, res) => {
       projectWhereConditions.status = { [Op.ne]: "Archived" };
     }
 
-    // Search logic for project title
     if (search && search.trim() !== "") {
-      const likeOperator = Op.like; // For MySQL, this is usually case-insensitive based on collation
+      const likeOperator = Op.like;
       projectWhereConditions[Op.or] = [
         { title: { [likeOperator]: `%${search.trim()}%` } },
-        // If you want to search description too:
-        // { description: { [likeOperator]: `%${search.trim()}%` } },
       ];
       console.log(
         `[Ctrl-getProjectsByUserId] Applied search term: "${search.trim()}" to user ${targetUserId}'s projects`
@@ -1144,10 +1125,137 @@ export const getProjectsByUserId = asyncHandler(async (req, res) => {
   }
 });
 
+// ========================================================================== //
+// ==================== MODIFIED FUNCTION STARTS HERE ======================= //
+// ========================================================================== //
 export const adminGetAllProjects = asyncHandler(async (req, res) => {
-  // This function remains unchanged.
-  console.warn("API: adminGetAllProjects invoked but not fully implemented.");
-  res
-    .status(501)
-    .json({ success: false, message: "Admin route not implemented yet" });
+  console.log("API: adminGetAllProjects invoked.");
+
+  try {
+    const { page = 1, limit = 20, search, status, ownerId } = req.query;
+
+    const parsedLimit = parseInt(limit, 10);
+    const parsedPage = parseInt(page, 10);
+
+    if (
+      isNaN(parsedLimit) ||
+      isNaN(parsedPage) ||
+      parsedLimit <= 0 ||
+      parsedPage <= 0
+    ) {
+      res.status(400);
+      throw new Error("Invalid pagination parameters for admin project list.");
+    }
+    const offset = (parsedPage - 1) * parsedLimit;
+
+    const where = {};
+
+    if (search) {
+      const likeOperator = Op.like;
+      where[Op.or] = [
+        { title: { [likeOperator]: `%${search}%` } },
+        { description: { [likeOperator]: `%${search}%` } },
+      ];
+    }
+
+    if (status && status.toLowerCase() !== "all") {
+      const allowedDbStatuses = Project.getAttributes().status?.values || [];
+      const canonicalQueryStatus = allowedDbStatuses.find(
+        (s) => s.toLowerCase() === status.toLowerCase()
+      );
+      if (canonicalQueryStatus) {
+        where.status = canonicalQueryStatus;
+      } else {
+        console.warn(
+          `adminGetAllProjects: Invalid status query parameter received: ${status}. Ignoring.`
+        );
+      }
+    }
+
+    if (ownerId) {
+      const parsedOwnerId = parseInt(ownerId, 10);
+      if (!isNaN(parsedOwnerId) && parsedOwnerId > 0) {
+        where.ownerId = parsedOwnerId;
+      } else {
+        console.warn(
+          `adminGetAllProjects: Invalid ownerId query parameter: ${ownerId}. Ignoring.`
+        );
+      }
+    }
+
+    const includes = [
+      {
+        model: User,
+        as: "owner",
+        attributes: userPublicSelectFields,
+        required: true,
+      },
+    ];
+
+    const { count, rows: dbProjects } = await Project.findAndCountAll({
+      // Renamed 'projects' to 'dbProjects' for clarity
+      where,
+      attributes: projectListSelectFields,
+      include: includes,
+      order: [["createdAt", "DESC"]],
+      limit: parsedLimit,
+      offset,
+      distinct: true,
+    });
+
+    const mappedProjects = dbProjects.map((p) => {
+      // Changed 'processedProjects' to 'mappedProjects'
+      const projectJson = p.toJSON();
+      return {
+        // These are the fields the frontend AdminProjectChatViewer's project list expects
+        projectId: projectJson.id,
+        projectName: projectJson.title,
+        // Include other fields that might be useful for the admin list, derived from projectJson
+        description: projectJson.description,
+        status: projectJson.status,
+        owner: projectJson.owner, // This will be the owner object from userPublicSelectFields
+        ownerId: projectJson.ownerId,
+        createdAt: projectJson.createdAt,
+        updatedAt: projectJson.updatedAt,
+        requiredCollaborators: projectJson.requiredCollaborators,
+        currentCollaborators:
+          parseInt(projectJson.currentCollaborators, 10) || 0,
+        imageUrl: projectJson.imageUrl,
+        category: projectJson.category,
+        duration: projectJson.duration,
+        funding: projectJson.funding,
+      };
+    });
+
+    const paginationObject = {
+      totalItems: count,
+      totalPages: Math.ceil(count / parsedLimit),
+      currentPage: parsedPage,
+      limit: parsedLimit,
+    };
+
+    // Ensure the response structure matches what the frontend (after last modification) expects:
+    // data: { projects: [...], pagination: {...} }
+    console.log("--- adminGetAllProjects: Sending Response ---");
+    console.log("Is mappedProjects an array?", Array.isArray(mappedProjects));
+    // console.log("Sample mappedProject:", mappedProjects.length > 0 ? JSON.stringify(mappedProjects[0], null, 2) : "No projects");
+    // console.log("Pagination object:", JSON.stringify(paginationObject, null, 2));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        // NESTED STRUCTURE
+        projects: mappedProjects,
+        pagination: paginationObject,
+      },
+    });
+  } catch (error) {
+    console.error("Error in adminGetAllProjects:", error);
+    const statusCode = res.statusCode >= 400 ? res.statusCode : 500;
+    const message =
+      error.message || "Server error retrieving projects for admin.";
+    if (!res.headersSent) {
+      res.status(statusCode).json({ success: false, message });
+    }
+  }
 });
