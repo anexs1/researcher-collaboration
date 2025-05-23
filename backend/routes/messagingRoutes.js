@@ -1,4 +1,3 @@
-// backend/routes/messagingRoutes.js
 import express from "express";
 import {
   getProjectChatList,
