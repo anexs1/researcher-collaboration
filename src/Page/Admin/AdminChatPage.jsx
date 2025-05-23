@@ -1,4 +1,3 @@
-// src/Page/Admin/AdminChatPage.jsx (or AdminProjectChatViewer.jsx)
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -21,7 +20,6 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import { format, isToday, isYesterday, parseISO } from "date-fns";
 
-// Adjust import paths as needed
 import LoadingSpinner from "../../Component/Common/LoadingSpinner";
 import ErrorMessage from "../../Component/Common/ErrorMessage";
 import AdminPageHeader from "../../Component/Admin/AdminPageHeader";
@@ -31,16 +29,11 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 const SOCKET_TIMEOUT = 15000;
 
-// Helpers
 const getRoomName = (projectId) => (projectId ? `project-${projectId}` : null);
 const formatMessageTime = (isoString) => {
   if (!isoString) return "";
-  try {
-    return format(parseISO(isoString), "p");
-  } catch (e) {
-    console.warn("Failed to format message time:", isoString, e);
-    return "";
-  }
+  try { return format(parseISO(isoString), "p"); }
+  catch (e) { console.warn("Failed to format message time:", isoString, e); return ""; }
 };
 const formatDateSeparator = (isoString) => {
   if (!isoString) return null;
@@ -49,26 +42,18 @@ const formatDateSeparator = (isoString) => {
     if (isToday(d)) return "Today";
     if (isYesterday(d)) return "Yesterday";
     return format(d, "MMMM d, yyyy");
-  } catch (e) {
-    console.warn("Failed to format date separator:", isoString, e);
-    return null;
-  }
+  } catch (e) { console.warn("Failed to format date separator:", isoString, e); return null; }
 };
 
 function AdminProjectChatViewer({ currentUser }) {
   const navigate = useNavigate();
 
-  // --- State ---
   const [projects, setProjects] = useState([]);
   const [filteredProjects, setFilteredProjects] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedProject, setSelectedProject] = useState(null);
   const [messages, setMessages] = useState([]);
-  const [messagesPagination, setMessagesPagination] = useState({
-    currentPage: 1,
-    totalPages: 1,
-    count: 0,
-  });
+  const [messagesPagination, setMessagesPagination] = useState({ currentPage: 1, totalPages: 1, count: 0 });
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [projectLoadError, setProjectLoadError] = useState(null);
@@ -81,74 +66,60 @@ function AdminProjectChatViewer({ currentUser }) {
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [membersError, setMembersError] = useState(null);
 
-  // --- Refs ---
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const currentSelectedProjectRef = useRef(null);
 
-  // --- Derived Values ---
   const currentAdminId = currentUser?.id;
-  const selectedProjectId = selectedProject?.projectId;
 
-  // --- Callbacks & Effects ---
   const scrollToBottom = useCallback((behavior = "smooth") => {
     messagesEndRef.current?.scrollIntoView({ behavior });
   }, []);
 
   useEffect(() => {
     if (messages.length > 0 && !isLoadingMessages) {
-        const lastMessage = messages[messages.length - 1];
-        const behavior = lastMessage?.senderId === currentAdminId ? "smooth" : "auto";
-        scrollToBottom(behavior);
+      const lastMessage = messages[messages.length - 1];
+      const behavior = lastMessage?.senderId === currentAdminId || messages.length <=1 ? "smooth" : "auto";
+      scrollToBottom(behavior);
     }
-  }, [messages, scrollToBottom, currentAdminId, isLoadingMessages]);
+  }, [messages, isLoadingMessages, currentAdminId, scrollToBottom]);
 
   const fetchAdminProjects = useCallback(async () => {
-    // console.log("ADMIN: Fetching projects list (fetchAdminProjects called)...");
     setIsLoadingProjects(true);
     setProjectLoadError(null);
     const token = localStorage.getItem("authToken");
-
     if (!token) {
-      setProjectLoadError("Authentication required to load projects.");
-      setIsLoadingProjects(false);
+      setProjectLoadError("Authentication required."); setIsLoadingProjects(false);
       setProjects([]); setFilteredProjects([]); return;
     }
-
     try {
       const url = `${API_BASE_URL}/api/admin/projects`;
-      const response = await axios.get(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      // console.log("ADMIN: response.data (parsed JSON) for projects:", JSON.stringify(response.data, null, 2));
+      const response = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
+      
+      console.log("ADMIN PROJECTS: Raw response data:", JSON.stringify(response.data, null, 2));
 
       if (response.data?.success === true && response.data?.data && Array.isArray(response.data.data.projects)) {
         const projectListFromData = response.data.data.projects.map((p) => ({
           projectId: p.id,
           projectName: p.title,
           description: p.description, status: p.status, owner: p.owner, ownerId: p.ownerId,
+          createdAt: p.createdAt, updatedAt: p.updatedAt, requiredCollaborators: p.requiredCollaborators,
+          currentCollaborators: p.currentCollaborators, imageUrl: p.imageUrl, category: p.category,
+          duration: p.duration, funding: p.funding,
         }));
         projectListFromData.sort((a, b) => (a.projectName || "").localeCompare(b.projectName || ""));
         setProjects(projectListFromData);
         setFilteredProjects(projectListFromData);
-        setProjectLoadError(null);
-        if (response.data.data.pagination) { /* console.log("ADMIN: Project list pagination received:", response.data.data.pagination); */ }
       } else {
-        const errorMessage = response.data?.message || "Server indicated failure loading projects. (Response structure unexpected)";
-        setProjectLoadError(errorMessage);
+        setProjectLoadError(response.data?.message || "Failed to load projects (unexpected structure).");
         setProjects([]); setFilteredProjects([]);
       }
     } catch (err) {
-      if (err.response) {
-        setProjectLoadError(`Error ${err.response.status}: ${err.response.data?.message || 'Failed to load projects.'}`);
-      } else if (err.request) {
-        setProjectLoadError("No response from server. Check network.");
-      } else {
-        setProjectLoadError(err.message || "Error loading projects.");
-      }
+      const errMsg = err.response?.data?.message || err.message || "Error loading projects.";
+      setProjectLoadError(err.response ? `Error ${err.response.status}: ${errMsg}` : errMsg);
       setProjects([]); setFilteredProjects([]);
     } finally {
       setIsLoadingProjects(false);
-      // console.log("ADMIN: fetchAdminProjects finished.");
     }
   }, [API_BASE_URL]);
 
@@ -159,75 +130,56 @@ function AdminProjectChatViewer({ currentUser }) {
     else setFilteredProjects(projects.filter((p) => p.projectName?.toLowerCase().includes(searchTerm.toLowerCase())));
   }, [searchTerm, projects]);
 
-  // Logging for project state
-  useEffect(() => {
-    if (projects.length > 0) { /* console.log("ADMIN: 'projects' state updated (first 2 items):", JSON.stringify(projects.slice(0,2), null, 2)); */ }
-  }, [projects]);
-  useEffect(() => {
-    if (selectedProject) { /* console.log("ADMIN: 'selectedProject' state updated:", JSON.stringify(selectedProject, null, 2)); */ }
-  }, [selectedProject]);
+  useEffect(() => { /* console.log("DEBUG: Projects state:", projects.slice(0,1)); */ }, [projects]);
+  useEffect(() => { /* console.log("DEBUG: SelectedProject state:", selectedProject); */ }, [selectedProject]);
 
+  const fetchProjectMessages = useCallback(async (projectIdToFetch, page = 1) => {
+    if (!projectIdToFetch) return;
+    setIsLoadingMessages(true);
+    if (page === 1) { setMessages([]); setMessageLoadError(null); }
 
-  const fetchProjectMessages = useCallback(
-    async (projectIdToFetch, page = 1) => {
-      if (!projectIdToFetch) return;
-      console.log(`ADMIN MSGS: Fetching messages page ${page} for project ${projectIdToFetch}`);
-      setIsLoadingMessages(true);
-      setMessageLoadError(null);
-      if (page === 1) setMessages([]);
+    const token = localStorage.getItem("authToken");
+    if (!token) { setMessageLoadError("Auth required for messages."); setIsLoadingMessages(false); return; }
+    try {
+      const url = `${API_BASE_URL}/api/admin/messages/project/${projectIdToFetch}?page=${page}&limit=50`;
+      const response = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
+      
+      console.log(`ADMIN MSGS: Raw response for project ${projectIdToFetch} messages:`, JSON.stringify(response.data, null, 2));
 
-      const token = localStorage.getItem("authToken");
-      if (!token) {
-        setMessageLoadError("Authentication required to load messages.");
-        setIsLoadingMessages(false); return;
-      }
-      try {
-        const url = `${API_BASE_URL}/api/admin/messages/project/${projectIdToFetch}?page=${page}&limit=50`;
-        const response = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
+      const messageList = response.data?.messages || response.data?.items;
+      if (response.data?.success === true && Array.isArray(messageList)) {
+        if (messageList.length > 0) console.log("ADMIN MSGS: First fetched message object:", JSON.stringify(messageList[0], null, 2));
+        else console.log("ADMIN MSGS: No messages in this batch.");
         
-        console.log("ADMIN MSGS: Raw response for messages:", JSON.stringify(response.data, null, 2));
-
-        if (response.data?.success === true && Array.isArray(response.data.messages || response.data.items)) {
-          const fetchedMessages = response.data.messages || response.data.items;
-          
-          // --- ADDED LOG FOR FIRST FETCHED MESSAGE ---
-          if (fetchedMessages.length > 0) {
-            console.log("ADMIN MSGS: First fetched message object structure:", JSON.stringify(fetchedMessages[0], null, 2));
-          } else {
-            console.log("ADMIN MSGS: No messages fetched in this batch.");
-          }
-          // --- END LOG ---
-
-          const sortedMessages = fetchedMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-          setMessages(page === 1 ? sortedMessages : (prev) => [...prev, ...sortedMessages]);
-          setMessagesPagination({
-            currentPage: response.data.currentPage || 1,
-            totalPages: response.data.totalPages || 1,
-            count: response.data.count || response.data.totalItems || response.data.totalMessages || 0,
-          });
-        } else {
-          throw new Error(response.data?.message || "Failed to load messages for project (unexpected structure).");
-        }
-      } catch (err) {
-        console.error(`ADMIN MSGS: Fetch messages error project ${projectIdToFetch}:`, err);
-        setMessageLoadError(err.response?.data?.message || "Error fetching messages for this project.");
+        const sortedMessages = messageList.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+        setMessages(page === 1 ? sortedMessages : (prev) => [...prev, ...sortedMessages]);
+        setMessagesPagination({
+          currentPage: response.data.currentPage || 1,
+          totalPages: response.data.totalPages || 1,
+          count: response.data.count || response.data.totalItems || response.data.totalMessages || 0,
+        });
+        setMessageLoadError(null);
+      } else {
+        setMessageLoadError(response.data?.message || "Failed to load messages (structure error).");
         if(page === 1) setMessages([]);
-      } finally {
-        setIsLoadingMessages(false);
       }
-    },
-    [API_BASE_URL]
-  );
+    } catch (err) {
+      const errMsg = err.response?.data?.message || err.message || "Error fetching messages.";
+      setMessageLoadError(err.response ? `Error ${err.response.status}: ${errMsg}` : errMsg);
+      if(page === 1) setMessages([]);
+    } finally {
+      setIsLoadingMessages(false);
+    }
+  }, [API_BASE_URL]);
 
   const fetchMembers = useCallback(async () => {
-    const currentSelectedProjId = selectedProject?.projectId;
-    if (!currentSelectedProjId) { setMembersError("No project selected."); return; }
-    // ... (rest of fetchMembers)
+    const currentProjId = selectedProject?.projectId;
+    if (!currentProjId) { setMembersError("No project selected."); return; }
     setLoadingMembers(true); setMembersError(null);
     const token = localStorage.getItem("authToken");
     if (!token) { setMembersError("Auth required."); setLoadingMembers(false); return; }
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/projects/${currentSelectedProjId}/members`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await axios.get(`${API_BASE_URL}/api/projects/${currentProjId}/members`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.data?.success === true && Array.isArray(res.data.data)) setMemberList(res.data.data);
       else throw new Error(res.data?.message || "Failed to load members.");
     } catch (err) {
@@ -238,74 +190,67 @@ function AdminProjectChatViewer({ currentUser }) {
   const handleOpenMembersModal = () => {
     if (!selectedProject?.projectId) return;
     setShowMembersModal(true);
-    if ( (memberList.length === 0 || memberList[0]?.projectId !== selectedProject?.projectId) && !loadingMembers && !membersError) {
-      fetchMembers();
-    }
+    if (memberList.length === 0 && !loadingMembers && !membersError) fetchMembers();
   };
 
   useEffect(() => {
-    const currentSelectedId = selectedProject?.projectId;
-    const currentRoomName = getRoomName(currentSelectedId);
-    if (currentSelectedId) {
-      fetchProjectMessages(currentSelectedId, 1);
+    const newSelectedProjectId = selectedProject?.projectId;
+    const prevSelectedProjectId = currentSelectedProjectRef.current?.projectId;
+
+    if (prevSelectedProjectId && prevSelectedProjectId !== newSelectedProjectId && socketRef.current?.connected) {
+      const prevRoomName = getRoomName(prevSelectedProjectId);
+      if (prevRoomName) {
+        socketRef.current.emit("leaveChatRoom", { roomName: prevRoomName });
+      }
+    }
+    
+    currentSelectedProjectRef.current = selectedProject;
+
+    if (newSelectedProjectId) {
+      fetchProjectMessages(newSelectedProjectId, 1);
       setMessageLoadError(null); setMembersError(null); setMemberList([]);
-      if (socketRef.current?.connected && currentRoomName) {
-        socketRef.current.emit("joinChatRoom", { roomName: currentRoomName });
-        if(socketRef.current) socketRef.current.currentRoom = currentRoomName;
+      
+      const newRoomName = getRoomName(newSelectedProjectId);
+      if (socketRef.current?.connected && newRoomName) {
+        socketRef.current.emit("joinChatRoom", { roomName: newRoomName });
       }
     } else {
       setMessages([]); setMessagesPagination({ currentPage: 1, totalPages: 1, count: 0 }); setMessageLoadError(null);
     }
-    return () => {
-      const roomToLeave = currentRoomName; 
-      if (socketRef.current?.connected && roomToLeave) {
-        socketRef.current.emit("leaveChatRoom", { roomName: roomToLeave });
-        if(socketRef.current) socketRef.current.currentRoom = null;
-      }
-    };
   }, [selectedProject, fetchProjectMessages]);
 
   useEffect(() => {
     if (!currentAdminId || !API_BASE_URL) return;
     const token = localStorage.getItem("authToken");
     if (!token) { setSocketError("Auth token not found for chat."); return; }
-    if (socketRef.current?.connected) return;
-    if (socketRef.current && socketRef.current.io?.engine?.readyState === 'opening') return;
+    if (socketRef.current) return;
 
     const newSocket = io(API_BASE_URL, {
       auth: { token }, transports: ["websocket"], query: { userId: currentAdminId, isAdmin: true },
-      reconnectionAttempts: 3, timeout: SOCKET_TIMEOUT, autoConnect: true,
+      reconnectionAttempts: 5, timeout: SOCKET_TIMEOUT, autoConnect: true,
     });
     socketRef.current = newSocket;
 
     newSocket.on("connect", () => {
       setIsConnected(true); setSocketError(null);
       const currentRoom = getRoomName(selectedProject?.projectId);
-      if (currentRoom) {
-        newSocket.emit("joinChatRoom", { roomName: currentRoom });
-        newSocket.currentRoom = currentRoom;
-      }
+      if (currentRoom) newSocket.emit("joinChatRoom", { roomName: currentRoom });
     });
     newSocket.on("disconnect", (reason) => {
       setIsConnected(false);
       if (reason === "io server disconnect") setSocketError("Disconnected by server.");
-      else if (reason !== "io client disconnect") setSocketError("Chat disconnected. Reconnecting...");
+      else if (reason !== "io client disconnect") setSocketError("Chat disconnected.");
     });
     newSocket.on("connect_error", (err) => {
       setIsConnected(false); setSocketError(`Chat Connection Failed: ${err.message}.`);
     });
 
     newSocket.on("newMessage", (message) => {
-      // --- ENHANCED LOGGING FOR SOCKET MESSAGE ---
       console.log("ADMIN CHAT: newMessage event received (raw object):", message);
-      console.log("ADMIN CHAT: newMessage expected content property:", message?.content); // Check if 'content' exists
-      // --- END LOG ---
+      console.log("ADMIN CHAT: newMessage expected content property:", message?.content);
 
       if (message?.projectId?.toString() === selectedProject?.projectId?.toString()) {
-        const msg = {
-          ...message,
-          sender: message.sender || { id: message.senderId, username: message.senderUsername || `User ${message.senderId}` },
-        };
+        const msg = { ...message, sender: message.sender || { id: message.senderId, username: message.senderUsername || `User ${message.senderId}` }};
         setMessages((prev) => [...prev, msg]);
       }
     });
@@ -320,52 +265,40 @@ function AdminProjectChatViewer({ currentUser }) {
         newSocket.off("newMessage"); newSocket.off("messageDeleted");
         newSocket.disconnect();
       }
-      if (socketRef.current && socketRef.current.id === newSocket.id) socketRef.current = null;
+      socketRef.current = null;
     };
-  }, [currentAdminId, API_BASE_URL, selectedProject]);
+  }, [currentAdminId, API_BASE_URL]);
 
-
-  // --- ADDED USEEFFECT TO LOG MESSAGES STATE ---
   useEffect(() => {
     if (messages.length > 0) {
         console.log("ADMIN MSGS STATE: 'messages' state updated (first message object):", JSON.stringify(messages[0], null, 2));
-        console.log("ADMIN MSGS STATE: Content of first message in state:", messages[0]?.content); // Check 'content' specifically
-    } else if (!isLoadingMessages && selectedProject) {
-        console.log("ADMIN MSGS STATE: 'messages' state is empty (and not loading for a selected project).");
+        console.log("ADMIN MSGS STATE: Content of first message in state:", messages[0]?.content);
     }
-  }, [messages, isLoadingMessages, selectedProject]);
-  // --- END LOG ---
-
+  }, [messages]);
 
   const handleDeleteClick = (message) => setMessageToDelete(message);
   const cancelDeleteMessage = () => setMessageToDelete(null);
   const confirmDeleteMessage = useCallback(async () => {
     if (!messageToDelete || !currentAdminId) return;
     const msgIdToDelete = messageToDelete.id;
+    const projIdOfMsg = messageToDelete.projectId;
     setMessageToDelete(null);
     const token = localStorage.getItem("authToken");
-    if (!token) { setProjectLoadError("Auth required to delete message."); return; }
+    if (!token) { setMessageLoadError("Auth required to delete."); return; }
     try {
       const url = `${API_BASE_URL}/api/admin/messages/${msgIdToDelete}`;
-      const response = await axios.delete(url, { headers: { Authorization: `Bearer ${token}` } });
+      const response = await axios.delete(url, { headers: { Authorization: `Bearer ${token}` }});
       if (!response.data?.success) throw new Error(response.data?.message || "API deletion failed.");
     } catch (err) {
-      setProjectLoadError(err.response?.data?.message || "Error deleting message.");
+      setMessageLoadError(err.response?.data?.message || "Error deleting message.");
     }
   }, [messageToDelete, currentAdminId, API_BASE_URL]);
 
-  // --- Render Logic ---
-
   if (isLoadingProjects) {
-    return (
-      <div className="p-6"><AdminPageHeader title="Project Chat Viewer" /><LoadingSpinner message="Loading Projects..." /></div>
-    );
+    return (<div className="p-6"><AdminPageHeader title="Project Chat Viewer" /><LoadingSpinner message="Loading Projects..." /></div>);
   }
-
-  if (projectLoadError && projects.length === 0 && !isLoadingProjects) {
-    return (
-      <div className="p-6"><AdminPageHeader title="Project Chat Viewer" /><ErrorMessage message={projectLoadError} onRetry={fetchAdminProjects} /></div>
-    );
+  if (projectLoadError && projects.length === 0) {
+    return (<div className="p-6"><AdminPageHeader title="Project Chat Viewer" /><ErrorMessage message={projectLoadError} onRetry={fetchAdminProjects} /></div>);
   }
 
   return (
@@ -376,7 +309,6 @@ function AdminProjectChatViewer({ currentUser }) {
           <ErrorMessage message={projectLoadError} onClose={() => setProjectLoadError(null)} isDismissible={true} type="warning" />
         )}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 h-[calc(100vh-16rem)] flex overflow-hidden">
-          {/* Left Panel: Project List */}
           <div className="w-1/3 lg:w-1/4 border-r border-gray-200 dark:border-gray-700 flex flex-col">
             <div className="p-3 border-b dark:border-gray-700">
               <div className="relative">
@@ -395,12 +327,11 @@ function AdminProjectChatViewer({ currentUser }) {
                       <span className="truncate">{proj.projectName || "Unnamed Project"}</span>
                     </li>
                   ))
-                ) : ( <p className="p-4 text-sm text-center text-gray-500 dark:text-gray-400">{isLoadingProjects ? "Loading..." : (searchTerm ? "No projects match." : (projectLoadError ? "Error." : "No projects."))}</p> )}
+                ) : ( <p className="p-4 text-sm text-center text-gray-500 dark:text-gray-400">{searchTerm ? "No matches." : (projectLoadError ? "Error." : "No projects.")}</p> )}
               </ul>
             </div>
           </div>
 
-          {/* Right Panel: Message Area */}
           <div className="w-2/3 lg:w-3/4 flex flex-col bg-gray-50 dark:bg-gray-850">
             {!selectedProject ? (
               <div className="flex-1 flex justify-center items-center text-center text-gray-500 dark:text-gray-400 p-5">
@@ -442,8 +373,7 @@ function AdminProjectChatViewer({ currentUser }) {
                               )}
                               <div className={`max-w-[70%] p-2.5 rounded-lg shadow-sm ${ senderIsAdmin ? "bg-indigo-500 text-white rounded-br-none" : "bg-white dark:bg-gray-700 dark:text-gray-200 text-gray-800 rounded-bl-none border dark:border-gray-600"}`}>
                                 {!senderIsAdmin && (<p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mb-0.5">{msg.sender?.username || `User ${msg.senderId}`}</p>)}
-                                {/* THIS IS WHERE MESSAGE CONTENT IS RENDERED */}
-                                <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p> 
+                                <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
                                 <p className={`text-[10px] mt-1 ${senderIsAdmin ? "text-indigo-200" : "text-gray-400 dark:text-gray-500"} text-right`} title={msg.createdAt ? new Date(msg.createdAt).toLocaleString() : ""}>{formatMessageTime(msg.createdAt)}</p>
                               </div>
                               {senderIsAdmin && (
